@@ -186,7 +186,20 @@ export const handleTextMessage = async (event) => {
   const replyToken = event.replyToken;
   const text = String(event.message.text || "").trim();
   const session = await getSession(userId);
+if (isProfileQuestionText(text)) {
+  const profile = await getProfile(userId);
+  const title = await getDisplayTitle({ userId, session });
 
+  await replyText(
+    replyToken,
+    getProfileAnswerText({
+      title,
+      profile,
+      session,
+    })
+  );
+  return;
+}
   if (text === "__FOLLOW__") {
     await updateSession({ userId, step: "ASK_NAME", sessionData: {} });
     await replyText(replyToken, "หนีห่าว! แปะแคลพร้อมดูแลสุขภาพแล้ว! ลื้อชื่ออะไรจ๊ะ?");
@@ -227,7 +240,7 @@ const getProfileAnswerText = ({ title, profile, session }) => {
 
 ถ้าอยากเปลี่ยน พิมพ์ “ตั้งเป้าสุขภาพ” หรือ “ฉันชื่อ...” ได้เลยจ้า`;
 };
-  const nameMatch = text.match(/^(?:ฉันชื่อ|ผมชื่อ|ชื่อ|เรียกฉันว่า|เรียกผมว่า)\s*(.+)$/i);
+  const nameMatch =   !["ฉันชื่ออะไร", "ชื่อฉันคืออะไร", "แปะจำชื่อฉันได้ไหม"].includes(text)     ? text.match(/^(?:ฉันชื่อ|ผมชื่อ|ชื่อ|เรียกฉันว่า|เรียกผมว่า)\s*(.+)$/i)     : null;
 
   if (nameMatch) {
     const newName = nameMatch[1].trim();
