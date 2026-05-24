@@ -1,6 +1,6 @@
 import { replyText } from "../services/line.js";
 import { postToSheet } from "../services/sheet.js";
-import { estimateFoodFromText, parseUserIntent } from "../services/openai.js";
+import {   estimateFoodFromText,   parseUserIntent,   generateNutritionAdvice, } from "../services/openai.js";
 import { calculateTDEE, DEFAULT_CALORIE_TARGET, safeNumber } from "../utils/helpers.js";
 import {
   buildTitleFromProfile,
@@ -347,10 +347,28 @@ ${getSmartMealAdvice({
   }
 
   if (intent.intent === "meal_suggestion") {
-    const summary = await postToSheet({ action: "GET_DAILY_SUMMARY", userId });
-    await replyText(replyToken, getMealSuggestionText({ title, summary }));
+  const summary = await postToSheet({
+    action: "GET_DAILY_SUMMARY",
+    userId,
+  });
+
+  const advice = await generateNutritionAdvice({
+    text,
+    summary,
+    title,
+  });
+
+  if (advice.inScope === false) {
+    await replyText(
+      replyToken,
+      "เรื่องนี้แปะไม่ถนัดน้า 😅 แปะช่วยดูเรื่องอาหาร แคล และมื้อที่กินได้จ้า ส่งรูปอาหารมาได้เลย 📸"
+    );
     return;
   }
+
+  await replyText(replyToken, advice.reply || getMealSuggestionText({ title, summary }));
+  return;
+}
 
   if (intent.intent === "health_goal") {
     await replyText(
