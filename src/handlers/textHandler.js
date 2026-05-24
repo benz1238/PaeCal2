@@ -192,7 +192,41 @@ export const handleTextMessage = async (event) => {
     await replyText(replyToken, "หนีห่าว! แปะแคลพร้อมดูแลสุขภาพแล้ว! ลื้อชื่ออะไรจ๊ะ?");
     return;
   }
+const isProfileQuestionText = (text) => {
+  return [
+    "ฉันชื่ออะไร",
+    "ชื่อฉันคืออะไร",
+    "แปะจำชื่อฉันได้ไหม",
+    "สเปคของฉันคืออะไร",
+    "สเปกของฉันคืออะไร",
+    "ถามสเปคของฉัน",
+    "ถามสเปกของฉัน",
+    "ข้อมูลของฉันคืออะไร",
+    "โปรไฟล์ของฉันคืออะไร",
+    "เป้าหมายของฉันคืออะไร",
+    "เป้าหมายตอนนี้คืออะไร",
+    "เป้าสุขภาพของฉันคืออะไร",
+  ].includes(text);
+};
 
+const getProfileAnswerText = ({ title, profile, session }) => {
+  const data = session?.data || {};
+
+  const name = data.name || profile.name || "";
+  const stats = data.stats || profile.stats || "";
+  const goal = data.goal || profile.goal || "";
+  const calorieTarget =
+    data.calorieTarget || profile.calorieTarget || DEFAULT_CALORIE_TARGET;
+
+  return `จำได้จ้า ${title} 😊
+
+ชื่อ: ${name || "ยังไม่มีชื่อที่บันทึกไว้"}
+สเปก: ${stats || "ยังไม่มีสเปกที่บันทึกไว้"}
+เป้าหมาย: ${goal || "ยังไม่ได้ตั้งเป้าหมาย"}
+เป้าต่อวัน: ${calorieTarget} kcal
+
+ถ้าอยากเปลี่ยน พิมพ์ “ตั้งเป้าสุขภาพ” หรือ “ฉันชื่อ...” ได้เลยจ้า`;
+};
   const nameMatch = text.match(/^(?:ฉันชื่อ|ผมชื่อ|ชื่อ|เรียกฉันว่า|เรียกผมว่า)\s*(.+)$/i);
 
   if (nameMatch) {
