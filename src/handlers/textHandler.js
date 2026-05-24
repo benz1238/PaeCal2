@@ -6,7 +6,11 @@ import {
   generateNutritionAdvice,
   generateSmartDailySummary,
 } from "../services/openai.js";
-import { calculateTDEE, DEFAULT_CALORIE_TARGET, safeNumber } from "../utils/helpers.js";
+import {
+  calculateTDEE,
+  DEFAULT_CALORIE_TARGET,
+  safeNumber,
+} from "../utils/helpers.js";
 import {
   buildTitleFromProfile,
   getDisplayTitle,
@@ -62,6 +66,61 @@ const isExactSummaryText = (text) => {
     "แคลวันนี้",
     "ดูสรุปวันนี้",
   ].includes(text);
+};
+
+const isProfileQuestionText = (text) => {
+  return [
+    "ฉันชื่ออะไร",
+    "ชื่อฉันคืออะไร",
+    "แปะจำชื่อฉันได้ไหม",
+    "สเปคของฉันคืออะไร",
+    "สเปกของฉันคืออะไร",
+    "ถามสเปคของฉัน",
+    "ถามสเปกของฉัน",
+    "ข้อมูลของฉันคืออะไร",
+    "โปรไฟล์ของฉันคืออะไร",
+    "เป้าหมายของฉันคืออะไร",
+    "เป้าหมายตอนนี้คืออะไร",
+    "เป้าสุขภาพของฉันคืออะไร",
+    "มื้อก่อนหน้าคืออะไร",
+    "มื้อล่าสุดคืออะไร",
+  ].includes(text);
+};
+
+const getProfileAnswerText = ({ title, profile, session }) => {
+  const data = session?.data || {};
+
+  const name = data.name || profile.name || "";
+  const stats = data.stats || profile.stats || "";
+  const goal = data.goal || profile.goal || "";
+  const calorieTarget =
+    data.calorieTarget || profile.calorieTarget || DEFAULT_CALORIE_TARGET;
+
+  return `จำได้จ้า ${title} 😊
+
+ชื่อ: ${name || "ยังไม่มีชื่อที่บันทึกไว้"}
+สเปก: ${stats || "ยังไม่มีสเปกที่บันทึกไว้"}
+เป้าหมาย: ${goal || "ยังไม่ได้ตั้งเป้าหมาย"}
+เป้าต่อวัน: ${calorieTarget} kcal
+
+ถ้าอยากเปลี่ยน พิมพ์ “ตั้งเป้าสุขภาพ” หรือ “ฉันชื่อ...” ได้เลยจ้า`;
+};
+
+const getLastMealAnswerText = ({ title, meal }) => {
+  if (!meal) {
+    return `${title} แปะยังไม่เจอมื้อล่าสุดน้า 😅 ส่งรูปอาหารมาก่อน เดี๋ยวแปะจำให้จ้า`;
+  }
+
+  return `มื้อล่าสุดที่แปะจำไว้คือ 🍽️
+
+${meal.menuName || "อาหาร"}
+ประมาณ ${meal.kcal || 0} kcal
+
+🍚 คาร์บ ${meal.carb || 0} g
+💪 โปรตีน ${meal.protein || 0} g
+💧 ไขมัน ${meal.fat || 0} g
+
+ถ้าผิด พิมพ์ “แก้มื้อล่าสุด” ได้เลยจ้า`;
 };
 
 const isEditMealHelpText = (text) => {
@@ -186,68 +245,66 @@ export const handleTextMessage = async (event) => {
   const replyToken = event.replyToken;
   const text = String(event.message.text || "").trim();
   const session = await getSession(userId);
-if (isProfileQuestionText(text)) {
-  const profile = await getProfile(userId);
-  const title = await getDisplayTitle({ userId, session });
 
-  await replyText(
-    replyToken,
-    getProfileAnswerText({
-      title,
-      profile,
-      session,
-    })
-  );
-  return;
-}
   if (text === "__FOLLOW__") {
     await updateSession({ userId, step: "ASK_NAME", sessionData: {} });
-    await replyText(replyToken, "หนีห่าว! แปะแคลพร้อมดูแลสุขภาพแล้ว! ลื้อชื่ออะไรจ๊ะ?");
+    await replyText(
+      replyToken,
+      "หนีห่าว! แปะแคลพร้อมดูแลสุขภาพแล้ว! ลื้อชื่ออะไรจ๊ะ?"
+    );
     return;
   }
-const isProfileQuestionText = (text) => {
-  return [
+
+  if (isProfileQuestionText(text)) {
+    const title = await getDisplayTitle({ userId, session });
+
+    if (text === "มื้อก่อนหน้าคืออะไร" || text === "มื้อล่าสุดคืออะไร") {
+      const latest = await getLastMeal(userId);
+      await replyText(
+        replyToken,
+        getLastMealAnswerText({
+          title,
+          meal: latest?.meal || null,
+        })
+      );
+      return;
+    }
+
+    const profile = await getProfile(userId);
+
+    await replyText(
+      replyToken,
+      getProfileAnswerText({
+        title,
+        profile,
+        session,
+      })
+    );
+    return;
+  }
+
+  const nameMatch = ![
     "ฉันชื่ออะไร",
     "ชื่อฉันคืออะไร",
     "แปะจำชื่อฉันได้ไหม",
-    "สเปคของฉันคืออะไร",
-    "สเปกของฉันคืออะไร",
-    "ถามสเปคของฉัน",
-    "ถามสเปกของฉัน",
-    "ข้อมูลของฉันคืออะไร",
-    "โปรไฟล์ของฉันคืออะไร",
-    "เป้าหมายของฉันคืออะไร",
-    "เป้าหมายตอนนี้คืออะไร",
-    "เป้าสุขภาพของฉันคืออะไร",
-  ].includes(text);
-};
-
-const getProfileAnswerText = ({ title, profile, session }) => {
-  const data = session?.data || {};
-
-  const name = data.name || profile.name || "";
-  const stats = data.stats || profile.stats || "";
-  const goal = data.goal || profile.goal || "";
-  const calorieTarget =
-    data.calorieTarget || profile.calorieTarget || DEFAULT_CALORIE_TARGET;
-
-  return `จำได้จ้า ${title} 😊
-
-ชื่อ: ${name || "ยังไม่มีชื่อที่บันทึกไว้"}
-สเปก: ${stats || "ยังไม่มีสเปกที่บันทึกไว้"}
-เป้าหมาย: ${goal || "ยังไม่ได้ตั้งเป้าหมาย"}
-เป้าต่อวัน: ${calorieTarget} kcal
-
-ถ้าอยากเปลี่ยน พิมพ์ “ตั้งเป้าสุขภาพ” หรือ “ฉันชื่อ...” ได้เลยจ้า`;
-};
-  const nameMatch =   !["ฉันชื่ออะไร", "ชื่อฉันคืออะไร", "แปะจำชื่อฉันได้ไหม"].includes(text)     ? text.match(/^(?:ฉันชื่อ|ผมชื่อ|ชื่อ|เรียกฉันว่า|เรียกผมว่า)\s*(.+)$/i)     : null;
+  ].includes(text)
+    ? text.match(/^(?:ฉันชื่อ|ผมชื่อ|ชื่อ|เรียกฉันว่า|เรียกผมว่า)\s*(.+)$/i)
+    : null;
 
   if (nameMatch) {
     const newName = nameMatch[1].trim();
     const profile = await getProfile(userId);
     const stats = session.data?.stats || profile.stats || "";
-    const title = buildTitleFromProfile({ name: newName, stats, fallbackTitle: "" });
-    const calorieTarget = session.data?.calorieTarget || profile.calorieTarget || DEFAULT_CALORIE_TARGET;
+    const title = buildTitleFromProfile({
+      name: newName,
+      stats,
+      fallbackTitle: "",
+    });
+
+    const calorieTarget =
+      session.data?.calorieTarget ||
+      profile.calorieTarget ||
+      DEFAULT_CALORIE_TARGET;
 
     await saveProfile({
       userId,
@@ -258,7 +315,8 @@ const getProfileAnswerText = ({ title, profile, session }) => {
       calorieTarget,
     });
 
-    const nextStep = session.step === "ASK_NAME" ? "ASK_STATS" : session.step || "READY";
+    const nextStep =
+      session.step === "ASK_NAME" ? "ASK_STATS" : session.step || "READY";
 
     await updateSession({
       userId,
@@ -351,7 +409,8 @@ const getProfileAnswerText = ({ title, profile, session }) => {
       profile.title ||
       buildTitleFromProfile({ name, stats, fallbackTitle: "" });
 
-    const calorieTarget = session.data?.calorieTarget || profile.calorieTarget || calculateTDEE(stats);
+    const calorieTarget =
+      session.data?.calorieTarget || profile.calorieTarget || calculateTDEE(stats);
 
     await saveProfile({
       userId,
@@ -406,7 +465,10 @@ const getProfileAnswerText = ({ title, profile, session }) => {
     const deleted = await deleteLastMeal(userId);
 
     if (deleted.status === "not_found") {
-      await replyText(replyToken, `${title} แปะยังไม่เจอมื้อล่าสุดให้ลบน้า 😅 ส่งรูปอาหารก่อนแล้วค่อยลบได้จ้า`);
+      await replyText(
+        replyToken,
+        `${title} แปะยังไม่เจอมื้อล่าสุดให้ลบน้า 😅 ส่งรูปอาหารก่อนแล้วค่อยลบได้จ้า`
+      );
       return;
     }
 
@@ -439,7 +501,10 @@ const getProfileAnswerText = ({ title, profile, session }) => {
   }
 
   if (session.step !== "READY") {
-    await replyText(replyToken, "แปะขอรู้จักลื้อก่อนน้า พิมพ์ชื่อมาก่อนเลยจ้า 😊");
+    await replyText(
+      replyToken,
+      "แปะขอรู้จักลื้อก่อนน้า พิมพ์ชื่อมาก่อนเลยจ้า 😊"
+    );
     return;
   }
 
@@ -454,7 +519,10 @@ const getProfileAnswerText = ({ title, profile, session }) => {
     const deleted = await deleteLastMeal(userId);
 
     if (deleted.status === "not_found") {
-      await replyText(replyToken, `${title} แปะยังไม่เจอมื้อล่าสุดให้ลบน้า 😅 ส่งรูปอาหารก่อนแล้วค่อยลบได้จ้า`);
+      await replyText(
+        replyToken,
+        `${title} แปะยังไม่เจอมื้อล่าสุดให้ลบน้า 😅 ส่งรูปอาหารก่อนแล้วค่อยลบได้จ้า`
+      );
       return;
     }
 
@@ -479,24 +547,31 @@ const getProfileAnswerText = ({ title, profile, session }) => {
     const latest = await getLastMeal(userId);
 
     if (latest.status === "not_found") {
-      await replyText(replyToken, `${title} แปะยังไม่เจอมื้อล่าสุดให้แก้น้า 😅 ส่งรูปอาหารก่อน แล้วค่อยแก้ได้จ้า`);
+      await replyText(
+        replyToken,
+        `${title} แปะยังไม่เจอมื้อล่าสุดให้แก้น้า 😅 ส่งรูปอาหารก่อน แล้วค่อยแก้ได้จ้า`
+      );
       return;
     }
 
-    const explicitMenu = String(intent.foodText || "").trim() || extractMenuFromEditText(text);
-    const explicitKcal = intent.kcal !== null && intent.kcal !== undefined ? Number(intent.kcal) : extractKcalFromText(text);
+    const explicitMenu =
+      String(intent.foodText || "").trim() || extractMenuFromEditText(text);
+
+    const explicitKcal =
+      intent.kcal !== null && intent.kcal !== undefined
+        ? Number(intent.kcal)
+        : extractKcalFromText(text);
 
     if (!explicitMenu && !explicitKcal) {
       await replyText(replyToken, getEditHelpText(title));
       return;
     }
 
-    let updatedPayload = {
-      userId,
-    };
+    let updatedPayload = { userId };
 
     if (explicitMenu) {
       const estimated = await estimateFoodFromText(explicitMenu);
+
       updatedPayload = {
         ...updatedPayload,
         menuName: estimated.menuName || explicitMenu,
@@ -528,7 +603,10 @@ const getProfileAnswerText = ({ title, profile, session }) => {
       session,
       extraData: {
         lastMeal: updated.updatedMeal,
-        calorieTarget: updated.calorieTarget || session.data?.calorieTarget || DEFAULT_CALORIE_TARGET,
+        calorieTarget:
+          updated.calorieTarget ||
+          session.data?.calorieTarget ||
+          DEFAULT_CALORIE_TARGET,
       },
     });
 
@@ -669,7 +747,10 @@ const getProfileAnswerText = ({ title, profile, session }) => {
       return;
     }
 
-    await replyText(replyToken, advice?.reply || getMealSuggestionText({ title, summary }));
+    await replyText(
+      replyToken,
+      advice?.reply || getMealSuggestionText({ title, summary })
+    );
     return;
   }
 
