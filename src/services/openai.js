@@ -53,8 +53,6 @@ export const parseUserIntent = async ({ text, session }) => {
 intent ที่อนุญาต:
 - log_food_text
 - adjust_last_meal
-- correct_last_meal
-- delete_last_meal
 - daily_summary
 - meal_suggestion
 - health_goal
@@ -63,15 +61,13 @@ intent ที่อนุญาต:
 
 กฎ:
 1. ทักทาย เช่น สวัสดี, ดี, หวัดดี, แปะ, อยู่ไหม, เริ่มเลย = meal_suggestion/action suggest_next_step
-2. หิว / อยากกิน / กินไรดี / แนะนำหน่อย / ขอเมนูสุขภาพดี / ซื้อง่าย / ทานง่าย = meal_suggestion
+2. หิว / อยากกิน / กินไรดี / แนะนำหน่อย / ขอเมนูสุขภาพดี / ซื้อง่าย / ทานง่าย / เมนูเซเว่น / ร้านสะดวกซื้อ = meal_suggestion
 3. ถามยอด / เหลือกี่แคล / สรุปวันนี้ / วันนี้กินไปเท่าไหร่ = daily_summary
 4. บอกอาหาร เช่น กินข้าวมันไก่, เมื่อกี้กินชาไทย, กินกะเพราไข่ดาว = log_food_text
 5. กินเพิ่ม / เบิ้ล / อีกจาน / อีกกล่อง / สองจาน / สั่งเพิ่ม = adjust_last_meal
 6. กินครึ่งเดียว / เหลือครึ่ง / กินไม่หมด / กินไปนิดเดียว = adjust_last_meal แบบค่าติดลบ
-7. ถ้าผู้ใช้บอกว่า ไม่ใช่..., แก้เป็น..., เปลี่ยนเป็น..., เมนูเมื่อกี้คือ..., จริงๆคือ..., เมื่อกี้ผิด ให้เป็น correct_last_meal
-8. ถ้าผู้ใช้บอกว่า ลบมื้อล่าสุด, ไม่เอามื้อนี้, ส่งผิด, ลบอันเมื่อกี้, ลบล่าสุด ให้เป็น delete_last_meal
-9. ตั้งเป้า / ลดน้ำหนัก / เพิ่มกล้าม / คุมแคล / อยากผอม / อยากลีน / อยากสุขภาพดี = health_goal
-10. ไม่ชัดแต่ยังเกี่ยวกับกิน ให้ใช้ unknown หรือ meal_suggestion ห้ามใช้ off_topic
+7. ตั้งเป้า / ลดน้ำหนัก / เพิ่มกล้าม / คุมแคล / อยากผอม / อยากลีน / อยากสุขภาพดี = health_goal
+8. ไม่ชัดแต่ยังเกี่ยวกับกิน ให้ใช้ unknown หรือ meal_suggestion ห้ามใช้ off_topic
 
 กฎ multiplier สำหรับ adjust_last_meal:
 - อีกจาน, เพิ่มอีกจาน, เบิ้ลอีกจาน, อีกกล่อง, เพิ่มอีกกล่อง = multiplier 1
@@ -200,83 +196,6 @@ export const estimateFoodFromImage = async (base64Image) => {
   );
 };
 
-export const extractFoodCorrection = async ({ text, lastMeal }) => {
-  try {
-    return await openAIJson(
-      [
-        {
-          role: "system",
-          content: `
-คุณคือ parser สำหรับแก้เมนูล่าสุดของระบบนับแคล
-อ่านข้อความ user แล้วแปลงเป็น JSON เท่านั้น
-
-ให้ดึงข้อมูลที่ user ต้องการแก้ เช่น ชื่อเมนูใหม่ kcal carb protein fat
-ถ้า user ไม่ได้บอกตัวเลขใด ให้ใส่ null
-ถ้า user บอกชื่อเมนูใหม่ ให้ใส่ menuName
-
-เมนูล่าสุดเดิม:
-${JSON.stringify(lastMeal || {})}
-
-รูปแบบ JSON:
-{
-  "menuName": "ข้าวหมูกระเทียมไข่ดาว",
-  "kcal": 650,
-  "carb": null,
-  "protein": null,
-  "fat": null
-}
-`,
-        },
-        {
-          role: "user",
-          content: text,
-        },
-      ],
-      { temperature: 0.2 }
-    );
-  } catch (err) {
-    return {
-      menuName: null,
-      kcal: null,
-      carb: null,
-      protein: null,
-      fat: null,
-    };
-  }
-};
-
-export const estimateCorrectedFood = async ({ text, lastMeal }) => {
-  return await openAIJson(
-    [
-      {
-        role: "system",
-        content: `
-คุณคือผู้ช่วยประเมินโภชนาการสำหรับเมนูที่ user แก้ไข
-ให้ใช้ข้อมูลเดิมเป็นฐาน แล้วประเมินใหม่แบบ conservative
-ส่งคืน JSON เท่านั้น
-
-เมนูล่าสุดเดิม:
-${JSON.stringify(lastMeal || {})}
-
-รูปแบบ JSON:
-{
-  "kcal": 650,
-  "menuName": "ข้าวหมูกระเทียมไข่ดาว",
-  "carb": 75,
-  "protein": 30,
-  "fat": 25
-}
-`,
-      },
-      {
-        role: "user",
-        content: text,
-      },
-    ],
-    { temperature: 0.25 }
-  );
-};
-
 export const generateNutritionAdvice = async ({ text, summary, title }) => {
   try {
     return await openAIJson(
@@ -322,7 +241,7 @@ export const generateNutritionAdvice = async ({ text, summary, title }) => {
 - ไม่ body shame
 - ไม่กดดัน
 - ไม่บอกให้อดอาหาร
-- แนะนำแบบซื้อ/กินได้จริง
+- แนะนำแบบซื้อ/กินได้จริง ไม่คลีนจ๋า
 - ห้ามตอบซ้ำแพทเทิร์นเดิมทุกครั้ง
 - ให้เปลี่ยนเมนู ตัวอย่าง และน้ำเสียงตามคำถามของผู้ใช้
 - ถ้าผู้ใช้ถามซ้ำ ให้เสนอ option ใหม่ ไม่ใช้ชุดเดิมเป๊ะๆ
@@ -366,32 +285,43 @@ export const generateSmartDailySummary = async ({ summary, title }) => {
         {
           role: "system",
           content: `
-คุณคือ "แปะแคล" ผู้ช่วยเรื่องอาหาร แคลอรี่ และโภชนาการเท่านั้น
-คาแรคเตอร์เป็นอาแปะ Gen Y อายุประมาณ 35+ ใจดี ใส่ใจสุขภาพ แซวนิดๆ แต่ไม่ดุ ไม่ body shame
+คุณคือ "แปะแคล" ผู้ช่วยสรุปอาหารประจำวันแบบฉลาด
+ตอบเฉพาะเรื่องอาหาร แคลอรี่ และโภชนาการเท่านั้น
 
-ให้สรุปวันนี้แบบฉลาด ไม่ใช่แค่บอกตัวเลข
-ต้องวิเคราะห์จาก kcal, carb, protein, fat ว่าวันนี้ควรระวังอะไร และมื้อต่อไปควรกินแนวไหน
-ตอบสั้น กระชับ ใช้งานได้จริง
+คาแรคเตอร์:
+- อาแปะ Gen Y อายุ 35+ ใจดี ใส่ใจสุขภาพ
+- อบอุ่น เป็นกันเอง แซวนิดๆ ได้ แต่ไม่ดุ ไม่ body shame
+- แนะนำแบบคนใช้ชีวิตจริง ไม่คลีนจ๋า
 
-ข้อมูลวันนี้:
-${JSON.stringify(summary || {})}
+ให้วิเคราะห์จากข้อมูลวันนี้:
+- kcal รวม
+- เป้าหมาย kcal
+- carb/protein/fat รวม
+- จำนวนมื้อ
+- เมนูล่าสุดๆ
+
+ให้ตอบสั้น กระชับ มี insight และแนะนำมื้อถัดไป
+ห้ามบอกให้อดอาหาร
+
+ข้อมูล:
+${JSON.stringify({ title, summary })}
 
 ให้ตอบเป็น JSON เท่านั้น:
 {
-  "reply": "ข้อความสรุปวันนี้"
+  "reply": "ข้อความสรุป"
 }
 `,
         },
         {
           role: "user",
-          content: `ช่วยสรุปวันนี้ให้ ${title}`,
+          content: "สรุปวันนี้แบบฉลาดให้หน่อย",
         },
       ],
       { temperature: 0.65 }
     );
   } catch (err) {
     return {
-      reply: `${title} วันนี้แปะดูภาพรวมให้แล้วนะ ถ้าโปรตีนยังน้อย มื้อถัดไปเติมไข่ ไก่ ปลา หรือเต้าหู้ได้เลย ส่วนถ้าแคลใกล้เต็มแล้ว ขอเบาๆ แบบต้ม/ย่าง/น้ำใสจะบาลานซ์กว่าจ้า`,
+      reply: `${title} วันนี้แปะสรุปให้คร่าวๆ นะ กินไปแล้ว ${summary?.todayCalories ?? summary?.totalToday ?? 0}/${summary?.calorieTarget ?? 2300} kcal จ้า มื้อถัดไปลองบาลานซ์ด้วยโปรตีนกับผักเพิ่มหน่อยนะ`,
     };
   }
 };
