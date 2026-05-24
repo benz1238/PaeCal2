@@ -1,0 +1,19 @@
+{
+  "name": "pae-cal-line-bot",
+  "version": "1.0.0",
+  "description": "LINE OA calorie tracking bot for Pae Cal",
+  "type": "module",
+  "main": "src/line-webhook.js",
+  "scripts": {
+    "start": "node src/line-webhook.js",
+    "check": "node --check src/line-webhook.js"
+  },
+  "engines": {
+    "node": "24.x"
+  },
+  "dependencies": {
+    "@line/bot-sdk": "^10.0.0",
+    "axios": "^1.13.2",
+    "express": "^4.18.2"
+  }
+}
