@@ -1,14 +1,16 @@
 import { replyText } from "../services/line.js";
 import { postToSheet } from "../services/sheet.js";
 import {
-  estimateCorrectedFood,
   estimateFoodFromText,
-  extractFoodCorrection,
   generateNutritionAdvice,
   generateSmartDailySummary,
   parseUserIntent,
 } from "../services/openai.js";
-import { calculateTDEE, DEFAULT_CALORIE_TARGET, safeNumber } from "../utils/helpers.js";
+import {
+  calculateTDEE,
+  DEFAULT_CALORIE_TARGET,
+  safeNumber,
+} from "../utils/helpers.js";
 import {
   buildTitleFromProfile,
   getDisplayTitle,
@@ -23,6 +25,9 @@ import {
   getSmartMealAdvice,
   getSummaryText,
 } from "../utils/advice.js";
+
+const OFF_TOPIC_REPLY =
+  "เรื่องนี้แปะไม่ถนัดน้า 😅 แปะช่วยดูเรื่องอาหาร แคล และมื้อที่กินได้จ้า ส่งรูปอาหารมาได้เลย 📸";
 
 const getSession = async (userId) => {
   return await postToSheet({ action: "GET_SESSION", userId });
@@ -44,16 +49,101 @@ const getDailySummary = async (userId) => {
   return await postToSheet({ action: "GET_DAILY_SUMMARY", userId });
 };
 
-const getLastMeal = async (userId) => {
-  return await postToSheet({ action: "GET_LAST_MEAL", userId });
+const isRichMenuPhotoPrompt = (text) => {
+  return ["แปะรูปอาหาร", "ส่งรูปอาหาร", "📸 แปะรูปอาหาร"].includes(text);
 };
 
-const updateLastMeal = async (payload) => {
-  return await postToSheet({ action: "UPDATE_LAST_MEAL", ...payload });
+const isRichMenuEditPrompt = (text) => {
+  return ["แก้มื้อล่าสุด", "แก้เมนูล่าสุด", "🧾 แก้มื้อล่าสุด"].includes(text);
 };
 
-const deleteLastMeal = async (userId) => {
-  return await postToSheet({ action: "DELETE_LAST_MEAL", userId });
+const isNewGoalRequest = (text) => {
+  return /^(ตั้งเป้าสุขภาพ|ตั้งเป้าใหม่|เปลี่ยนเป้า|แก้เป้า|เปลี่ยนเป้าหมาย|🎯 ตั้งเป้าสุขภาพ)$/i.test(
+    text
+  );
+};
+
+const getDirectGoal = (text) => {
+  const trimmed = String(text || "").trim();
+  const goalPattern = /^(อยากลดไขมัน|ลดไขมัน|ลดน้ำหนัก|อยากเพิ่มกล้าม|เพิ่มกล้าม|คุมแคล|คุมน้ำหนัก|กินสุขภาพดีขึ้น|อยากกินดีขึ้น|อยากลีน|เพิ่มน้ำหนักแบบสุขภาพดี)(.*)$/i;
+  const match = trimmed.match(goalPattern);
+  return match ? trimmed : "";
+};
+
+const isDeleteLastMealText = (text) => {
+  return /^(ลบมื้อล่าสุด|ไม่เอามื้อนี้|ส่งผิด|ลบอันเมื่อกี้|ลบเมนูล่าสุด)$/i.test(text);
+};
+
+const parseUpdateLastMealText = (text) => {
+  const kcalOnly = text.match(/^แก้(?:เป็น|แคล)?\s*(\d+)\s*(?:kcal|แคล|กิโลแคล)?$/i);
+  if (kcalOnly) {
+    return {
+      type: "kcal_only",
+      kcal: Number(kcalOnly[1]),
+      menuText: "",
+    };
+  }
+
+  const menuMatch = text.match(/^(?:แก้(?:มื้อล่าสุด|เมนูล่าสุด)?(?:เป็น)?|เปลี่ยน(?:มื้อล่าสุด|เมนูล่าสุด)?(?:เป็น)?)\s*(.+)$/i);
+  if (menuMatch) {
+    const menuText = menuMatch[1].trim();
+    if (menuText) {
+      return {
+        type: "menu",
+        menuText,
+      };
+    }
+  }
+
+  const notThisMatch = text.match(/^ไม่ใช่(.+?)เป็น(.+)$/i);
+  if (notThisMatch) {
+    return {
+      type: "menu",
+      menuText: notThisMatch[2].trim(),
+    };
+  }
+
+  return null;
+};
+
+const saveGoalAndReply = async ({ userId, replyToken, session, goal }) => {
+  const profile = await getProfile(userId);
+  const name = session.data?.name || profile.name || "";
+  const stats = session.data?.stats || profile.stats || "";
+  const title = buildTitleFromProfile({
+    name,
+    stats,
+    fallbackTitle: session.data?.title || profile.title || "",
+  });
+  const calorieTarget =
+    session.data?.calorieTarget || profile.calorieTarget || DEFAULT_CALORIE_TARGET;
+
+  await saveProfile({
+    userId,
+    name,
+    title,
+    stats,
+    goal,
+    calorieTarget,
+  });
+
+  await updateSession({
+    userId,
+    step: "READY",
+    sessionData: {
+      ...session.data,
+      name,
+      stats,
+      title,
+      goal,
+      calorieTarget,
+    },
+  });
+
+  await replyText(
+    replyToken,
+    `จัดให้แล้ว ${title} 🎯\nแปะอัปเดตเป้าหมายเป็น “${goal}” ให้เรียบร้อยจ้า\n\nต่อไปแปะจะช่วยดูมื้ออาหารให้เข้ากับเป้านี้มากขึ้นนะ`
+  );
 };
 
 export const handleTextMessage = async (event) => {
@@ -64,17 +154,26 @@ export const handleTextMessage = async (event) => {
 
   if (text === "__FOLLOW__") {
     await updateSession({ userId, step: "ASK_NAME", sessionData: {} });
-    await replyText(replyToken, "หนีห่าว! แปะแคลพร้อมดูแลสุขภาพแล้ว! ลื้อชื่ออะไรจ๊ะ?");
+    await replyText(
+      replyToken,
+      "หนีห่าว! แปะแคลพร้อมดูแลสุขภาพแล้ว! ลื้อชื่ออะไรจ๊ะ?"
+    );
     return;
   }
 
-  const nameMatch = text.match(/^(?:ฉันชื่อ|ผมชื่อ|ชื่อ|เรียกฉันว่า|เรียกผมว่า)\s*(.+)$/i);
+  const nameMatch = text.match(
+    /^(?:ฉันชื่อ|ผมชื่อ|ชื่อ|เรียกฉันว่า|เรียกผมว่า)\s*(.+)$/i
+  );
 
   if (nameMatch) {
     const newName = nameMatch[1].trim();
     const profile = await getProfile(userId);
     const stats = session.data?.stats || profile.stats || "";
-    const title = buildTitleFromProfile({ name: newName, stats, fallbackTitle: "" });
+    const title = buildTitleFromProfile({
+      name: newName,
+      stats,
+      fallbackTitle: "",
+    });
     const calorieTarget =
       session.data?.calorieTarget || profile.calorieTarget || DEFAULT_CALORIE_TARGET;
 
@@ -179,7 +278,6 @@ export const handleTextMessage = async (event) => {
       session.data?.title ||
       profile.title ||
       buildTitleFromProfile({ name, stats });
-
     const tdee = calculateTDEE(stats);
 
     await saveProfile({
@@ -206,38 +304,66 @@ export const handleTextMessage = async (event) => {
 
     await replyText(
       replyToken,
-      `บันทึกเรียบร้อยจ้า ${title}! 🏆
-🔥 TDEE: ~${tdee} kcal/วัน
-🎯 เป้าหมาย: ${text}
-
-ส่งรูปอาหารมาให้อั๊วแปะแคลได้เลย! 📸`
+      `บันทึกเรียบร้อยจ้า ${title}! 🏆\n🔥 TDEE: ~${tdee} kcal/วัน\n🎯 เป้าหมาย: ${text}\n\nส่งรูปอาหารมาให้อั๊วแปะแคลได้เลย! 📸`
     );
+    return;
+  }
+
+  if (session.step === "ASK_NEW_GOAL") {
+    await saveGoalAndReply({ userId, replyToken, session, goal: text });
+    return;
+  }
+
+  const title = await getDisplayTitle({ userId, session });
+
+  if (isRichMenuPhotoPrompt(text)) {
+    await replyText(
+      replyToken,
+      `${title} ส่งรูปอาหารมาได้เลยจ้า 📸\nแปะจะช่วยดูแคล โปรตีน คาร์บ ไขมัน แล้วบันทึกให้ทันที`
+    );
+    return;
+  }
+
+  if (isRichMenuEditPrompt(text)) {
+    await replyText(
+      replyToken,
+      `${title} อยากแก้มื้อล่าสุด พิมพ์แบบนี้ได้เลยจ้า 🧾\n\n- แก้มื้อล่าสุดเป็น ข้าวหมูกระเทียมไข่ดาว\n- แก้เป็น 650 kcal\n- ลบมื้อล่าสุด\n- ส่งผิด`
+    );
+    return;
+  }
+
+  if (isNewGoalRequest(text)) {
+    await updateSession({
+      userId,
+      step: "ASK_NEW_GOAL",
+      sessionData: session.data || {},
+    });
+
+    await replyText(
+      replyToken,
+      `${title} อยากตั้งเป้าใหม่ใช่ไหมจ๊ะ 🎯\nพิมพ์เป้าหมายมาได้เลย เช่น\n- ลดไขมัน\n- เพิ่มกล้าม\n- คุมน้ำหนัก\n- กินสุขภาพดีขึ้น`
+    );
+    return;
+  }
+
+  const directGoal = getDirectGoal(text);
+  if (directGoal) {
+    await saveGoalAndReply({ userId, replyToken, session, goal: directGoal });
     return;
   }
 
   if (text === "ถามแปะ") {
     await replyText(
       replyToken,
-      `ถามมาได้เลยนะลูก แปะช่วยดูเรื่องกินให้ 🍚
-
-เช่น
-- หิวแล้ว
-- เย็นนี้กินไรดี
-- เมนูนี้กี่แคล
-- วันนี้กินโปรตีนพอยัง`
+      `ถามมาได้เลยนะลูก แปะช่วยดูเรื่องกินให้ 🍚\n\nเช่น\n- หิวแล้ว\n- เย็นนี้กินไรดี\n- เมนูนี้กี่แคล\n- วันนี้กินโปรตีนพอยัง`
     );
     return;
   }
 
-  const title = await getDisplayTitle({ userId, session });
-
   if (["สรุปวันนี้", "วันนี้กินไปเท่าไหร่", "วันนี้กินไปเท่าไร"].includes(text)) {
     const summary = await getDailySummary(userId);
     const smart = await generateSmartDailySummary({ summary, title });
-    await replyText(
-      replyToken,
-      `${getSummaryText({ title, summary })}\n\n${smart.reply || ""}`.trim()
-    );
+    await replyText(replyToken, smart.reply || getSummaryText({ title, summary }));
     return;
   }
 
@@ -246,101 +372,73 @@ export const handleTextMessage = async (event) => {
     return;
   }
 
-  const intent = await parseUserIntent({ text, session });
+  if (isDeleteLastMealText(text)) {
+    const result = await postToSheet({ action: "DELETE_LAST_MEAL", userId });
 
-  if (intent.intent === "delete_last_meal") {
-    const result = await deleteLastMeal(userId);
-
-    if (result.status !== "success") {
-      await replyText(replyToken, `${title} แปะยังไม่เจอมื้อล่าสุดให้ลบน้า 😅 ส่งรูปอาหารหรือบอกเมนูก่อนก็ได้จ้า`);
+    if (result.status === "not_found") {
+      await replyText(replyToken, `${title} ยังไม่มีมื้อล่าสุดให้ลบน้า 😅`);
       return;
     }
 
-    await syncSessionFromProfile({
+    await updateSession({
       userId,
-      session,
-      extraData: { lastMeal: null },
-    });
-
-    await replyText(
-      replyToken,
-      `ลบมื้อล่าสุดให้แล้วนะ ${title} 🧾
-
-🗑️ ${result.deletedMeal?.menuName || "มื้อล่าสุด"}
-🔥 ยอดวันนี้ตอนนี้: ${result.totalToday || 0} / ${result.calorieTarget || DEFAULT_CALORIE_TARGET} kcal จ้า`
-    );
-    return;
-  }
-
-  if (intent.intent === "correct_last_meal") {
-    const latest = await getLastMeal(userId);
-    const lastMeal = latest.meal || session.data?.lastMeal;
-
-    if (!lastMeal) {
-      await replyText(replyToken, `${title} แปะยังไม่มีมื้อล่าสุดให้แก้น้า 😅 ส่งรูปอาหารหรือบอกเมนูก่อนก็ได้จ้า`);
-      return;
-    }
-
-    const correction = await extractFoodCorrection({ text, lastMeal });
-    let corrected = correction;
-
-    if (!corrected.menuName || corrected.kcal === null || corrected.kcal === undefined) {
-      corrected = await estimateCorrectedFood({ text, lastMeal });
-    }
-
-    const menuName = corrected.menuName || lastMeal.menuName;
-    const kcal = safeNumber(corrected.kcal, lastMeal.kcal || 0);
-    const carb = safeNumber(corrected.carb, lastMeal.carb || 0);
-    const protein = safeNumber(corrected.protein, lastMeal.protein || 0);
-    const fat = safeNumber(corrected.fat, lastMeal.fat || 0);
-
-    const result = await updateLastMeal({
-      userId,
-      menuName,
-      kcal,
-      carb,
-      protein,
-      fat,
-    });
-
-    if (result.status !== "success") {
-      await replyText(replyToken, `${title} แปะลองแก้แล้วแต่ยังไม่เจอมื้อล่าสุดน้า 😅`);
-      return;
-    }
-
-    const total = result.todayCalories ?? result.totalToday ?? kcal;
-    const target = result.calorieTarget || DEFAULT_CALORIE_TARGET;
-
-    await syncSessionFromProfile({
-      userId,
-      session,
-      extraData: {
-        lastMeal: { menuName, kcal, carb, protein, fat },
-        calorieTarget: target,
+      step: "READY",
+      sessionData: {
+        ...session.data,
+        lastMeal: null,
       },
     });
 
     await replyText(
       replyToken,
-      `โอเค ${title} แปะแก้มื้อล่าสุดให้แล้วจ้า 🧾
-
-จากเดิม: ${lastMeal.menuName || "มื้อล่าสุด"}
-แก้เป็น: ${menuName}
-
-${getFoodLogText({
-  menuName,
-  kcal,
-  carb,
-  protein,
-  fat,
-  total,
-  calorieTarget: target,
-})}
-
-${getSmartMealAdvice({ title, kcal, carb, protein, fat, total, calorieTarget: target })}`
+      `ลบมื้อล่าสุดให้แล้วจ้า ${title} 🧾\n\n🔥 กินไปแล้วรวม: ${result.todayCalories || result.totalToday || 0} / ${result.calorieTarget || DEFAULT_CALORIE_TARGET} kcal\n📊 สถานะวันนี้:\n(${result.progressBar || buildProgressBar(result.todayCalories || result.totalToday || 0, result.calorieTarget || DEFAULT_CALORIE_TARGET)})`
     );
     return;
   }
+
+  const updateMeal = parseUpdateLastMealText(text);
+  if (updateMeal) {
+    let payload = { action: "UPDATE_LAST_MEAL", userId };
+
+    if (updateMeal.type === "kcal_only") {
+      payload.kcal = updateMeal.kcal;
+    } else {
+      const foodData = await estimateFoodFromText(updateMeal.menuText);
+      payload = {
+        ...payload,
+        menuName: foodData.menuName || updateMeal.menuText,
+        kcal: safeNumber(foodData.kcal, 0),
+        carb: safeNumber(foodData.carb, 0),
+        protein: safeNumber(foodData.protein, 0),
+        fat: safeNumber(foodData.fat, 0),
+      };
+    }
+
+    const result = await postToSheet(payload);
+
+    if (result.status === "not_found") {
+      await replyText(replyToken, `${title} ยังไม่มีมื้อล่าสุดให้แก้น้า 😅`);
+      return;
+    }
+
+    const updatedMeal = result.updatedMeal || {};
+    await updateSession({
+      userId,
+      step: "READY",
+      sessionData: {
+        ...session.data,
+        lastMeal: updatedMeal,
+      },
+    });
+
+    await replyText(
+      replyToken,
+      `โอเค ${title} แปะแก้มื้อล่าสุดให้แล้วจ้า 🧾\n\n🔍 ${updatedMeal.menuName || "อาหาร"}\nประมาณ ${updatedMeal.kcal || 0} kcal\n\n🔥 กินไปแล้วรวม: ${result.todayCalories || result.totalToday || 0} / ${result.calorieTarget || DEFAULT_CALORIE_TARGET} kcal\n📊 สถานะวันนี้:\n(${result.progressBar || buildProgressBar(result.todayCalories || result.totalToday || 0, result.calorieTarget || DEFAULT_CALORIE_TARGET)})`
+    );
+    return;
+  }
+
+  const intent = await parseUserIntent({ text, session });
 
   if (intent.intent === "adjust_last_meal") {
     if (!session.data?.lastMeal) {
@@ -384,24 +482,15 @@ ${getSmartMealAdvice({ title, kcal, carb, protein, fat, total, calorieTarget: ta
 
     await replyText(
       replyToken,
-      `โอเค ${title} แปะปรับจากเมนูล่าสุดให้แล้วนะ 😄
-
-🍳 ${lastMeal.menuName}
-${kcal >= 0 ? "➕" : "➖"} ${signText}ประมาณ ${Math.abs(kcal)} kcal
-
-📊 สถานะวันนี้:
-(${progress})
-🔥 กินไปแล้วรวม: ${total} / ${target} kcal จ้า!
-
-${getSmartMealAdvice({
-  title,
-  kcal,
-  carb,
-  protein,
-  fat,
-  total,
-  calorieTarget: target,
-})}`
+      `โอเค ${title} แปะปรับจากเมนูล่าสุดให้แล้วนะ 😄\n\n🍳 ${lastMeal.menuName}\n${kcal >= 0 ? "➕" : "➖"} ${signText}ประมาณ ${Math.abs(kcal)} kcal\n\n📊 สถานะวันนี้:\n(${progress})\n🔥 กินไปแล้วรวม: ${total} / ${target} kcal จ้า!\n\n${getSmartMealAdvice({
+        title,
+        kcal,
+        carb,
+        protein,
+        fat,
+        total,
+        calorieTarget: target,
+      })}`
     );
     return;
   }
@@ -446,17 +535,15 @@ ${getSmartMealAdvice({
         fat,
         total,
         calorieTarget: target,
-      })}
-
-${getSmartMealAdvice({
-  title,
-  kcal,
-  carb,
-  protein,
-  fat,
-  total,
-  calorieTarget: target,
-})}`
+      })}\n\n${getSmartMealAdvice({
+        title,
+        kcal,
+        carb,
+        protein,
+        fat,
+        total,
+        calorieTarget: target,
+      })}`
     );
     return;
   }
@@ -464,10 +551,7 @@ ${getSmartMealAdvice({
   if (intent.intent === "daily_summary") {
     const summary = await getDailySummary(userId);
     const smart = await generateSmartDailySummary({ summary, title });
-    await replyText(
-      replyToken,
-      `${getSummaryText({ title, summary })}\n\n${smart.reply || ""}`.trim()
-    );
+    await replyText(replyToken, smart.reply || getSummaryText({ title, summary }));
     return;
   }
 
@@ -476,10 +560,7 @@ ${getSmartMealAdvice({
     const advice = await generateNutritionAdvice({ text, summary, title });
 
     if (advice.inScope === false) {
-      await replyText(
-        replyToken,
-        "เรื่องนี้แปะไม่ถนัดน้า 😅 แปะช่วยดูเรื่องอาหาร แคล และมื้อที่กินได้จ้า ส่งรูปอาหารมาได้เลย 📸"
-      );
+      await replyText(replyToken, OFF_TOPIC_REPLY);
       return;
     }
 
@@ -488,39 +569,26 @@ ${getSmartMealAdvice({
   }
 
   if (intent.intent === "health_goal") {
+    await updateSession({
+      userId,
+      step: "ASK_NEW_GOAL",
+      sessionData: session.data || {},
+    });
+
     await replyText(
       replyToken,
-      `${title} อยากเปลี่ยนเป้าสุขภาพใช่ไหมจ๊ะ 🎯
-
-ตอนนี้แปะยังให้ตั้งผ่าน flow หลักก่อนน้า
-พิมพ์ประมาณนี้ได้เลย:
-- ลดไขมัน
-- เพิ่มกล้าม
-- คุมน้ำหนัก
-- กินสุขภาพดีขึ้น
-
-เดี๋ยวรอบถัดไปแปะจะทำปุ่มเปลี่ยนเป้าให้กดง่ายๆ จ้า`
+      `${title} อยากปรับเป้าสุขภาพใช่ไหมจ๊ะ 🎯\nพิมพ์เป้าหมายมาได้เลย เช่น ลดไขมัน / เพิ่มกล้าม / คุมน้ำหนัก / กินสุขภาพดีขึ้น`
     );
     return;
   }
 
   if (intent.intent === "off_topic") {
-    await replyText(
-      replyToken,
-      "เรื่องนี้แปะไม่ถนัดน้า 😅 แปะช่วยดูเรื่องอาหาร แคล และมื้อที่กินได้จ้า ส่งรูปอาหารมาได้เลย 📸"
-    );
+    await replyText(replyToken, OFF_TOPIC_REPLY);
     return;
   }
 
   await replyText(
     replyToken,
-    `${title} แปะยังจับใจความไม่ค่อยได้น้า 😅
-
-ลองส่งรูปอาหารมา หรือพิมพ์แบบนี้ได้เลย:
-- สรุปวันนี้
-- หิวแล้ว
-- แก้มื้อล่าสุดเป็น ข้าวหมูกระเทียมไข่ดาว
-- ลบมื้อล่าสุด
-- กินเพิ่มอีกจาน`
+    `${title} แปะยังจับใจความไม่ค่อยได้น้า 😅\n\nลองส่งรูปอาหารมา หรือพิมพ์แบบนี้ได้เลย:\n- สรุปวันนี้\n- หิวแล้ว\n- เย็นนี้กินอะไรดี\n- กินเพิ่มอีกจาน\n- กินครึ่งเดียว`
   );
 };
