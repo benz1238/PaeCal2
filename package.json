@@ -6,7 +6,7 @@
   "main": "src/line-webhook.js",
   "scripts": {
     "start": "node src/line-webhook.js",
-    "check": "node --check src/line-webhook.js"
+    "check": "node --check src/line-webhook.js && node --check src/check-imports.js && node src/check-imports.js"
   },
   "engines": {
     "node": "24.x"
