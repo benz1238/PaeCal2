@@ -437,7 +437,30 @@ export const handleTextMessage = async (event) => {
     );
     return;
   }
+const editMealHelpKeywords = [
+  "แก้มื้อล่าสุด",
+  "แก้ไขมื้อล่าสุด",
+  "แก้มื้อเมื่อกี้",
+  "แก้ไขมื้อเมื่อกี้",
+  "แก้เมนูล่าสุด",
+];
 
+if (editMealHelpKeywords.includes(text)) {
+  await replyText(
+    replyToken,
+    `${title} อยากแก้มื้อล่าสุดใช่ไหมจ๊ะ 🧾
+
+พิมพ์แบบนี้ได้เลยน้า:
+
+- แก้มื้อล่าสุดเป็น ข้าวหมูกระเทียมไข่ดาว
+- ไม่ใช่ข้าวผัด เป็นข้าวหมูกระเทียม
+- แก้เป็น 650 kcal
+- ลบมื้อล่าสุด
+
+แปะจะไม่เดาเองนะ ต้องให้${title}บอกก่อนว่าจะแก้อะไรจ้า`
+  );
+  return;
+}
   const intent = await parseUserIntent({ text, session });
 
   if (intent.intent === "adjust_last_meal") {
