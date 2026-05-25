@@ -5,17 +5,41 @@ export const client = new line.messagingApi.MessagingApiClient({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
 });
 
+const toTextMessages = (texts) => {
+  const list = Array.isArray(texts) ? texts : [texts];
+
+  return list
+    .map((text) => String(text || "").trim())
+    .filter(Boolean)
+    .slice(0, 5)
+    .map((text) => ({ type: "text", text }));
+};
+
 export const replyText = async (replyToken, text) => {
   await client.replyMessage({
     replyToken,
-    messages: [{ type: "text", text }],
+    messages: toTextMessages(text),
+  });
+};
+
+export const replyTexts = async (replyToken, texts) => {
+  await client.replyMessage({
+    replyToken,
+    messages: toTextMessages(texts),
   });
 };
 
 export const pushText = async (to, text) => {
   await client.pushMessage({
     to,
-    messages: [{ type: "text", text }],
+    messages: toTextMessages(text),
+  });
+};
+
+export const pushTexts = async (to, texts) => {
+  await client.pushMessage({
+    to,
+    messages: toTextMessages(texts),
   });
 };
 
