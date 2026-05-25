@@ -1,7 +1,11 @@
 import { replyText } from "../services/line.js";
 import { postToSheet } from "../services/sheet.js";
 import { estimateFoodFromText, parseUserIntent } from "../services/openai.js";
-import { calculateTDEE, DEFAULT_CALORIE_TARGET, safeNumber } from "../utils/helpers.js";
+import {
+  calculateTDEE,
+  DEFAULT_CALORIE_TARGET,
+  safeNumber,
+} from "../utils/helpers.js";
 import {
   buildTitleFromProfile,
   getDisplayTitle,
@@ -9,15 +13,32 @@ import {
   getTitle,
   syncSessionFromProfile,
 } from "../utils/profile.js";
-import { buildProgressBar, getMealSuggestionText, getSummaryText } from "../utils/advice.js";
-import { decideDailyRecap, decideFoodLog, decideMealSuggestion } from "../utils/decision.js";
+import {
+  buildProgressBar,
+  getMealSuggestionText,
+  getSummaryText,
+} from "../utils/advice.js";
+import {
+  decideDailyRecap,
+  decideFoodLog,
+  decideMealSuggestion,
+} from "../utils/decision.js";
 import {
   renderDailyRecapReply,
   renderFoodLogReply,
   renderMealSuggestionReply,
 } from "../utils/personality.js";
 
-const getSession = async (userId) => postToSheet({ action: "GET_SESSION", userId });
+const getSession = async (userId) => {
+  const session = await postToSheet({ action: "GET_SESSION", userId });
+
+  return {
+    step: session?.step || "READY",
+    data: session?.data || {},
+    ...session,
+  };
+};
+
 const saveProfile = async (payload) => postToSheet({ action: "SAVE_PROFILE", ...payload });
 const updateSession = async (payload) => postToSheet({ action: "UPDATE_SESSION", ...payload });
 const logFood = async (payload) => postToSheet({ action: "LOG_FOOD", ...payload });
@@ -26,7 +47,7 @@ const getLastMeal = async (userId) => postToSheet({ action: "GET_LAST_MEAL", use
 const updateLastMeal = async (payload) => postToSheet({ action: "UPDATE_LAST_MEAL", ...payload });
 const deleteLastMeal = async (userId) => postToSheet({ action: "DELETE_LAST_MEAL", userId });
 
-const exactTexts = (list, text) => list.includes(text);
+const exactTexts = (list, text) => list.includes(String(text || "").trim());
 
 const isExactSummaryText = (text) => exactTexts([
   "สรุปวันนี้",
@@ -54,22 +75,46 @@ const isProfileQuestionText = (text) => exactTexts([
   "มื้อล่าสุดคืออะไร",
 ], text);
 
+const isOnboardingCommandText = (text) => exactTexts([
+  "กินไรดี",
+  "กินอะไรดี",
+  "หิวแล้ว",
+  "สรุปวันนี้",
+  "ถามแปะ",
+  "แปะรูปอาหาร",
+  "ตั้งเป้าสุขภาพ",
+  "แก้มื้อล่าสุด",
+  "ลบมื้อล่าสุด",
+  "วันนี้กินอะไรไปบ้าง",
+], text);
+
+const NAME_PATTERN = /^(?:เปลี่ยนชื่อเป็น|ฉันชื่อ|ผมชื่อ|ชื่อ|เรียกฉันว่า|เรียกผมว่า)\s*(.+)$/i;
+
+const isExplicitNameText = (text) => NAME_PATTERN.test(String(text || "").trim());
+
+const getNameFromExplicitText = (text) => {
+  const match = String(text || "").trim().match(NAME_PATTERN);
+  return match?.[1]?.trim() || "";
+};
+
 const getProfileAnswerText = ({ title, profile, session }) => {
   const data = session?.data || {};
-  const name = data.name || profile.name || "";
-  const stats = data.stats || profile.stats || "";
-  const goal = data.goal || profile.goal || "";
-  const calorieTarget = data.calorieTarget || profile.calorieTarget || DEFAULT_CALORIE_TARGET;
+  const name = data.name || profile?.name || "";
+  const stats = data.stats || profile?.stats || "";
+  const goal = data.goal || profile?.goal || "";
+  const calorieTarget =
+    data.calorieTarget || profile?.calorieTarget || DEFAULT_CALORIE_TARGET;
 
   return `จำได้จ้า ${title} 😊
 
-ชื่อ: ${name || "ยังไม่มีชื่อที่บันทึกไว้"}
-สเปก: ${stats || "ยังไม่มีสเปกที่บันทึกไว้"}
-เป้าหมาย: ${goal || "ยังไม่ได้ตั้งเป้าหมาย"}
-เป้าต่อวัน: ${calorieTarget} kcal
+👤 ชื่อ: ${name || "ยังไม่มีชื่อที่บันทึกไว้"}
+📏 สเปก: ${stats || "ยังไม่มีสเปกที่บันทึกไว้"}
+🎯 เป้าหมาย: ${goal || "ยังไม่ได้ตั้งเป้าหมาย"}
+🔥 เป้าต่อวัน: ${calorieTarget} kcal
 
 ถ้าอยากเปลี่ยน
-พิมพ์ “ตั้งเป้าสุขภาพ” หรือ “ฉันชื่อ...” ได้เลยจ้า`;
+พิมพ์ “เปลี่ยนชื่อเป็นเบ๊นซ์”
+หรือ “ตั้งเป้าสุขภาพ” ได้เลยจ้า`;
 };
 
 const getLastMealAnswerText = ({ title, meal }) => {
@@ -209,7 +254,34 @@ export const handleTextMessage = async (event) => {
 
   if (text === "__FOLLOW__") {
     await updateSession({ userId, step: "ASK_NAME", sessionData: {} });
-    await replyText(replyToken, "หนีห่าว! แปะแคลพร้อมดูแลสุขภาพแล้ว! ลื้อชื่ออะไรจ๊ะ?");
+    await replyText(
+      replyToken,
+      "หนีห่าว! แปะแคลพร้อมดูแลสุขภาพแล้ว! ลื้อชื่ออะไรจ๊ะ?"
+    );
+    return;
+  }
+
+  const profileForOnboarding = await getProfile(userId);
+  const savedName = session?.data?.name || profileForOnboarding?.name || "";
+
+  if (
+    !savedName &&
+    !isExplicitNameText(text) &&
+    session.step !== "ASK_NAME" &&
+    session.step !== "ASK_STATS" &&
+    session.step !== "ASK_GOAL" &&
+    session.step !== "ASK_GOAL_UPDATE"
+  ) {
+    await updateSession({
+      userId,
+      step: "ASK_NAME",
+      sessionData: session.data || {},
+    });
+
+    await replyText(
+      replyToken,
+      "แปะขอรู้จักชื่อก่อนน้า 😊\n\nลื้อชื่ออะไรจ๊ะ?\nพิมพ์แบบนี้ก็ได้: ฉันชื่อเบ๊นซ์"
+    );
     return;
   }
 
@@ -222,18 +294,24 @@ export const handleTextMessage = async (event) => {
       return;
     }
 
-    const profile = await getProfile(userId);
-    await replyText(replyToken, getProfileAnswerText({ title, profile, session }));
+    await replyText(
+      replyToken,
+      getProfileAnswerText({ title, profile: profileForOnboarding, session })
+    );
     return;
   }
 
-  const nameMatch = !["ฉันชื่ออะไร", "ชื่อฉันคืออะไร", "แปะจำชื่อฉันได้ไหม"].includes(text)
-    ? text.match(/^(?:ฉันชื่อ|ผมชื่อ|ชื่อ|เรียกฉันว่า|เรียกผมว่า)\s*(.+)$/i)
+  const nameMatch = ![
+    "ฉันชื่ออะไร",
+    "ชื่อฉันคืออะไร",
+    "แปะจำชื่อฉันได้ไหม",
+  ].includes(text)
+    ? text.match(NAME_PATTERN)
     : null;
 
   if (nameMatch) {
-    const newName = nameMatch[1].trim();
-    const profile = await getProfile(userId);
+    const newName = getNameFromExplicitText(text);
+    const profile = profileForOnboarding || {};
     const stats = session.data?.stats || profile.stats || "";
     const title = buildTitleFromProfile({ name: newName, stats, fallbackTitle: "" });
     const calorieTarget = session.data?.calorieTarget || profile.calorieTarget || DEFAULT_CALORIE_TARGET;
@@ -263,7 +341,7 @@ export const handleTextMessage = async (event) => {
     });
 
     const message = session.step === "ASK_NAME"
-      ? `จำได้แล้วจ้า ต่อไปแปะจะเรียก ${title} นะ 😊\n\nขอสเปกหน่อย (เพศ, อายุ, สูง, น้ำหนัก)\n💡 เช่น: ชาย 31 165 61`
+      ? `จำได้แล้วจ้า ต่อไปแปะจะเรียก ${title} นะ 😊\n\nขอสเปกหน่อยน้า\nเพศ อายุ สูง น้ำหนัก\n\n💡 เช่น: ชาย 31 165 61`
       : `จำได้แล้วจ้า ต่อไปแปะจะเรียก ${title} นะ 😊`;
 
     await replyText(replyToken, message);
@@ -271,17 +349,44 @@ export const handleTextMessage = async (event) => {
   }
 
   if (session.step === "ASK_NAME") {
-    const name = text;
+    if (isOnboardingCommandText(text)) {
+      await replyText(
+        replyToken,
+        "เดี๋ยวก่อนน้า แปะยังไม่รู้จักชื่อเลย 😅\n\nลื้อชื่ออะไรจ๊ะ?\nพิมพ์แบบนี้ก็ได้: ฉันชื่อเบ๊นซ์"
+      );
+      return;
+    }
 
-    await saveProfile({ userId, name, title: "", stats: "", goal: "", calorieTarget: DEFAULT_CALORIE_TARGET });
+    const name = isExplicitNameText(text) ? getNameFromExplicitText(text) : text;
+
+    if (!name || name.length > 30) {
+      await replyText(
+        replyToken,
+        "แปะขอชื่อสั้น ๆ ก่อนน้า 😊\nเช่น: เบ๊นซ์ หรือ ฉันชื่อเบ๊นซ์"
+      );
+      return;
+    }
+
+    await saveProfile({
+      userId,
+      name,
+      title: "",
+      stats: "",
+      goal: "",
+      calorieTarget: DEFAULT_CALORIE_TARGET,
+    });
+
     await updateSession({ userId, step: "ASK_STATS", sessionData: { name } });
 
-    await replyText(replyToken, "ยินดีที่ได้รู้จักครับ! ขอสเปกหน่อย (เพศ, อายุ, สูง, น้ำหนัก)\n💡 เช่น: ชาย 31 165 61");
+    await replyText(
+      replyToken,
+      `จำได้แล้วจ้า ${name} 😊\n\nขอสเปกหน่อยน้า\nเพศ อายุ สูง น้ำหนัก\n\n💡 เช่น: ชาย 31 165 61`
+    );
     return;
   }
 
   if (session.step === "ASK_STATS") {
-    const profile = await getProfile(userId);
+    const profile = profileForOnboarding || {};
     const parts = text.split(/\s+/);
     const name = session.data?.name || profile.name || "";
     const title = getTitle(parts[0], parts[1], name);
@@ -290,12 +395,15 @@ export const handleTextMessage = async (event) => {
     await saveProfile({ userId, name, title, stats: text, goal: "", calorieTarget: tdee });
     await updateSession({ userId, step: "ASK_GOAL", sessionData: { ...session.data, name, stats: text, title, calorieTarget: tdee } });
 
-    await replyText(replyToken, `โอเคจ้า ${title}! ด่านสุดท้าย เป้าหมาย/สไตล์การกินเป็นไงบ้างจ๊ะ?\n\nไม่มีพิมพ์ "ไม่มี" ได้เลย`);
+    await replyText(
+      replyToken,
+      `โอเคจ้า ${title}! ด่านสุดท้าย เป้าหมาย/สไตล์การกินเป็นไงบ้างจ๊ะ?\n\nไม่มีพิมพ์ "ไม่มี" ได้เลย`
+    );
     return;
   }
 
   if (session.step === "ASK_GOAL" || session.step === "ASK_GOAL_UPDATE") {
-    const profile = await getProfile(userId);
+    const profile = profileForOnboarding || {};
     const name = session.data?.name || profile.name || "";
     const stats = session.data?.stats || profile.stats || "";
     const title = session.data?.title || profile.title || buildTitleFromProfile({ name, stats, fallbackTitle: "" });
@@ -304,7 +412,10 @@ export const handleTextMessage = async (event) => {
     await saveProfile({ userId, name, title, stats, goal: text, calorieTarget });
     await updateSession({ userId, step: "READY", sessionData: { ...session.data, name, stats, title, goal: text, calorieTarget } });
 
-    await replyText(replyToken, `บันทึกเป้าหมายเรียบร้อยจ้า ${title}! 🎯\n\nเป้าหมาย: ${text}\n🔥 เป้าต่อวันประมาณ: ${calorieTarget} kcal\n\nส่งรูปอาหารมาให้อั๊วแปะแคลได้เลย! 📸`);
+    await replyText(
+      replyToken,
+      `บันทึกเป้าหมายเรียบร้อยจ้า ${title}! 🎯\n\nเป้าหมาย: ${text}\n🔥 เป้าต่อวันประมาณ: ${calorieTarget} kcal\n\nส่งรูปอาหารมาให้อั๊วแปะแคลได้เลย! 📸`
+    );
     return;
   }
 
@@ -499,7 +610,10 @@ export const handleTextMessage = async (event) => {
   if (intent.intent === "meal_suggestion") {
     const summary = await getDailySummary(userId);
     const decision = decideMealSuggestion({ summary, text });
-    await replyText(replyToken, renderMealSuggestionReply({ title, decision }) || getMealSuggestionText({ title, summary }));
+    await replyText(
+      replyToken,
+      renderMealSuggestionReply({ title, decision }) || getMealSuggestionText({ title, summary })
+    );
     return;
   }
 
