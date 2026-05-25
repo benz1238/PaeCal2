@@ -1,17 +1,24 @@
-import { pushText, replyText, getLineImageBase64 } from "../services/line.js";
+import { pushTexts, replyText, getLineImageBase64 } from "../services/line.js";
 import { postToSheet } from "../services/sheet.js";
 import { estimateFoodFromImage } from "../services/openai.js";
 import { DEFAULT_CALORIE_TARGET, safeNumber } from "../utils/helpers.js";
 import { getDisplayTitle, syncSessionFromProfile } from "../utils/profile.js";
 import { decideFoodLog } from "../utils/decision.js";
-import { renderFoodLogReply, renderNoFoodDetectedReply } from "../utils/personality.js";
+import {
+  renderFoodLogMessages,
+  renderFoodLogReply,
+  renderNoFoodDetectedReply,
+} from "../utils/personality.js";
 
 export const handleImageMessage = async (event) => {
   const userId = event.source.userId;
   const session = await postToSheet({ action: "GET_SESSION", userId });
 
   if (session.step !== "READY") {
-    await replyText(event.replyToken, "แปะขอรู้จักลื้อก่อนน้า\nพิมพ์ชื่อมาก่อนเลยจ้า 😊");
+    await replyText(
+      event.replyToken,
+      "แปะขอรู้จักลื้อก่อนน้า\nพิมพ์ชื่อมาก่อนเลยจ้า 😊"
+    );
     return;
   }
 
@@ -62,13 +69,9 @@ export const handleImageMessage = async (event) => {
     },
   });
 
-  await pushText(
-    userId,
-    renderFoodLogReply({
-      title,
-      meal,
-      summary,
-      decision,
-    })
-  );
+  const messages = renderFoodLogMessages
+    ? renderFoodLogMessages({ title, meal, summary, decision })
+    : [renderFoodLogReply({ title, meal, summary, decision })];
+
+  await pushTexts(userId, messages);
 };
