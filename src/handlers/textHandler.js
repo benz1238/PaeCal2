@@ -1226,11 +1226,141 @@ const getGoalAwareRecapLine = ({ goalText = "", normalized, topMeal }) => {
   return "เป้าที่ลื้อตั้งไว้ แปะจำอยู่นะ ค่อย ๆ ปรับให้เข้าทางตัวเองก็พอ 🎯";
 };
 
+
+const getMacroStatusForRecap = ({ normalized }) => {
+  const target = Math.max(Number(normalized.target || DEFAULT_CALORIE_TARGET), 1);
+  const carbLimit = Math.round(target * 0.55 / 4);
+  const proteinFloor = 70;
+  const fatLimit = Math.round(target * 0.30 / 9);
+
+  return {
+    carbColor: normalized.carb > carbLimit ? "#DC2626" : "#111827",
+    proteinColor: normalized.mealCount > 0 && normalized.protein < proteinFloor ? "#D97706" : "#047857",
+    fatColor: normalized.fat > fatLimit ? "#DC2626" : "#111827",
+    carbNote: normalized.carb > carbLimit ? "สูงกว่าที่ควรนิดนึง" : "",
+    proteinNote: normalized.protein >= proteinFloor ? "โปรตีนดี" : "โปรตีนยังเติมได้",
+    fatNote: normalized.fat > fatLimit ? "ไขมันเริ่มสูง" : "",
+  };
+};
+
+const getMealLabelForRecap = (meal = {}) => {
+  const raw = String(meal.mealLabel || meal.label || meal.mealTime || "").trim();
+  if (raw) return raw;
+
+  const name = normalizeText(meal.menuName || meal.name || "");
+  if (name.includes("เช้า")) return "เช้า";
+  if (name.includes("เที่ยง") || name.includes("กลางวัน")) return "เที่ยง";
+  if (name.includes("เย็น") || name.includes("ค่ำ")) return "เย็น";
+  if (name.includes("ดึก")) return "ดึก";
+  return "";
+};
+
+const formatMealNameForRecap = (meal = {}) => {
+  const name = String(meal.menuName || meal.name || "อาหาร").trim();
+  const label = getMealLabelForRecap(meal);
+  return label && !name.includes(label) ? `${label}: ${name}` : name;
+};
+
+const splitExplicitMealText = (text) => {
+  const raw = String(text || "").trim();
+  if (!raw) return [];
+
+  const normalized = raw
+    .replace(/\r/g, "\n")
+    .replace(/[，,]+/g, "\n")
+    .replace(/\s+(?=มื้อ(?:เช้า|เที่ยง|กลางวัน|เย็น|ค่ำ|ดึก)\b)/g, "\n")
+    .replace(/\s+(?=(?:เช้า|เที่ยง|กลางวัน|เย็น|ค่ำ|ดึก)\s*[:：])/g, "\n");
+
+  const lines = normalized
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const segments = [];
+
+  for (const line of lines) {
+    const match = line.match(/^(?:มื้อ)?(เช้า|เที่ยง|กลางวัน|เย็น|ค่ำ|ดึก)\s*[:：\-]?\s*(.+)$/i);
+    if (!match) continue;
+
+    const label = match[1] === "กลางวัน" ? "เที่ยง" : match[1];
+    const foodText = String(match[2] || "").trim();
+
+    if (foodText && hasFoodKeyword(foodText)) {
+      segments.push({ label, foodText });
+    }
+  }
+
+  return segments.length >= 2 ? segments.slice(0, 5) : [];
+};
+
+const logExplicitMealSegments = async ({ event, userId, session, title, segments, goalText }) => {
+  let latestSummary = null;
+  const meals = [];
+
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i];
+    const foodData = await estimateFoodFromText(segment.foodText);
+    const kcal = safeNumber(foodData.kcal, 0);
+    const carb = safeNumber(foodData.carb, 0);
+    const protein = safeNumber(foodData.protein, 0);
+    const fat = safeNumber(foodData.fat, 0);
+    const menuName = `${segment.label}: ${foodData.menuName || segment.foodText}`;
+    const items = normalizeEstimatedItems(foodData, segment.foodText);
+    const requestId = `${getMessageRequestId(event, "text-log")}:part-${i + 1}`;
+
+    const sheetData = await logFood({
+      userId,
+      name: session.data?.name || "",
+      kcal,
+      carb,
+      protein,
+      fat,
+      menuName,
+      requestId,
+      itemsJson: serializeMealItems(items),
+    });
+
+    latestSummary = sheetData;
+    meals.push(normalizeMealRecord({ menuName, kcal, carb, protein, fat, items, requestId, mealLabel: segment.label }));
+  }
+
+  const total = latestSummary?.todayCalories ?? latestSummary?.totalToday ?? meals.reduce((sum, meal) => sum + safeNumber(meal.kcal, 0), 0);
+  const target = latestSummary?.calorieTarget || DEFAULT_CALORIE_TARGET;
+  const summary = { ...latestSummary, todayCalories: total, totalToday: total, calorieTarget: target };
+  const recentMeals = meals.reduce(
+    (list, meal) => upsertRecentMealList(list, meal),
+    getRecentMealsFromSession(session)
+  );
+  const lastMeal = meals[meals.length - 1] || null;
+  const loggedText = meals
+    .map((meal) => `- ${meal.menuName} ${Math.round(safeNumber(meal.kcal, 0))} kcal`)
+    .join("\n");
+  const left = Math.max(Math.round(target - total), 0);
+  const progress = buildProgressBar(total, target);
+
+  await syncSessionFromProfile({
+    userId,
+    session,
+    extraData: { calorieTarget: target, lastMeal, recentMeals },
+  });
+
+  await replyTexts(replyTokenFromEvent(event), [
+    `${title} แปะบันทึกแยกมื้อให้แล้วนะ 🍽️\n\n${loggedText}`,
+    `📊 วันนี้กินไปแล้ว\n${Math.round(total)} / ${Math.round(target)} kcal\n${total > target ? `เกินประมาณ ${Math.round(total - target)} kcal` : `เหลือประมาณ ${left} kcal`}\n(${progress})`,
+    total > target
+      ? "วันนี้เกินนิดนึง ไม่ต้องตกใจ พรุ่งนี้ค่อยดึงกลับจ้า 😄"
+      : "ยังพอจัดได้อยู่ มื้อต่อไปเลือกดี ๆ นะ 😄",
+  ]);
+};
+
+const replyTokenFromEvent = (event) => event.replyToken;
+
 const buildDailyRecapPayload = ({ title, summary, goalText = "" }) => {
   const normalized = normalizeSummaryForRecap(summary);
   const status = getRecapStatus(normalized);
+  const macroStatus = getMacroStatusForRecap({ normalized });
   const topMeal = getTopMealForRecap(normalized.meals);
-  const topMealName = topMeal?.menuName || topMeal?.name || "";
+  const topMealName = topMeal ? formatMealNameForRecap(topMeal) : "";
   const topMealKcal = Number(topMeal?.kcal || topMeal?.totalKcal || 0) || 0;
   const topMealText = topMealName
     ? `${topMealName}${topMealKcal ? ` · ${Math.round(topMealKcal)} kcal` : ""}`
@@ -1240,9 +1370,13 @@ const buildDailyRecapPayload = ({ title, summary, goalText = "" }) => {
     statusText: status.statusText,
     statusColor: status.statusColor,
     kcalText: `${Math.round(normalized.total)} / ${Math.round(normalized.target)} kcal`,
+    kcalColor: normalized.over > 0 ? "#DC2626" : status.mood === "near" ? "#D97706" : "#111827",
     carbText: `${Math.round(normalized.carb)} g`,
+    carbColor: macroStatus.carbColor,
     proteinText: `${Math.round(normalized.protein)} g`,
+    proteinColor: macroStatus.proteinColor,
     fatText: `${Math.round(normalized.fat)} g`,
+    fatColor: macroStatus.fatColor,
     mealCountText: `${normalized.mealCount} มื้อ`,
     goalText: getGoalLabelForRecap(goalText),
     topMealText,
@@ -1259,26 +1393,24 @@ const buildDailyRecapPayload = ({ title, summary, goalText = "" }) => {
 
   const goalLine = getGoalAwareRecapLine({ goalText, normalized, topMeal });
   const intro = status.mood === "over"
-    ? `${title} วันนี้เลยเป้ามานิดนึงนะ 😅\n\nไม่ต้องตกใจ เดี๋ยวพรุ่งนี้ค่อยดึงกลับ แปะว่าไม่พัง แค่มีแววซน`
+    ? `${title} วันนี้เกินเป้าแล้วนะ 👀\n\nมื้อต่อไปถ้ายังหิว เอาเบา ๆ พอ เดี๋ยวพรุ่งนี้ค่อยดึงกลับ 😄`
     : status.mood === "near"
-      ? `${title} วันนี้ใกล้เต็มแล้วนะ 👀\n\nมื้อต่อไปถ้ายังหิว เอาเบา ๆ พอ จะได้ไม่แน่นเกิน`
-      : `${title} วันนี้รวม ๆ ยังโอเคเลย 😄\n\nแปะว่าเดินเกมดีอยู่ ไม่ต้องซีเรียส`;
+      ? `${title} มื้อต่อไปถ้ายังหิว ก็เบา ๆ พอ จะได้ไม่แน่นเกิน 😄`
+      : `${title} วันนี้รวม ๆ ยังโอเคเลย 😄\n\nมื้อต่อไปเลือกชิล ๆ ได้ แปะว่าไปต่อสวย`;
 
   const insightParts = [];
 
   if (topMealName) {
-    insightParts.push(`มื้อที่เด่นสุดวันนี้คือ ${topMealName}${topMealKcal ? ` ประมาณ ${Math.round(topMealKcal)} kcal` : ""}`);
+    insightParts.push(`มื้อเด่นวันนี้คือ ${topMealName}${topMealKcal ? ` ประมาณ ${Math.round(topMealKcal)} kcal` : ""}`);
   }
 
-  if (normalized.protein >= 70) {
-    insightParts.push("โปรตีนวันนี้ดูดี มีของให้กล้ามเนื้อทำงานอยู่ 💪");
-  } else if (normalized.mealCount > 0) {
-    insightParts.push("โปรตีนยังเติมได้อีกนิด พรุ่งนี้เพิ่มไข่/ไก่/เต้าหู้คือดีเลย 💪");
-  }
+  if (macroStatus.fatNote) insightParts.push(macroStatus.fatNote);
+  if (macroStatus.carbNote) insightParts.push(macroStatus.carbNote);
+  if (macroStatus.proteinNote && normalized.mealCount > 0) insightParts.push(macroStatus.proteinNote);
 
-  const insight = insightParts.length
-    ? `อินไซต์จากแปะ:\n- ${insightParts.join("\n- ")}${goalLine ? `\n\n${goalLine}` : ""}`
-    : goalLine || "แปะดูรวม ๆ แล้ว วันนี้ยังพอคุมได้อยู่ 😄";
+  const insight = insightParts.length || goalLine
+    ? `อินไซต์จากแปะ 👀\n- ${insightParts.slice(0, 3).join("\n- ")}${goalLine ? `\n\n${goalLine}` : ""}`.replace("- \n", "")
+    : "อินไซต์จากแปะ 👀\nวันนี้ดูรวม ๆ ยังพอคุมได้อยู่";
 
   return {
     card,
@@ -1626,6 +1758,13 @@ export const handleTextMessage = async (event) => {
   }
 
   if (isLikelyFoodLogText(text)) {
+    const explicitMealSegments = splitExplicitMealText(text);
+
+    if (explicitMealSegments.length >= 2) {
+      await logExplicitMealSegments({ event, userId, session, title, segments: explicitMealSegments, goalText });
+      return;
+    }
+
     const localIntent = getLocalIntent(text) || {
       intent: "log_food_text",
       foodText: stripEatLogPrefix(text),
