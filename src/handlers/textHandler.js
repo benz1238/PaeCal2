@@ -118,9 +118,12 @@ const getLocalIntent = (text) => {
 
 
 const FOOD_ADVICE_QUESTION_WORDS = [
-  "ดีไหม", "ดีมั้ย", "โอเคไหม", "โอเคมั้ย", "ได้ไหม", "ได้มั้ย", "ได้ปะ",
-  "เหมาะไหม", "เหมาะมั้ย", "ควรไหม", "ควรมั้ย", "กินได้ไหม", "กินได้มั้ย",
-  "อ้วนไหม", "อ้วนมั้ย", "หนักไหม", "หนักมั้ย", "พังไหม", "พังมั้ย"
+  "ดีไหม", "ดีมั้ย", "ดีปะ", "ดีป่ะ", "ดีป่าว", "ดีเปล่า",
+  "โอเคไหม", "โอเคมั้ย", "โอเคปะ", "โอเคป่ะ",
+  "ได้ไหม", "ได้มั้ย", "ได้ปะ", "ได้ป่ะ", "ได้ป่าว",
+  "เหมาะไหม", "เหมาะมั้ย", "ควรไหม", "ควรมั้ย", "ควรปะ", "ควรป่ะ",
+  "กินได้ไหม", "กินได้มั้ย", "กินดีไหม", "กินดีมั้ย", "กินดีปะ", "กินดีป่ะ",
+  "อ้วนไหม", "อ้วนมั้ย", "หนักไหม", "หนักมั้ย", "พังไหม", "พังมั้ย", "พังปะ", "พังป่ะ"
 ];
 
 const FOOD_ADVICE_KEYWORDS = [
@@ -130,7 +133,7 @@ const FOOD_ADVICE_KEYWORDS = [
   "ขนม", "เค้ก", "คุกกี้", "เบเกอรี่", "โยเกิร์ต", "นม", "หมูกระทะ", "ชาบู", "พิซซ่า", "เบอร์เกอร์"
 ];
 
-const FOOD_STOP_WORD_PATTERN = /(ดีไหม|ดีมั้ย|โอเคไหม|โอเคมั้ย|ได้ไหม|ได้มั้ย|ได้ปะ|เหมาะไหม|เหมาะมั้ย|ควรไหม|ควรมั้ย|กินได้ไหม|กินได้มั้ย|อ้วนไหม|อ้วนมั้ย|หนักไหม|หนักมั้ย|พังไหม|พังมั้ย|อันไหนดี|อะไรดี|ไหนดี|ดีกว่า|เลือกอะไร|กี่แคล|กี่ kcal|แคลเท่าไหร่|แคลเท่าไร).*/i;
+const FOOD_STOP_WORD_PATTERN = /(ดีไหม|ดีมั้ย|ดีปะ|ดีป่ะ|ดีป่าว|ดีเปล่า|โอเคไหม|โอเคมั้ย|โอเคปะ|โอเคป่ะ|ได้ไหม|ได้มั้ย|ได้ปะ|ได้ป่ะ|ได้ป่าว|เหมาะไหม|เหมาะมั้ย|ควรไหม|ควรมั้ย|ควรปะ|ควรป่ะ|กินได้ไหม|กินได้มั้ย|กินดีไหม|กินดีมั้ย|กินดีปะ|กินดีป่ะ|อ้วนไหม|อ้วนมั้ย|หนักไหม|หนักมั้ย|พังไหม|พังมั้ย|พังปะ|พังป่ะ|อันไหนดี|อะไรดี|ไหนดี|ดีกว่า|เลือกอะไร|กี่แคล|กี่ kcal|แคลเท่าไหร่|แคลเท่าไร).*/i;
 
 const hasFoodKeyword = (text) => FOOD_ADVICE_KEYWORDS.some((word) => normalizeText(text).includes(word));
 
@@ -194,13 +197,26 @@ const isFoodKcalQuestionText = (text) => {
 
 const isNextMealAfterFoodText = (text) => {
   const value = normalizeText(text);
-  return hasFoodKeyword(value) && hasAnyText(value, ["แล้วเย็นนี้", "แล้วมื้อต่อไป", "ต่อไปกิน", "เย็นนี้กินอะไร", "มื้อต่อไปกินอะไร"]);
+  return hasFoodKeyword(value) && hasAnyText(value, [
+    "แล้วเย็นนี้", "แล้วคืนนี้", "แล้วมื้อต่อไป",
+    "ต่อไปกิน", "มื้อต่อไปกิน", "มื้อต่อไปควรกิน",
+    "เย็นนี้กินอะไร", "เย็นนี้จะกินอะไร", "คืนนี้กินอะไร", "คืนนี้จะกินอะไร"
+  ]);
+};
+
+const isFoodDesireAdviceText = (text) => {
+  const value = normalizeText(text);
+  if (!hasFoodKeyword(value)) return false;
+
+  return /^(อยากกิน|อยากลอง|ว่าจะกิน|กำลังจะกิน|เย็นนี้อยากกิน|คืนนี้อยากกิน|ขอกิน|กิน)\s*/i.test(value)
+    || hasAnyText(value, ["อยากกิน", "กินดี", "กินได้", "กินปะ", "กินป่ะ"]);
 };
 
 const isFoodAdviceText = (text) => {
   const value = normalizeText(text);
-  if (!value || value.length > 100) return false;
+  if (!value || value.length > 120) return false;
   if (isFoodCompareText(value) || isFoodKcalQuestionText(value) || isNextMealAfterFoodText(value)) return true;
+  if (isFoodDesireAdviceText(value)) return true;
   const hasQuestion = FOOD_ADVICE_QUESTION_WORDS.some((word) => value.includes(word));
   return hasQuestion && hasFoodKeyword(value);
 };
@@ -249,7 +265,8 @@ ${menuName}
 
 const buildNextMealAfterFoodReply = ({ title, text, summary }) => {
   const budget = getDayBudget(summary);
-  const food = cleanFoodText(text.replace(/แล้ว.*/i, ""));
+  const beforeNextMeal = String(text || "").split(/แล้ว|จากนั้น|ต่อไป/i)[0];
+  const food = cleanFoodText(beforeNextMeal);
 
   if (budget.isOver) {
     return `${title} ถ้ากิน ${food} ไปแล้ว
