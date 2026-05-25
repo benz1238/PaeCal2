@@ -3,17 +3,15 @@ import { postToSheet } from "../services/sheet.js";
 import { estimateFoodFromImage } from "../services/openai.js";
 import { DEFAULT_CALORIE_TARGET, safeNumber } from "../utils/helpers.js";
 import { getDisplayTitle, syncSessionFromProfile } from "../utils/profile.js";
-import { getFoodLogText, getSmartMealAdvice } from "../utils/advice.js";
+import { decideFoodLog } from "../utils/decision.js";
+import { renderFoodLogReply, renderNoFoodDetectedReply } from "../utils/personality.js";
 
 export const handleImageMessage = async (event) => {
   const userId = event.source.userId;
-  const session = await postToSheet({
-    action: "GET_SESSION",
-    userId,
-  });
+  const session = await postToSheet({ action: "GET_SESSION", userId });
 
   if (session.step !== "READY") {
-    await replyText(event.replyToken, "แปะขอรู้จักลื้อก่อนน้า พิมพ์ชื่อมาก่อนเลยจ้า 😊");
+    await replyText(event.replyToken, "แปะขอรู้จักลื้อก่อนน้า\nพิมพ์ชื่อมาก่อนเลยจ้า 😊");
     return;
   }
 
@@ -25,6 +23,11 @@ export const handleImageMessage = async (event) => {
   const protein = safeNumber(gptData.protein, 0);
   const fat = safeNumber(gptData.fat, 0);
   const menuName = gptData.menuName || "อาหาร";
+
+  if (!menuName || kcal <= 0) {
+    await replyText(event.replyToken, renderNoFoodDetectedReply());
+    return;
+  }
 
   const sheetData = await postToSheet({
     action: "LOG_FOOD",
@@ -39,42 +42,33 @@ export const handleImageMessage = async (event) => {
 
   const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
   const target = sheetData.calorieTarget || DEFAULT_CALORIE_TARGET;
+  const summary = {
+    ...sheetData,
+    todayCalories: total,
+    totalToday: total,
+    calorieTarget: target,
+  };
+
+  const meal = { menuName, kcal, carb, protein, fat };
   const title = await getDisplayTitle({ userId, session });
+  const decision = decideFoodLog({ meal, summary });
 
   await syncSessionFromProfile({
     userId,
     session,
     extraData: {
       calorieTarget: target,
-      lastMeal: {
-        menuName,
-        kcal,
-        carb,
-        protein,
-        fat,
-      },
+      lastMeal: meal,
     },
   });
 
-  const message = `${getFoodLogText({
-    menuName,
-    kcal,
-    carb,
-    protein,
-    fat,
-    total,
-    calorieTarget: target,
-  })}
-
-${getSmartMealAdvice({
-  title,
-  kcal,
-  carb,
-  protein,
-  fat,
-  total,
-  calorieTarget: target,
-})}`;
-
-  await pushText(userId, message);
+  await pushText(
+    userId,
+    renderFoodLogReply({
+      title,
+      meal,
+      summary,
+      decision,
+    })
+  );
 };
