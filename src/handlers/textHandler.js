@@ -1,4 +1,4 @@
-import { replyDailyRecapCardWithBubbles, replyText, replyTexts } from "../services/line.js";
+import { pushDailyRecapCardWithBubbles, pushTexts, replyDailyRecapCardWithBubbles, replyText, replyTexts } from "../services/line.js";
 import { postToSheet } from "../services/sheet.js";
 import { estimateFoodFromText, parseUserIntent, reviseFoodEstimateFromCorrection } from "../services/openai.js";
 import {
@@ -62,6 +62,7 @@ const updateSession = async (payload) => postToSheet({ action: "UPDATE_SESSION",
 const logFood = async (payload) => postToSheet({ action: "LOG_FOOD", ...payload });
 const batchLogFood = async (payload) => postToSheet({ action: "BATCH_LOG_FOOD", ...payload });
 const getDailySummary = async (userId) => postToSheet({ action: "GET_DAILY_SUMMARY", userId });
+const getDailySummaryFresh = async (userId) => postToSheet({ action: "GET_DAILY_SUMMARY", userId, forceRebuild: true });
 const getLastMeal = async (userId) => postToSheet({ action: "GET_LAST_MEAL", userId });
 const updateLastMeal = async (payload) => retryOnce(() => postToSheet({ action: "UPDATE_LAST_MEAL", ...payload }));
 const updateMealByRequestId = async (payload) => retryOnce(() => postToSheet({ action: "UPDATE_MEAL_BY_REQUEST_ID", ...payload }));
@@ -968,6 +969,51 @@ const buildLatestMealHeavyReply = async ({ title, userId, session }) => {
 };
 
 
+const isRefreshSummaryText = (text) => exactTexts([
+  "รีเฟรชสรุป",
+  "รีเฟรชสรุปวันนี้",
+  "คำนวณสรุปใหม่",
+  "อัปเดตสรุปใหม่",
+  "refresh summary",
+], text);
+
+
+const isAcknowledgementText = (text) => {
+  const value = normalizeText(text)
+    .replace(/[.!?？！，,~ๆ]+/g, "")
+    .trim();
+
+  if (!value || value.length > 24) return false;
+
+  return [
+    "เค",
+    "โอเค",
+    "โอเคร",
+    "ok",
+    "okay",
+    "ได้",
+    "ได้เลย",
+    "รับทราบ",
+    "ครับ",
+    "คับ",
+    "ค่ะ",
+    "คะ",
+    "จ้า",
+    "จ้ะ",
+    "จ๊ะ",
+    "อืม",
+    "อือ",
+    "อ่อ",
+    "อ๋อ",
+    "โอเคครับ",
+    "โอเคค่ะ",
+    "โอเคจ้า",
+    "เคครับ",
+    "เคค่ะ",
+    "เคจ้า",
+  ].includes(value);
+};
+
 const isExactSummaryText = (text) => exactTexts([
   "สรุปวันนี้",
   "วันนี้กินไปเท่าไหร่",
@@ -1437,6 +1483,11 @@ const splitExplicitMealText = (text) => {
 };
 
 const logExplicitMealSegments = async ({ event, userId, session, title, segments, goalText }) => {
+  await replyText(
+    event.replyToken,
+    `${title} แปะกำลังแยกมื้อให้แป๊บนะ 👀\nหลายมื้อหน่อย เดี๋ยวรวมให้แบบไม่มั่ว 🍽️`
+  );
+
   const estimatedMeals = await Promise.all(
     segments.map(async (segment, index) => {
       const foodData = await estimateFoodFromText(segment.foodText);
@@ -1494,7 +1545,7 @@ const logExplicitMealSegments = async ({ event, userId, session, title, segments
     extraData: { calorieTarget: target, lastMeal, recentMeals },
   });
 
-  await replyTexts(event.replyToken, [
+  await pushTexts(userId, [
     `${title} แปะแยกมื้อให้แล้วนะ 🍽️\n\n${loggedText}`,
     `📊 วันนี้กินไปแล้ว\n${Math.round(total)} / ${Math.round(target)} kcal\n${total > target ? `เกินประมาณ ${Math.round(total - target)} kcal` : `เหลือประมาณ ${left} kcal`}\n(${progress})`,
     total > target
@@ -1502,7 +1553,6 @@ const logExplicitMealSegments = async ({ event, userId, session, title, segments
       : "ยังพอจัดได้อยู่ มื้อต่อไปเลือกดี ๆ นะ 😄",
   ]);
 };
-
 
 
 const buildDailyRecapPayload = ({ title, summary, goalText = "" }) => {
@@ -1812,6 +1862,12 @@ export const handleTextMessage = async (event) => {
     return;
   }
 
+  if (isAcknowledgementText(text)) {
+    // Standalone acknowledgements like "เค", "ครับ", "จ้า", "โอเค"
+    // are conversation closers. Do not reply, otherwise Pae feels needy/repetitive.
+    return;
+  }
+
   if (isProteinStatusQuestionText(text)) {
     const summary = await getDailySummary(userId);
     await replyText(replyToken, buildProteinStatusReply({ title, summary }));
@@ -1832,6 +1888,14 @@ export const handleTextMessage = async (event) => {
 
   if (isLatestMealHeavyQuestionText(text)) {
     await replyText(replyToken, await buildLatestMealHeavyReply({ title, userId, session }));
+    return;
+  }
+
+  if (isRefreshSummaryText(text)) {
+    await replyText(replyToken, `${title} แปะรีเฟรชสรุปให้ใหม่แล้วนะ 🔄`);
+    const summary = await getDailySummaryFresh(userId);
+    const payload = buildDailyRecapPayload({ title, summary, goalText });
+    await pushDailyRecapCardWithBubbles(userId, { title, ...payload });
     return;
   }
 

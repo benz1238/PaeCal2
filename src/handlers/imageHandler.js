@@ -23,6 +23,11 @@ export const handleImageMessage = async (event) => {
     return;
   }
 
+  await replyText(
+    event.replyToken,
+    "แปะกำลังดูรูปให้นะ 👀\nขอซูมแป๊บ เดี๋ยวบอกให้ว่าเมนูนี้ประมาณเท่าไหร่ 🍽️"
+  );
+
   const base64Image = await getLineImageBase64(event.message.id);
   const gptData = await estimateFoodFromImage(base64Image);
 
@@ -33,7 +38,7 @@ export const handleImageMessage = async (event) => {
   const menuName = gptData.menuName || "อาหาร";
 
   if (!menuName || kcal <= 0) {
-    await replyText(event.replyToken, renderNoFoodDetectedReply());
+    await pushTexts(userId, [renderNoFoodDetectedReply()]);
     return;
   }
 
