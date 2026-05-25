@@ -7,60 +7,28 @@
   },
   "areas": [
     {
-      "bounds": { "x": 0, "y": 0, "width": 1250, "height": 843 },
-      "action": {
-        "type": "postback",
-        "data": "action=OPEN_PAELAEW_GUIDE"
-      }
+      "bounds": { "x": 0, "y": 0, "width": 921, "height": 851 },
+      "action": { "type": "postback", "data": "action=OPEN_PAELAEW_GUIDE" }
     },
     {
-      "bounds": { "x": 1250, "y": 0, "width": 625, "height": 562 },
-      "action": {
-        "type": "message",
-        "text": "สรุปวันนี้"
-      }
+      "bounds": { "x": 921, "y": 0, "width": 762, "height": 851 },
+      "action": { "type": "message", "text": "สรุปวันนี้" }
     },
     {
-      "bounds": { "x": 1875, "y": 0, "width": 625, "height": 562 },
-      "action": {
-        "type": "message",
-        "text": "กินอะไรดี"
-      }
+      "bounds": { "x": 1683, "y": 0, "width": 817, "height": 851 },
+      "action": { "type": "message", "text": "กินอะไรดี" }
     },
     {
-      "bounds": { "x": 1250, "y": 562, "width": 625, "height": 562 },
-      "action": {
-        "type": "message",
-        "text": "ลบมื้อล่าสุด"
-      }
+      "bounds": { "x": 0, "y": 851, "width": 833, "height": 708 },
+      "action": { "type": "message", "text": "เปลี่ยนเป้าสุขภาพ" }
     },
     {
-      "bounds": { "x": 1875, "y": 562, "width": 625, "height": 562 },
-      "action": {
-        "type": "message",
-        "text": "แก้มื้อล่าสุด"
-      }
+      "bounds": { "x": 833, "y": 851, "width": 834, "height": 708 },
+      "action": { "type": "message", "text": "แก้มื้อล่าสุด" }
     },
     {
-      "bounds": { "x": 0, "y": 843, "width": 833, "height": 843 },
-      "action": {
-        "type": "message",
-        "text": "สรุปวันนี้"
-      }
-    },
-    {
-      "bounds": { "x": 833, "y": 843, "width": 834, "height": 843 },
-      "action": {
-        "type": "message",
-        "text": "เปลี่ยนเป้าสุขภาพ"
-      }
-    },
-    {
-      "bounds": { "x": 1667, "y": 843, "width": 833, "height": 843 },
-      "action": {
-        "type": "message",
-        "text": "Help"
-      }
+      "bounds": { "x": 1667, "y": 851, "width": 833, "height": 708 },
+      "action": { "type": "message", "text": "ถามแปะ" }
     }
   ]
 }
