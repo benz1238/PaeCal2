@@ -4,6 +4,7 @@ import { estimateFoodFromImage } from "../services/openai.js";
 import { DEFAULT_CALORIE_TARGET, safeNumber } from "../utils/helpers.js";
 import { getDisplayTitle, syncSessionFromProfile } from "../utils/profile.js";
 import { decideFoodLog } from "../utils/decision.js";
+import { get7DayMemorySummary, refreshDailyMemorySnapshot } from "../services/memorySheet.js";
 import {
   renderFoodLogMessages,
   renderFoodLogReply,
@@ -57,8 +58,13 @@ export const handleImageMessage = async (event) => {
   };
 
   const meal = { menuName, kcal, carb, protein, fat };
+
+  await refreshDailyMemorySnapshot({ userId, summary, fallbackMeal: meal });
+  const memory7 = await get7DayMemorySummary(userId);
+  const summaryWithMemory = { ...summary, memory7 };
+
   const title = await getDisplayTitle({ userId, session });
-  const decision = decideFoodLog({ meal, summary });
+  const decision = decideFoodLog({ meal, summary: summaryWithMemory });
 
   await syncSessionFromProfile({
     userId,
@@ -70,8 +76,8 @@ export const handleImageMessage = async (event) => {
   });
 
   const messages = renderFoodLogMessages
-    ? renderFoodLogMessages({ title, meal, summary, decision })
-    : [renderFoodLogReply({ title, meal, summary, decision })];
+    ? renderFoodLogMessages({ title, meal, summary: summaryWithMemory, decision })
+    : [renderFoodLogReply({ title, meal, summary: summaryWithMemory, decision })];
 
   await pushTexts(userId, messages);
 };

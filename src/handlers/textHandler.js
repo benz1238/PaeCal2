@@ -1,5 +1,6 @@
 import { replyText, replyTexts } from "../services/line.js";
 import { postToSheet } from "../services/sheet.js";
+import { get7DayMemorySummary, refreshDailyMemorySnapshot } from "../services/memorySheet.js";
 import { estimateFoodFromText, parseUserIntent } from "../services/openai.js";
 import {
   calculateTDEE,
@@ -47,6 +48,15 @@ const getDailySummary = async (userId) => postToSheet({ action: "GET_DAILY_SUMMA
 const getLastMeal = async (userId) => postToSheet({ action: "GET_LAST_MEAL", userId });
 const updateLastMeal = async (payload) => postToSheet({ action: "UPDATE_LAST_MEAL", ...payload });
 const deleteLastMeal = async (userId) => postToSheet({ action: "DELETE_LAST_MEAL", userId });
+
+const with7DayMemory = async (userId, summary = {}) => {
+  const memory7 = await get7DayMemorySummary(userId);
+  return { ...summary, memory7 };
+};
+
+const refreshMemoryFromSummary = async ({ userId, summary = {}, fallbackMeal = null }) => {
+  await refreshDailyMemorySnapshot({ userId, summary, fallbackMeal });
+};
 
 const exactTexts = (list, text) => list.includes(String(text || "").trim());
 
@@ -242,7 +252,7 @@ ${total} / ${target} kcal
 };
 
 const replySmartSummary = async ({ replyToken, userId, title }) => {
-  const summary = await getDailySummary(userId);
+  const summary = await with7DayMemory(userId, await getDailySummary(userId));
   const decision = decideDailyRecap({ summary });
   await replyTexts(replyToken, renderDailyRecapMessages({ title, decision }));
 };
@@ -451,6 +461,7 @@ export const handleTextMessage = async (event) => {
     }
 
     await syncSessionFromProfile({ userId, session, extraData: { lastMeal: null } });
+    await refreshMemoryFromSummary({ userId, summary: deleted });
     await replyText(replyToken, formatDeletedMealReply({ title, deletedMeal: deleted.deletedMeal, summary: deleted }));
     return;
   }
@@ -482,6 +493,7 @@ export const handleTextMessage = async (event) => {
     }
 
     await syncSessionFromProfile({ userId, session, extraData: { lastMeal: null } });
+    await refreshMemoryFromSummary({ userId, summary: deleted });
     await replyText(replyToken, formatDeletedMealReply({ title, deletedMeal: deleted.deletedMeal, summary: deleted }));
     return;
   }
@@ -541,6 +553,7 @@ export const handleTextMessage = async (event) => {
       },
     });
 
+    await refreshMemoryFromSummary({ userId, summary: updated, fallbackMeal: updated.updatedMeal });
     await replyText(replyToken, formatUpdatedMealReply({ title, oldMeal: updated.oldMeal, updatedMeal: updated.updatedMeal, summary: updated }));
     return;
   }
@@ -577,6 +590,12 @@ export const handleTextMessage = async (event) => {
     const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
     const target = sheetData.calorieTarget || DEFAULT_CALORIE_TARGET;
     const progress = buildProgressBar(total, target);
+    const adjustedMeal = { menuName: `${lastMeal.menuName} ปรับปริมาณ`, kcal, carb, protein, fat };
+    await refreshMemoryFromSummary({
+      userId,
+      summary: { ...sheetData, todayCalories: total, totalToday: total, calorieTarget: target },
+      fallbackMeal: adjustedMeal,
+    });
     const signText = kcal >= 0 ? "เพิ่ม" : "ลด";
 
     await replyText(replyToken, `โอเค ${title} แปะปรับจากเมนูล่าสุดให้แล้วนะ 😄\n\n🍳 ${lastMeal.menuName}\n${kcal >= 0 ? "➕" : "➖"} ${signText}ประมาณ ${Math.abs(kcal)} kcal\n\n📊 วันนี้กินไปแล้ว:\n${total} / ${target} kcal\n(${progress})`);
@@ -596,10 +615,12 @@ export const handleTextMessage = async (event) => {
     const target = sheetData.calorieTarget || DEFAULT_CALORIE_TARGET;
     const summary = { ...sheetData, todayCalories: total, totalToday: total, calorieTarget: target };
     const meal = { menuName, kcal, carb, protein, fat };
-    const decision = decideFoodLog({ meal, summary });
+    await refreshMemoryFromSummary({ userId, summary, fallbackMeal: meal });
+    const summaryWithMemory = await with7DayMemory(userId, summary);
+    const decision = decideFoodLog({ meal, summary: summaryWithMemory });
 
     await syncSessionFromProfile({ userId, session, extraData: { calorieTarget: target, lastMeal: meal } });
-    await replyText(replyToken, renderFoodLogReply({ title, meal, summary, decision }));
+    await replyText(replyToken, renderFoodLogReply({ title, meal, summary: summaryWithMemory, decision }));
     return;
   }
 
@@ -609,7 +630,7 @@ export const handleTextMessage = async (event) => {
   }
 
   if (intent.intent === "meal_suggestion") {
-    const summary = await getDailySummary(userId);
+    const summary = await with7DayMemory(userId, await getDailySummary(userId));
     const decision = decideMealSuggestion({ summary, text });
     await replyText(
       replyToken,
