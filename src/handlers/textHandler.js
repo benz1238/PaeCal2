@@ -1,4 +1,4 @@
-import { replyText } from "../services/line.js";
+import { replyText, replyTexts } from "../services/line.js";
 import { postToSheet } from "../services/sheet.js";
 import { estimateFoodFromText, parseUserIntent } from "../services/openai.js";
 import {
@@ -24,6 +24,7 @@ import {
   decideMealSuggestion,
 } from "../utils/decision.js";
 import {
+  renderDailyRecapMessages,
   renderDailyRecapReply,
   renderFoodLogReply,
   renderMealSuggestionReply,
@@ -243,7 +244,7 @@ ${total} / ${target} kcal
 const replySmartSummary = async ({ replyToken, userId, title }) => {
   const summary = await getDailySummary(userId);
   const decision = decideDailyRecap({ summary });
-  await replyText(replyToken, renderDailyRecapReply({ title, decision }));
+  await replyTexts(replyToken, renderDailyRecapMessages({ title, decision }));
 };
 
 export const handleTextMessage = async (event) => {
