@@ -1,6 +1,5 @@
 import { replyText, replyTexts } from "../services/line.js";
 import { postToSheet } from "../services/sheet.js";
-import { get7DayMemorySummary, refreshDailyMemorySnapshot } from "../services/memorySheet.js";
 import { estimateFoodFromText, parseUserIntent } from "../services/openai.js";
 import {
   calculateTDEE,
@@ -27,6 +26,7 @@ import {
 import {
   renderDailyRecapMessages,
   renderDailyRecapReply,
+  renderFoodLogMessages,
   renderFoodLogReply,
   renderMealSuggestionReply,
 } from "../utils/personality.js";
@@ -41,24 +41,80 @@ const getSession = async (userId) => {
   };
 };
 
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const retryOnce = async (fn) => {
+  try {
+    return await fn();
+  } catch (err) {
+    await wait(350);
+    return fn();
+  }
+};
+
 const saveProfile = async (payload) => postToSheet({ action: "SAVE_PROFILE", ...payload });
 const updateSession = async (payload) => postToSheet({ action: "UPDATE_SESSION", ...payload });
 const logFood = async (payload) => postToSheet({ action: "LOG_FOOD", ...payload });
 const getDailySummary = async (userId) => postToSheet({ action: "GET_DAILY_SUMMARY", userId });
 const getLastMeal = async (userId) => postToSheet({ action: "GET_LAST_MEAL", userId });
-const updateLastMeal = async (payload) => postToSheet({ action: "UPDATE_LAST_MEAL", ...payload });
-const deleteLastMeal = async (userId) => postToSheet({ action: "DELETE_LAST_MEAL", userId });
-
-const with7DayMemory = async (userId, summary = {}) => {
-  const memory7 = await get7DayMemorySummary(userId);
-  return { ...summary, memory7 };
-};
-
-const refreshMemoryFromSummary = async ({ userId, summary = {}, fallbackMeal = null }) => {
-  await refreshDailyMemorySnapshot({ userId, summary, fallbackMeal });
-};
+const updateLastMeal = async (payload) => retryOnce(() => postToSheet({ action: "UPDATE_LAST_MEAL", ...payload }));
+const deleteLastMeal = async (userId) => retryOnce(() => postToSheet({ action: "DELETE_LAST_MEAL", userId }));
 
 const exactTexts = (list, text) => list.includes(String(text || "").trim());
+
+const normalizeText = (text) => String(text || "").trim().toLowerCase();
+
+const hasAnyText = (text, words = []) => {
+  const value = normalizeText(text);
+  return words.some((word) => value.includes(word));
+};
+
+const getLocalIntent = (text) => {
+  const value = normalizeText(text);
+
+  if (!value) return null;
+
+  if (/^(กินไรดี|กินอะไรดี|กินไรดี\?|กินอะไรดี\?|หิวแล้ว|หาไรกินดี|เอาไรกินดี)$/.test(value)) {
+    return { intent: "meal_suggestion", confidence: 1, action: "suggest_meal", multiplier: 0, foodText: "", kcal: null, source: "local" };
+  }
+
+  if (hasAnyText(value, ["กินไรดี", "กินอะไรดี", "หาไรกินดี", "เอาไรกินดี", "แนะนำเมนู", "เมนูสุขภาพ", "หิว"])) {
+    return { intent: "meal_suggestion", confidence: 0.95, action: "suggest_meal", multiplier: 0, foodText: "", kcal: null, source: "local" };
+  }
+
+  if (hasAnyText(value, ["สรุปวันนี้", "แคลวันนี้", "เหลือกี่แคล", "กินไปเท่าไหร่", "กินไปเท่าไร", "วันนี้กินอะไรไปบ้าง"])) {
+    return { intent: "daily_summary", confidence: 0.98, action: "daily_summary", multiplier: 0, foodText: "", kcal: null, source: "local" };
+  }
+
+  if (hasAnyText(value, ["ลบมื้อล่าสุด", "ลบมื้อเมื่อกี้", "ลบอันเมื่อกี้", "ส่งผิด", "ไม่เอามื้อนี้"])) {
+    return { intent: "delete_last_meal", confidence: 0.98, action: "delete_last_meal", multiplier: 0, foodText: "", kcal: null, source: "local" };
+  }
+
+  if (/^(แก้มื้อล่าสุด|แก้ไขมื้อล่าสุด|แก้มื้อเมื่อกี้|แก้เมนูล่าสุด)$/.test(value)) {
+    return { intent: "meal_edit_help", confidence: 1, action: "ask_edit_detail", multiplier: 0, foodText: "", kcal: null, source: "local" };
+  }
+
+  if (hasAnyText(value, ["แก้มื้อล่าสุดเป็น", "แก้ไขมื้อล่าสุดเป็น", "แก้เมนูล่าสุดเป็น", "ไม่ใช่", "เปลี่ยนเป็น", "แก้เป็น"])) {
+    const kcal = extractKcalFromText(value);
+    const foodText = extractMenuFromEditText(text);
+    return { intent: "edit_last_meal", confidence: 0.9, action: foodText ? "update_menu" : "update_kcal", multiplier: 0, foodText, kcal, source: "local" };
+  }
+
+  if (hasAnyText(value, ["อีกจาน", "อีกกล่อง", "เบิ้ล", "เพิ่มอีก", "ครึ่งเดียว", "กินครึ่ง", "กินไม่หมด", "เหลือครึ่ง"])) {
+    const multiplier = hasAnyText(value, ["ครึ่งเดียว", "กินครึ่ง", "กินไม่หมด", "เหลือครึ่ง"]) ? -0.5 : 1;
+    return { intent: "adjust_last_meal", confidence: 0.9, action: "adjust_amount", multiplier, foodText: "", kcal: null, source: "local" };
+  }
+
+  if (hasAnyText(value, ["ตั้งเป้า", "เปลี่ยนเป้า", "ลดไขมัน", "เพิ่มกล้าม", "คุมแคล", "คุมน้ำหนัก", "กินสุขภาพดี"])) {
+    return { intent: "health_goal", confidence: 0.9, action: "update_goal", multiplier: 0, foodText: "", kcal: null, source: "local" };
+  }
+
+  if (/^(กิน|เมื่อกี้กิน|วันนี้กิน|มื้อเช้ากิน|มื้อเที่ยงกิน|มื้อเย็นกิน)\s+/.test(value)) {
+    return { intent: "log_food_text", confidence: 0.88, action: "log_food", multiplier: 0, foodText: text.replace(/^(กิน|เมื่อกี้กิน|วันนี้กิน|มื้อเช้ากิน|มื้อเที่ยงกิน|มื้อเย็นกิน)\s+/i, "").trim(), kcal: null, source: "local" };
+  }
+
+  return null;
+};
 
 const isExactSummaryText = (text) => exactTexts([
   "สรุปวันนี้",
@@ -252,7 +308,7 @@ ${total} / ${target} kcal
 };
 
 const replySmartSummary = async ({ replyToken, userId, title }) => {
-  const summary = await with7DayMemory(userId, await getDailySummary(userId));
+  const summary = await getDailySummary(userId);
   const decision = decideDailyRecap({ summary });
   await replyTexts(replyToken, renderDailyRecapMessages({ title, decision }));
 };
@@ -461,7 +517,6 @@ export const handleTextMessage = async (event) => {
     }
 
     await syncSessionFromProfile({ userId, session, extraData: { lastMeal: null } });
-    await refreshMemoryFromSummary({ userId, summary: deleted });
     await replyText(replyToken, formatDeletedMealReply({ title, deletedMeal: deleted.deletedMeal, summary: deleted }));
     return;
   }
@@ -477,7 +532,7 @@ export const handleTextMessage = async (event) => {
     return;
   }
 
-  const intent = await parseUserIntent({ text, session });
+  const intent = getLocalIntent(text) || await parseUserIntent({ text, session });
 
   if (intent.intent === "meal_edit_help") {
     await replyText(replyToken, getEditHelpText(title));
@@ -493,7 +548,6 @@ export const handleTextMessage = async (event) => {
     }
 
     await syncSessionFromProfile({ userId, session, extraData: { lastMeal: null } });
-    await refreshMemoryFromSummary({ userId, summary: deleted });
     await replyText(replyToken, formatDeletedMealReply({ title, deletedMeal: deleted.deletedMeal, summary: deleted }));
     return;
   }
@@ -553,7 +607,6 @@ export const handleTextMessage = async (event) => {
       },
     });
 
-    await refreshMemoryFromSummary({ userId, summary: updated, fallbackMeal: updated.updatedMeal });
     await replyText(replyToken, formatUpdatedMealReply({ title, oldMeal: updated.oldMeal, updatedMeal: updated.updatedMeal, summary: updated }));
     return;
   }
@@ -590,12 +643,6 @@ export const handleTextMessage = async (event) => {
     const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
     const target = sheetData.calorieTarget || DEFAULT_CALORIE_TARGET;
     const progress = buildProgressBar(total, target);
-    const adjustedMeal = { menuName: `${lastMeal.menuName} ปรับปริมาณ`, kcal, carb, protein, fat };
-    await refreshMemoryFromSummary({
-      userId,
-      summary: { ...sheetData, todayCalories: total, totalToday: total, calorieTarget: target },
-      fallbackMeal: adjustedMeal,
-    });
     const signText = kcal >= 0 ? "เพิ่ม" : "ลด";
 
     await replyText(replyToken, `โอเค ${title} แปะปรับจากเมนูล่าสุดให้แล้วนะ 😄\n\n🍳 ${lastMeal.menuName}\n${kcal >= 0 ? "➕" : "➖"} ${signText}ประมาณ ${Math.abs(kcal)} kcal\n\n📊 วันนี้กินไปแล้ว:\n${total} / ${target} kcal\n(${progress})`);
@@ -603,24 +650,23 @@ export const handleTextMessage = async (event) => {
   }
 
   if (intent.intent === "log_food_text") {
-    const foodData = await estimateFoodFromText(text);
+    const foodText = String(intent.foodText || text).trim();
+    const foodData = await estimateFoodFromText(foodText);
     const kcal = safeNumber(foodData.kcal, 0);
     const carb = safeNumber(foodData.carb, 0);
     const protein = safeNumber(foodData.protein, 0);
     const fat = safeNumber(foodData.fat, 0);
-    const menuName = foodData.menuName || text;
+    const menuName = foodData.menuName || foodText;
 
     const sheetData = await logFood({ userId, name: session.data?.name || "", kcal, carb, protein, fat, menuName });
     const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
     const target = sheetData.calorieTarget || DEFAULT_CALORIE_TARGET;
     const summary = { ...sheetData, todayCalories: total, totalToday: total, calorieTarget: target };
     const meal = { menuName, kcal, carb, protein, fat };
-    await refreshMemoryFromSummary({ userId, summary, fallbackMeal: meal });
-    const summaryWithMemory = await with7DayMemory(userId, summary);
-    const decision = decideFoodLog({ meal, summary: summaryWithMemory });
+    const decision = decideFoodLog({ meal, summary });
 
     await syncSessionFromProfile({ userId, session, extraData: { calorieTarget: target, lastMeal: meal } });
-    await replyText(replyToken, renderFoodLogReply({ title, meal, summary: summaryWithMemory, decision }));
+    await replyTexts(replyToken, renderFoodLogMessages({ title, meal, summary, decision }));
     return;
   }
 
@@ -630,7 +676,7 @@ export const handleTextMessage = async (event) => {
   }
 
   if (intent.intent === "meal_suggestion") {
-    const summary = await with7DayMemory(userId, await getDailySummary(userId));
+    const summary = await getDailySummary(userId);
     const decision = decideMealSuggestion({ summary, text });
     await replyText(
       replyToken,
