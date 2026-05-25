@@ -1360,7 +1360,9 @@ export const handleTextMessage = async (event) => {
         return;
       }
     }
-  }\n\n  if (isPronounKcalQuestionText(text)) {
+  }
+
+  if (isPronounKcalQuestionText(text)) {
     const meal = await getLatestMealForFollowUp({ userId, session });
     await replyText(replyToken, buildPronounKcalReply({ title, meal }));
     return;
