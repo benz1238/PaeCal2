@@ -1,5 +1,6 @@
 const openai = await import("./services/openai.js");
 const sheet = await import("./services/sheet.js");
+const memorySheet = await import("./services/memorySheet.js");
 const line = await import("./services/line.js");
 const helpers = await import("./utils/helpers.js");
 const profile = await import("./utils/profile.js");
@@ -19,6 +20,12 @@ const requiredExports = [
   [openai, "generateSmartDailySummary", "./services/openai.js"],
 
   [sheet, "postToSheet", "./services/sheet.js"],
+
+  [memorySheet, "getTodayDateString", "./services/memorySheet.js"],
+  [memorySheet, "upsertDailyMemorySnapshot", "./services/memorySheet.js"],
+  [memorySheet, "getMemorySnapshotsLast7Days", "./services/memorySheet.js"],
+  [memorySheet, "get7DayMemorySummary", "./services/memorySheet.js"],
+  [memorySheet, "refreshDailyMemorySnapshot", "./services/memorySheet.js"],
 
   [line, "client", "./services/line.js"],
   [line, "replyText", "./services/line.js"],
@@ -47,6 +54,11 @@ const requiredExports = [
   [memory, "getMealMemoryTags", "./utils/memory.js"],
   [memory, "summarizeMealMemory", "./utils/memory.js"],
   [memory, "getContextMemoryLine", "./utils/memory.js"],
+  [memory, "buildDailyMemorySnapshot", "./utils/memory.js"],
+  [memory, "build7DayMemorySummary", "./utils/memory.js"],
+  [memory, "shouldMention7DayMemory", "./utils/memory.js"],
+  [memory, "get7DayMemoryLine", "./utils/memory.js"],
+  [memory, "format7DayMemoryForPrompt", "./utils/memory.js"],
 
   [decision, "getDayContext", "./utils/decision.js"],
   [decision, "getMealSignals", "./utils/decision.js"],
