@@ -90,16 +90,13 @@ const softSuggestionFromFood = ({ decision }) => {
   const { day, signals, mood } = decision;
 
   if (day.isVeryOver) {
-    return `วันนี้เกินเป้าแล้ว
-ถ้ายังหิวจริง ๆ เอาเบา ๆ พอ
-
-${overTargetClosing()}`;
+    return `ถ้ายังหิวจริง ๆ เอาเบา ๆ พอ 😅
+พรุ่งนี้ค่อยดึงกลับ ชิล ๆ 😄`;
   }
 
   if (day.isOver) {
-    return `วันนี้ล้นเป้าแล้วนิดนึง
-ไม่ต้องไปฝืนชดเชยนะ
-แค่ไม่เติมหนักต่อก็พอ`;
+    return `ถ้ายังหิวจริง ๆ เอาเบา ๆ พอนะ 😅
+ไม่ต้องฝืนแก้ทั้งวัน แค่ไม่เติมหนักต่อก็พอ 😄`;
   }
 
   if (day.isNearLimit) {
@@ -132,16 +129,18 @@ const foodLogCommentLine = ({ decision }) => {
 
   if (day.isVeryOver) {
     return [
-      "วันนี้เกินเป้าแบบชัดแล้วนะ เฮียเบนซ์ 👀",
-      softSuggestionFromFood({ decision }),
+      "วันนี้เกินเป้าแบบชัด ๆ แล้วนะ เฮียเบนซ์ 👀",
+      "ถ้ายังหิวจริง ๆ เอาเบา ๆ พอนะ 😅",
+      "พรุ่งนี้ค่อยดึงกลับ ชิล ๆ 😄",
       memoryLine,
     ].filter(Boolean).join("\n");
   }
 
   if (day.isOver) {
     return [
-      "วันนี้เริ่มล้นเป้าแล้วนะ 👀",
-      softSuggestionFromFood({ decision }),
+      "วันนี้เริ่มเกินเป้าแล้วนะ เฮียเบนซ์ 👀",
+      "ถ้ายังหิวจริง ๆ เอาเบา ๆ พอนะ 😅",
+      "ไม่ต้องฝืนแก้ทั้งวัน แค่ไม่เติมหนักต่อก็พอ 😄",
       memoryLine,
     ].filter(Boolean).join("\n");
   }
