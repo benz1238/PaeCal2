@@ -257,3 +257,26 @@ export const replyDailyRecapCardWithBubbles = async (replyToken, { title, card, 
     messages: [dailyRecapFlex({ title, card }), ...bubbleMessages].slice(0, 5),
   });
 };
+
+export const pushFlex = async (to, messages) => {
+  const list = Array.isArray(messages) ? messages : [messages];
+
+  await client.pushMessage({
+    to,
+    messages: list.filter(Boolean).slice(0, 5),
+  });
+};
+
+export const pushDailyRecapCardWithBubbles = async (to, { title, card, bubbles = [] }) => {
+  const bubbleMessages = (Array.isArray(bubbles) ? bubbles : [bubbles])
+    .map((text) => String(text || "").trim())
+    .filter(Boolean)
+    .slice(0, 4)
+    .map((text) => ({ type: "text", text }));
+
+  await client.pushMessage({
+    to,
+    messages: [dailyRecapFlex({ title, card }), ...bubbleMessages].slice(0, 5),
+  });
+};
+
