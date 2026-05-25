@@ -303,6 +303,94 @@ const getLatestMealForFollowUp = async ({ userId, session }) => {
   }
 };
 
+
+const roundKcal = (value) => Math.max(0, Math.round((Number(value) || 0) / 10) * 10);
+
+const splitFoodItemsFromText = (text) => {
+  let value = String(text || "").trim();
+  value = stripEatLogPrefix(value);
+  value = value.replace(/\s*(?:ไป|มา|แล้ว|นะ|คับ|ครับ|ค่ะ|จ้า)\s*$/i, "").trim();
+
+  const lineParts = value
+    .split(/[\n,，;；]+/g)
+    .map((part) => cleanFoodText(part))
+    .filter((part) => part && hasFoodKeyword(part));
+
+  if (lineParts.length > 1) return lineParts.slice(0, 8);
+
+  const plusParts = value
+    .split(/\s*(?:\+|และ|พร้อม|,|，)\s*/g)
+    .map((part) => cleanFoodText(part))
+    .filter((part) => part && hasFoodKeyword(part));
+
+  return plusParts.length > 1 ? plusParts.slice(0, 8) : [];
+};
+
+const getFallbackItemWeight = (label) => {
+  const value = normalizeText(label);
+  let weight = 1;
+  if (hasAnyText(value, ["ข้าวมันไก่", "ข้าวหมูกรอบ", "กะเพรา", "กระเพรา", "ข้าวผัด", "ผัดไทย", "หมูกระทะ", "ชาบู", "พิซซ่า", "เบอร์เกอร์"])) weight += 2.2;
+  if (hasAnyText(value, ["ข้าว", "เส้น", "บะหมี่", "มาม่า"])) weight += 1.2;
+  if (hasAnyText(value, ["ทอด", "กรอบ", "หมูทอด", "ไก่ทอด", "เลย์", "ขนม"])) weight += 1.4;
+  if (hasAnyText(value, ["ชาไทย", "ชานม", "น้ำหวาน", "โกโก้", "กาแฟเย็น", "หวาน"])) weight += 0.9;
+  if (hasAnyText(value, ["ครึ่ง", "นิดหน่อย", "นิดนึง"])) weight *= 0.55;
+  return Math.max(weight, 0.3);
+};
+
+const allocateFallbackItemKcals = (labels, totalKcal) => {
+  const total = Math.max(Number(totalKcal) || 0, labels.length * 80);
+  const weights = labels.map(getFallbackItemWeight);
+  const weightTotal = weights.reduce((sum, weight) => sum + weight, 0) || 1;
+  let used = 0;
+
+  return labels.map((label, index) => {
+    const isLast = index === labels.length - 1;
+    const kcal = isLast
+      ? Math.max(0, roundKcal(total - used))
+      : roundKcal((total * weights[index]) / weightTotal);
+    used += kcal;
+    return { name: label, quantity: "", kcal };
+  });
+};
+
+const normalizeEstimatedItems = (foodData = {}, originalText = "") => {
+  const totalKcal = safeNumber(foodData?.kcal, 0);
+  const rawItems = Array.isArray(foodData?.items) ? foodData.items : [];
+  let items = rawItems
+    .map((item) => ({
+      name: cleanFoodText(item?.name || ""),
+      quantity: String(item?.quantity || "").trim(),
+      kcal: roundKcal(item?.kcal),
+    }))
+    .filter((item) => item.name && item.kcal > 0)
+    .slice(0, 8);
+
+  if (items.length <= 1) {
+    const labels = splitFoodItemsFromText(originalText);
+    if (labels.length > 1) items = allocateFallbackItemKcals(labels, totalKcal);
+  }
+
+  if (items.length <= 1) return [];
+
+  const itemTotal = items.reduce((sum, item) => sum + item.kcal, 0);
+  if (totalKcal > 0 && itemTotal > 0 && Math.abs(itemTotal - totalKcal) / totalKcal > 0.18) {
+    let used = 0;
+    items = items.map((item, index) => {
+      const isLast = index === items.length - 1;
+      const kcal = isLast ? roundKcal(totalKcal - used) : roundKcal((item.kcal / itemTotal) * totalKcal);
+      used += kcal;
+      return { ...item, kcal: Math.max(kcal, 0) };
+    });
+  }
+
+  return items;
+};
+
+const formatFoodItemLine = (item) => {
+  const label = [item.name, item.quantity].filter(Boolean).join(" ").trim();
+  return `- ${label} ~ ${safeNumber(item.kcal, 0)} kcal`;
+};
+
 const buildPronounKcalReply = ({ title, meal }) => {
   if (!meal) {
     return `${title} แปะยังไม่เจอมื้อก่อนหน้าให้เทียบน้า 😅
@@ -316,6 +404,19 @@ const buildPronounKcalReply = ({ title, meal }) => {
   const carb = safeNumber(meal.carb, 0);
   const protein = safeNumber(meal.protein, 0);
   const fat = safeNumber(meal.fat, 0);
+  const items = Array.isArray(meal?.items) ? meal.items : [];
+
+  if (items.length > 1) {
+    return `${title} อันเมื่อกี้แปะตีไว้ประมาณนี้นะ 🔥
+
+${menuName}
+รวมประมาณ ${kcal} kcal
+
+แยกให้คร่าว ๆ:
+${items.map(formatFoodItemLine).join("\n")}
+
+ถ้าปริมาณไม่ตรง พิมพ์ “แก้มื้อล่าสุดเป็น ...” ได้เลยจ้า`;
+  }
 
   return `${title} อันเมื่อกี้แปะตีไว้ประมาณนี้นะ 🔥
 
@@ -330,7 +431,6 @@ ${menuName}
 ถ้าปริมาณไม่ตรง พิมพ์ “แก้มื้อล่าสุดเป็น ...” ได้เลยจ้า`;
 };
 
-
 const buildTextFoodLogMessages = ({ title, meal, summary, decision }) => {
   const menuName = meal?.menuName || "อาหาร";
   const kcal = safeNumber(meal?.kcal, 0);
@@ -342,19 +442,47 @@ const buildTextFoodLogMessages = ({ title, meal, summary, decision }) => {
   const progress = buildProgressBar(total, target);
   const left = Math.max(target - total, 0);
   const over = Math.max(total - target, 0);
+  const items = Array.isArray(meal?.items) ? meal.items : [];
+  const itemLines = items.length > 1 ? items.map(formatFoodItemLine).join("\n") : "";
 
-  const mealBubble = `${title} แปะบันทึกให้แล้วนะ 🍽️\n\n${menuName}\n🔥 ประมาณ ${kcal} kcal\n\nคร่าว ๆ:\n🍚 คาร์บ ${carb} g\n💪 โปรตีน ${protein} g\n💧 ไขมัน ${fat} g`;
+  const mealBubble = items.length > 1
+    ? `${title} แปะบันทึกให้แล้วนะ 🍽️
+
+มื้อนี้รวมประมาณ ${kcal} kcal
+
+แยกให้คร่าว ๆ:
+${itemLines}`
+    : `${title} แปะบันทึกให้แล้วนะ 🍽️
+
+${menuName}
+🔥 ประมาณ ${kcal} kcal
+
+คร่าว ๆ:
+🍚 คาร์บ ${carb} g
+💪 โปรตีน ${protein} g
+💧 ไขมัน ${fat} g`;
 
   const progressBubble = over > 0
-    ? `📊 วันนี้กินไปแล้ว\n${total} / ${target} kcal\n🔴 เกินเป้าไปประมาณ ${over} kcal\n(${progress})`
-    : `📊 วันนี้กินไปแล้ว\n${total} / ${target} kcal\n🟢 เหลือประมาณ ${left} kcal\n(${progress})`;
+    ? `📊 วันนี้กินไปแล้ว
+${total} / ${target} kcal
+🔴 เกินเป้าไปประมาณ ${over} kcal
+(${progress})`
+    : `📊 วันนี้กินไปแล้ว
+${total} / ${target} kcal
+🟢 เหลือประมาณ ${left} kcal
+(${progress})`;
 
   const tone = String(decision?.tone || decision?.level || "");
   const commentBubble = over > 0
-    ? `วันนี้เกินเป้าแล้วนิดนึงนะ 👀\nถ้ายังหิวจริง ๆ เอาเบา ๆ พอ\nพรุ่งนี้ค่อยดึงกลับ ชิล ๆ 😄`
+    ? `วันนี้เกินเป้าแล้วนิดนึงนะ 👀
+ถ้ายังหิวจริง ๆ เอาเบา ๆ พอ
+พรุ่งนี้ค่อยดึงกลับ ชิล ๆ 😄`
     : tone.includes("warn") || kcal >= 700
-      ? `มื้อนี้ตัวเลขขึ้นไวอยู่ 👀\nแต่บันทึกไว้แล้ว จะได้คุมเกมต่อถูก\nมื้อต่อไปเอาเบาลงนิดก็พอ 😄`
-      : `ได้อยู่ มื้อนี้แปะให้ผ่าน 😄\nถ้ามีอะไรเพิ่ม ส่งมาได้เลย`;
+      ? `มื้อนี้ตัวเลขขึ้นไวอยู่ 👀
+แต่บันทึกไว้แล้ว จะได้คุมเกมต่อถูก
+มื้อต่อไปเอาเบาลงนิดก็พอ 😄`
+      : `ได้อยู่ มื้อนี้แปะให้ผ่าน 😄
+ถ้ามีอะไรเพิ่ม ส่งมาได้เลย`;
 
   return [mealBubble, progressBubble, commentBubble];
 };
@@ -1038,6 +1166,7 @@ export const handleTextMessage = async (event) => {
     const protein = safeNumber(foodData.protein, 0);
     const fat = safeNumber(foodData.fat, 0);
     const menuName = foodData.menuName || foodText;
+    const items = normalizeEstimatedItems(foodData, foodText);
 
     const sheetData = await logFood({
       userId,
@@ -1052,7 +1181,7 @@ export const handleTextMessage = async (event) => {
     const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
     const target = sheetData.calorieTarget || DEFAULT_CALORIE_TARGET;
     const summary = { ...sheetData, todayCalories: total, totalToday: total, calorieTarget: target };
-    const meal = { menuName, kcal, carb, protein, fat };
+    const meal = { menuName, kcal, carb, protein, fat, items };
     const decision = decideFoodLog({ meal, summary });
 
     await syncSessionFromProfile({ userId, session, extraData: { calorieTarget: target, lastMeal: meal } });
@@ -1210,6 +1339,7 @@ export const handleTextMessage = async (event) => {
     const protein = safeNumber(foodData.protein, 0);
     const fat = safeNumber(foodData.fat, 0);
     const menuName = foodData.menuName || foodText;
+    const items = normalizeEstimatedItems(foodData, foodText);
 
     const sheetData = await logFood({
       userId,
@@ -1224,7 +1354,7 @@ export const handleTextMessage = async (event) => {
     const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
     const target = sheetData.calorieTarget || DEFAULT_CALORIE_TARGET;
     const summary = { ...sheetData, todayCalories: total, totalToday: total, calorieTarget: target };
-    const meal = { menuName, kcal, carb, protein, fat };
+    const meal = { menuName, kcal, carb, protein, fat, items };
     const decision = decideFoodLog({ meal, summary });
 
     await syncSessionFromProfile({ userId, session, extraData: { calorieTarget: target, lastMeal: meal } });
