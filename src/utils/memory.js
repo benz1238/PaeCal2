@@ -285,7 +285,12 @@ export const build7DayMemorySummary = (rows = []) => {
 };
 
 export const shouldMention7DayMemory = ({ memory7 = {}, decision = {} } = {}) => {
-  if (!memory7?.days) return false;
+  const days = safeNumber(memory7?.days, 0);
+
+  // Do not make the bot sound fake when the app only has 1-2 days of data.
+  // Persistent memory should feel earned, not like surveillance.
+  if (days < 4) return false;
+
   if (decision.type === "daily_recap" || decision.type === "meal_suggestion") return true;
 
   const tags = Array.isArray(memory7.patternTags) ? memory7.patternTags : [];
@@ -300,20 +305,20 @@ export const shouldMention7DayMemory = ({ memory7 = {}, decision = {} } = {}) =>
 };
 
 export const get7DayMemoryLine = (memory7 = {}) => {
-  if (!memory7?.days) return "";
+  if (safeNumber(memory7?.days, 0) < 4) return "";
 
   const tags = Array.isArray(memory7.patternTags) ? memory7.patternTags : [];
 
-  if (tags.includes("sweet_often")) return "ช่วง 7 วันนี้หวานโผล่หลายรอบละ แปะเห็นอยู่ 👀";
-  if (tags.includes("fried_often")) return "ช่วง 7 วันนี้ของทอดมาบ่อยนิดนึงนะ";
+  if (tags.includes("sweet_often")) return "ช่วงนี้หวานโผล่บ่อยนะ แปะเห็นอยู่ 👀";
+  if (tags.includes("fried_often")) return "ช่วงนี้ของทอดมาถี่นิดนึงนะ";
   if (tags.includes("protein_low_often")) return "ช่วงนี้โปรตีนดูเบาไปหน่อย รอบหน้าเติมนิดก็สวย";
-  if (tags.includes("heavy_often")) return "ช่วงนี้มื้อหนักมาถี่นิดนึง มื้อต่อไปเบาลงหน่อยก็ยังทัน";
+  if (tags.includes("heavy_often")) return "ช่วงนี้มื้อหนักมาถี่นิดนึง เดี๋ยวค่อยดึงกลับแบบไม่เครียด";
   if (tags.includes("late_meal_often")) return "ช่วงนี้มื้อดึกแอบมีบ่อยนะ เอาแบบเบา ๆ จะนอนสบายกว่า";
 
   const repeated = Array.isArray(memory7.repeatedFoods) ? memory7.repeatedFoods[0] : null;
   if (repeated?.name) return `${repeated.name} โผล่มาซ้ำอยู่เหมือนกันนะ แปะจำได้ 😄`;
 
-  return "ช่วง 7 วันนี้ภาพรวมยังพอคุมเกมได้อยู่";
+  return "";
 };
 
 export const format7DayMemoryForPrompt = (memory7 = {}) => {

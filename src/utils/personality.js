@@ -11,11 +11,18 @@ const pick = (items = []) => {
 const shortClosing = () =>
   pick([
     "ได้อยู่ เดี๋ยวแปะดูให้ 😄",
-    "มื้อต่อไปค่อยลดนิดนึงพอ 👀",
     "ไม่เป็นไร วันนี้โอแล้ว",
     "พรุ่งนี้ค่อยเอาใหม่ ชิล ๆ จ้า",
     "แปะว่าแค่นี้ยังทัน",
     "รอบหน้าเดี๋ยวแปะช่วยเอง",
+  ]);
+
+const overTargetClosing = () =>
+  pick([
+    "วันนี้พอแค่นี้ก็สวยละ",
+    "ถ้าหิวจริง ๆ เอาเบา ๆ พอ",
+    "ไม่ต้องแก้ทั้งวัน แค่ไม่เติมหนักก็พอ",
+    "พรุ่งนี้ค่อยดึงกลับ ชิล ๆ",
   ]);
 
 const kcalStatusLine = ({ eaten, target }) => {
@@ -79,55 +86,90 @@ const reactionLineForFood = ({ title, decision }) => {
   return pick(bank[mood] || bank.balanced) || reaction?.emotion || "แปะดูให้แล้วนะ 😄";
 };
 
-const softSuggestionFromFood = ({ title, decision }) => {
+const softSuggestionFromFood = ({ decision }) => {
   const { day, signals, mood } = decision;
 
   if (day.isVeryOver) {
-    return `🍲 ถ้ายังหิวจริง ๆ
-เอาเบา ๆ พออยู่ท้องพอ
+    return `วันนี้เกินเป้าแล้ว
+ถ้ายังหิวจริง ๆ เอาเบา ๆ พอ
 
-${shortClosing()}`;
+${overTargetClosing()}`;
   }
 
   if (day.isOver) {
-    return `🍲 มื้อถัดไปขอเบา ๆ หน่อย
-ต้ม / ย่าง / น้ำใส ได้หมด
-
-${shortClosing()}`;
-  }
-
-  if (day.memory?.hasFriedPattern || mood === "fried_or_fat") {
-    return `🍲 มื้อหน้าพักของทอดแป๊บนึง
-ไปทางต้ม/ย่างจะเซฟกว่า
-
-${shortClosing()}`;
-  }
-
-  if (day.memory?.hasSweetPattern || mood === "sweet_heavy") {
-    return `🍲 มื้อถัดไปขอไม่เติมหวานเพิ่มน้า
-แคลมันชอบเนียนมาแบบนี้แหละ 😂
-
-${shortClosing()}`;
-  }
-
-  if (signals.lowProtein) {
-    return `🍲 มื้อหน้าลองเติมโปรตีนอีกนิด
-ไข่ต้ม ไก่ ปลา เต้าหู้ ได้หมด
-
-${shortClosing()}`;
+    return `วันนี้ล้นเป้าแล้วนิดนึง
+ไม่ต้องไปฝืนชดเชยนะ
+แค่ไม่เติมหนักต่อก็พอ`;
   }
 
   if (day.isNearLimit) {
-    return `🍲 วันนี้ใกล้เต็มเป้าแล้ว
-มื้อถัดไปเอาเบา ๆ ก็พอ
-
-${shortClosing()}`;
+    return `วันนี้ใกล้เต็มแล้ว
+มื้อถัดไปเอาเบา ๆ หน่อยก็พอ`;
   }
 
-  return `🍲 กินให้อร่อยได้เลย
-มื้อถัดไปเดี๋ยวค่อยบาลานซ์
+  if (mood === "fried_or_fat") {
+    return `ถ้ามีมื้อหน้า
+พักทอดสักรอบก็เซฟกว่า`;
+  }
 
-${shortClosing()}`;
+  if (mood === "sweet_heavy") {
+    return `มื้อถัดไปไม่เติมหวานเพิ่มก็พอ
+แคลมันชอบมาเงียบ ๆ`;
+  }
+
+  if (signals.lowProtein) {
+    return `รอบหน้าเติมโปรตีนอีกนิด
+ไข่ ไก่ ปลา เต้าหู้ ได้หมด`;
+  }
+
+  return `มื้อนี้ยังไปได้
+เดี๋ยวมื้อถัดไปค่อยบาลานซ์`;
+};
+
+const foodLogCommentLine = ({ decision }) => {
+  const { day, signals, mood } = decision;
+  const memoryLine = decision.mention7DayMemory ? get7DayMemoryLine(day.memory7) : "";
+
+  if (day.isVeryOver) {
+    return [
+      "วันนี้เกินเป้าแบบชัดแล้วนะ เฮียเบนซ์ 👀",
+      softSuggestionFromFood({ decision }),
+      memoryLine,
+    ].filter(Boolean).join("\n");
+  }
+
+  if (day.isOver) {
+    return [
+      "วันนี้เริ่มล้นเป้าแล้วนะ 👀",
+      softSuggestionFromFood({ decision }),
+      memoryLine,
+    ].filter(Boolean).join("\n");
+  }
+
+  if (mood === "fried_or_fat") {
+    return [
+      "ของทอดมาละหนึ่ง แปะเห็นนะ 👀",
+      softSuggestionFromFood({ decision }),
+      memoryLine,
+    ].filter(Boolean).join("\n");
+  }
+
+  if (mood === "sweet_heavy") {
+    return [
+      "หวานมาแบบเนียน ๆ เลยนะ",
+      softSuggestionFromFood({ decision }),
+      memoryLine,
+    ].filter(Boolean).join("\n");
+  }
+
+  if (signals.proteinGood && !signals.isHeavy) {
+    return [
+      "โปรตีนมีอยู่ อันนี้แปะให้ผ่าน 💪",
+      memoryLine,
+    ].filter(Boolean).join("\n");
+  }
+
+  return [softSuggestionFromFood({ decision }), memoryLine].filter(Boolean).join("\n");
 };
 
 export const renderFoodLogReply = ({ title, meal, summary, decision }) => {
@@ -424,10 +466,6 @@ export const renderFoodLogMessages = ({ title, meal, summary, decision }) => {
   const day = decision.day;
   const signals = decision.signals;
   const progress = buildProgressBar(day.eaten, day.target);
-  const insight = shortMealInsight(signals).join("\n");
-  const memoryLine = getContextMemoryLine(day.memory);
-  const sevenDayLine = decision.mention7DayMemory ? get7DayMemoryLine(day.memory7) : "";
-  const memoryBlock = [memoryLine, sevenDayLine].filter(Boolean).join("\n");
 
   const firstMessage = `${reactionLineForFood({ title, decision })}
 
@@ -436,16 +474,12 @@ ${signals.menuName}
 
 🔥 ประมาณ ${signals.kcal} kcal`;
 
-  const secondMessage = `📌 แปะขอเมนต์สั้น ๆ
-${insight}
-${memoryBlock}
-
-📊 วันนี้กินไปแล้ว
+  const secondMessage = `📊 วันนี้กินไปแล้ว
 ${day.eaten} / ${day.target} kcal
 ${kcalStatusLine({ eaten: day.eaten, target: day.target })}
-(${progress})
+(${progress})`;
 
-${softSuggestionFromFood({ title, decision })}`;
+  const thirdMessage = foodLogCommentLine({ decision });
 
-  return [firstMessage, secondMessage];
+  return [firstMessage, secondMessage, thirdMessage].filter(Boolean);
 };
