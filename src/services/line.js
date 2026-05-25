@@ -73,7 +73,7 @@ export const getLineImageBase64 = async (messageId) => {
 
 const paeLaewGuideFlex = () => ({
   type: "flex",
-  altText: "แปะเลย กินอะไรมา?",
+  altText: "แปะเลย ลื้อกินอะไรมา?",
   contents: {
     type: "bubble",
     size: "mega",
@@ -84,7 +84,7 @@ const paeLaewGuideFlex = () => ({
       contents: [
         {
           type: "text",
-          text: "🍚 แปะเลย กินอะไรมา?",
+          text: "🍚 แปะเลย ลื้อกินอะไรมา?",
           weight: "bold",
           size: "xl",
           wrap: true,
@@ -92,7 +92,7 @@ const paeLaewGuideFlex = () => ({
         },
         {
           type: "text",
-          text: "ส่งรูปอาหารก็ได้\nหรือพิมพ์บอกแปะสั้น ๆ ก็ได้",
+          text: "ส่งรูปอาหารหรือจะพิมพ์บอกแปะสั้น ๆ ก็ได้",
           size: "md",
           wrap: true,
           color: "#374151",
@@ -103,7 +103,7 @@ const paeLaewGuideFlex = () => ({
         },
         {
           type: "text",
-          text: "พิมพ์แบบนี้ได้เลย:",
+          text: "เช่น:",
           weight: "bold",
           size: "sm",
           color: "#111827",
@@ -111,74 +111,20 @@ const paeLaewGuideFlex = () => ({
         },
         {
           type: "text",
-          text: "- ข้าวมันไก่ 1 จาน\n- ชาไทยหวานน้อย\n- ขนมเลย์ 1 ห่อ\n- มื้อเที่ยงกินสุกี้น้ำกับไข่ต้ม",
+          text: "ข้าวมันไก่ 1 จาน\nชาไทยหวาน 25\nขนมเลย์ 1 ห่อ",
           size: "sm",
           wrap: true,
           color: "#4B5563",
         },
         {
           type: "text",
-          text: "หลายอย่างก็พิมพ์แยกบรรทัดมาได้เลย\nแปะจะแยกแคลคร่าว ๆ แล้วรวมของวันนี้ให้เอง 😄",
+          text: "หลายอย่างพิมพ์แยกบรรทัดได้เลย\nเดี๋ยวแปะแยกแคลให้ 😄",
           size: "sm",
           wrap: true,
           color: "#374151",
           margin: "md",
         },
-        {
-          type: "text",
-          text: "ไม่รู้เรียกเมนูว่าอะไร ก็ส่งรูปมาได้\nเดี๋ยวแปะดูให้เอง 👀",
-          size: "sm",
-          wrap: true,
-          color: "#6B7280",
-          margin: "sm",
-        },
       ],
-    },
-    footer: {
-      type: "box",
-      layout: "vertical",
-      spacing: "sm",
-      contents: [
-        {
-          type: "button",
-          style: "primary",
-          height: "sm",
-          action: {
-            type: "postback",
-            label: "พิมพ์มื้ออาหาร",
-            data: "action=TYPE_FOOD_PROMPT",
-          },
-          color: "#E53935",
-        },
-        {
-          type: "box",
-          layout: "horizontal",
-          spacing: "sm",
-          contents: [
-            {
-              type: "button",
-              style: "secondary",
-              height: "sm",
-              action: {
-                type: "postback",
-                label: "ส่งรูปอาหาร",
-                data: "action=SEND_PHOTO_GUIDE",
-              },
-            },
-            {
-              type: "button",
-              style: "secondary",
-              height: "sm",
-              action: {
-                type: "postback",
-                label: "กินอะไรดี",
-                data: "action=MEAL_SUGGESTION",
-              },
-            },
-          ],
-        },
-      ],
-      flex: 0,
     },
   },
 });
