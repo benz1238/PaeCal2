@@ -92,7 +92,7 @@ const paeLaewGuideFlex = () => ({
         },
         {
           type: "text",
-          text: "ส่งรูปอาหารหรือจะพิมพ์บอกแปะสั้น ๆ",
+          text: "ส่งรูปอาหารหรือจะพิมพ์บอกแปะสั้น ๆ ก็ได้",
           size: "md",
           wrap: true,
           color: "#374151",
@@ -103,7 +103,7 @@ const paeLaewGuideFlex = () => ({
         },
         {
           type: "text",
-          text: "พิมพ์แบบนี้ได้เลย:",
+          text: "เช่น:",
           weight: "bold",
           size: "sm",
           color: "#111827",
@@ -154,4 +154,106 @@ export const replySendPhotoGuide = async (replyToken) => {
     replyToken,
     "ส่งรูปอาหารเข้ามาในแชตได้เลยนะ 👀\nกดรูป/อัลบั้มใน LINE แล้วส่งมาให้แปะดูได้เลย"
   );
+};
+
+const normalizeFlexText = (value, fallback = "-") => {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+};
+
+const recapRow = (label, value, options = {}) => ({
+  type: "box",
+  layout: "horizontal",
+  spacing: "sm",
+  contents: [
+    {
+      type: "text",
+      text: label,
+      size: "sm",
+      color: "#6B7280",
+      flex: 4,
+      wrap: true,
+    },
+    {
+      type: "text",
+      text: normalizeFlexText(value),
+      size: "sm",
+      color: options.color || "#111827",
+      weight: options.weight || "regular",
+      align: "end",
+      flex: 6,
+      wrap: true,
+    },
+  ],
+});
+
+const dailyRecapFlex = ({ title, card }) => ({
+  type: "flex",
+  altText: "สรุปวันนี้จากแปะแคล",
+  contents: {
+    type: "bubble",
+    size: "mega",
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "md",
+      contents: [
+        {
+          type: "text",
+          text: `📊 สรุปวันนี้ของ ${normalizeFlexText(title, "ลื้อ")}`,
+          weight: "bold",
+          size: "lg",
+          wrap: true,
+          color: "#1F2937",
+        },
+        {
+          type: "text",
+          text: normalizeFlexText(card?.statusText, "วันนี้แปะรวมให้แล้วจ้า"),
+          size: "sm",
+          wrap: true,
+          color: card?.statusColor || "#374151",
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          margin: "md",
+          contents: [
+            recapRow("🔥 กินไป", card?.kcalText, { weight: "bold", color: "#DC2626" }),
+            recapRow("🍚 คาร์บ", card?.carbText),
+            recapRow("💪 โปรตีน", card?.proteinText, { color: "#047857" }),
+            recapRow("💧 ไขมัน", card?.fatText),
+            recapRow("🍽️ จำนวนมื้อ", card?.mealCountText),
+          ],
+        },
+        {
+          type: "separator",
+          margin: "md",
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          margin: "md",
+          contents: [
+            recapRow("🎯 เป้า", card?.goalText || "ยังไม่ได้ตั้งเป้าสุขภาพ"),
+            recapRow("👀 มื้อเด่น", card?.topMealText || "ยังไม่มีมื้อเด่น"),
+          ],
+        },
+      ],
+    },
+  },
+});
+
+export const replyDailyRecapCardWithBubbles = async (replyToken, { title, card, bubbles = [] }) => {
+  const bubbleMessages = (Array.isArray(bubbles) ? bubbles : [bubbles])
+    .map((text) => String(text || "").trim())
+    .filter(Boolean)
+    .slice(0, 4)
+    .map((text) => ({ type: "text", text }));
+
+  await client.replyMessage({
+    replyToken,
+    messages: [dailyRecapFlex({ title, card }), ...bubbleMessages].slice(0, 5),
+  });
 };
