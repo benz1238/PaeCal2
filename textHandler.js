@@ -78,7 +78,7 @@ const getLocalIntent = (text) => {
     return { intent: "meal_suggestion", confidence: 1, action: "suggest_meal", multiplier: 0, foodText: "", kcal: null, source: "local" };
   }
 
-  if (hasAnyText(value, ["กินไรดี", "กินอะไรดี", "หาไรกินดี", "เอาไรกินดี", "แนะนำเมนู", "เมนูสุขภาพ", "หิว"])) {
+  if (!hasFoodKeyword(value) && hasAnyText(value, ["กินไรดี", "กินอะไรดี", "หาไรกินดี", "เอาไรกินดี", "แนะนำเมนู", "เมนูสุขภาพ", "หิว"])) {
     return { intent: "meal_suggestion", confidence: 0.95, action: "suggest_meal", multiplier: 0, foodText: "", kcal: null, source: "local" };
   }
 
@@ -109,8 +109,8 @@ const getLocalIntent = (text) => {
     return { intent: "health_goal", confidence: 0.9, action: "update_goal", multiplier: 0, foodText: "", kcal: null, source: "local" };
   }
 
-  if (/^(กิน|เมื่อกี้กิน|วันนี้กิน|มื้อเช้ากิน|มื้อเที่ยงกิน|มื้อเย็นกิน)\s+/.test(value)) {
-    return { intent: "log_food_text", confidence: 0.88, action: "log_food", multiplier: 0, foodText: text.replace(/^(กิน|เมื่อกี้กิน|วันนี้กิน|มื้อเช้ากิน|มื้อเที่ยงกิน|มื้อเย็นกิน)\s+/i, "").trim(), kcal: null, source: "local" };
+  if (EAT_LOG_PREFIX_PATTERN.test(value) && hasFoodKeyword(stripEatLogPrefix(text))) {
+    return { intent: "log_food_text", confidence: 0.88, action: "log_food", multiplier: 0, foodText: stripEatLogPrefix(text), kcal: null, source: "local" };
   }
 
   return null;
@@ -118,21 +118,30 @@ const getLocalIntent = (text) => {
 
 
 const FOOD_ADVICE_QUESTION_WORDS = [
-  "ดีไหม", "ดีมั้ย", "โอเคไหม", "โอเคมั้ย", "ได้ไหม", "ได้มั้ย", "ได้ปะ",
-  "เหมาะไหม", "เหมาะมั้ย", "ควรไหม", "ควรมั้ย", "กินได้ไหม", "กินได้มั้ย",
-  "อ้วนไหม", "อ้วนมั้ย", "หนักไหม", "หนักมั้ย", "พังไหม", "พังมั้ย"
+  "ดีไหม", "ดีมั้ย", "ดีปะ", "ดีป่ะ", "ดีป่าว", "ดีเปล่า",
+  "โอเคไหม", "โอเคมั้ย", "โอเคปะ", "โอเคป่ะ",
+  "ได้ไหม", "ได้มั้ย", "ได้ปะ", "ได้ป่ะ", "ได้ป่าว",
+  "เหมาะไหม", "เหมาะมั้ย", "ควรไหม", "ควรมั้ย", "ควรปะ", "ควรป่ะ",
+  "กินได้ไหม", "กินได้มั้ย", "กินดีไหม", "กินดีมั้ย", "กินดีปะ", "กินดีป่ะ",
+  "อ้วนไหม", "อ้วนมั้ย", "หนักไหม", "หนักมั้ย", "พังไหม", "พังมั้ย", "พังปะ", "พังป่ะ"
 ];
 
 const FOOD_ADVICE_KEYWORDS = [
   "ข้าว", "ก๋วยเตี๋ยว", "สุกี้", "เกาเหลา", "ต้ม", "แกง", "ยำ", "สลัด", "ซุป", "โจ๊ก", "ข้าวต้ม",
   "ไก่", "หมู", "ปลา", "กุ้ง", "ไข่", "เต้าหู้", "เนื้อ", "อกไก่", "ทะเล",
   "ทอด", "ย่าง", "นึ่ง", "ลวก", "ผัด", "มัน", "หวาน", "น้ำหวาน", "ชานม", "กาแฟ", "โกโก้",
-  "ขนม", "เค้ก", "คุกกี้", "เบเกอรี่", "โยเกิร์ต", "นม", "หมูกระทะ", "ชาบู", "พิซซ่า", "เบอร์เกอร์"
+  "ขนม", "เค้ก", "คุกกี้", "เบเกอรี่", "โยเกิร์ต", "นม", "หมูกระทะ", "ชาบู", "พิซซ่า", "เบอร์เกอร์",
+  "มาม่า", "บะหมี่", "ราเมง", "ซูชิ", "แซลมอน", "ส้มตำ", "ลาบ", "น้ำตก", "กะเพรา", "กระเพรา",
+  "ข้าวมันไก่", "ข้าวหมูแดง", "ข้าวหมูกรอบ", "ข้าวผัด", "ผัดไทย", "ชาไทย", "มัทฉะ", "ไอติม", "บิงซู"
 ];
 
-const FOOD_STOP_WORD_PATTERN = /(ดีไหม|ดีมั้ย|โอเคไหม|โอเคมั้ย|ได้ไหม|ได้มั้ย|ได้ปะ|เหมาะไหม|เหมาะมั้ย|ควรไหม|ควรมั้ย|กินได้ไหม|กินได้มั้ย|อ้วนไหม|อ้วนมั้ย|หนักไหม|หนักมั้ย|พังไหม|พังมั้ย|อันไหนดี|อะไรดี|ไหนดี|ดีกว่า|เลือกอะไร|กี่แคล|กี่ kcal|แคลเท่าไหร่|แคลเท่าไร).*/i;
+const FOOD_STOP_WORD_PATTERN = /(ดีไหม|ดีมั้ย|ดีปะ|ดีป่ะ|ดีป่าว|ดีเปล่า|โอเคไหม|โอเคมั้ย|โอเคปะ|โอเคป่ะ|ได้ไหม|ได้มั้ย|ได้ปะ|ได้ป่ะ|ได้ป่าว|เหมาะไหม|เหมาะมั้ย|ควรไหม|ควรมั้ย|ควรปะ|ควรป่ะ|กินได้ไหม|กินได้มั้ย|กินดีไหม|กินดีมั้ย|กินดีปะ|กินดีป่ะ|อ้วนไหม|อ้วนมั้ย|หนักไหม|หนักมั้ย|พังไหม|พังมั้ย|พังปะ|พังป่ะ|อันไหนดี|อะไรดี|ไหนดี|ดีกว่า|เลือกอะไร|กี่แคล|กี่ kcal|แคลเท่าไหร่|แคลเท่าไร).*/i;
 
 const hasFoodKeyword = (text) => FOOD_ADVICE_KEYWORDS.some((word) => normalizeText(text).includes(word));
+
+const EAT_LOG_PREFIX_PATTERN = /^(กิน|เมื่อกี้กิน|วันนี้กิน|มื้อเช้ากิน|มื้อเที่ยงกิน|มื้อเย็นกิน)\s*/i;
+
+const stripEatLogPrefix = (text) => String(text || "").trim().replace(EAT_LOG_PREFIX_PATTERN, "").trim();
 
 const cleanFoodText = (text) => {
   let value = String(text || "").trim();
@@ -174,14 +183,23 @@ const getDayBudget = (summary) => {
   return { total, target, left: Math.max(target - total, 0), isOver: total > target, isNear: target - total <= 350 };
 };
 
+const COMPARISON_CUE_PATTERN = /(ระหว่าง|อันไหนดี|อะไรดี|เลือกอะไร|เลือกอันไหน|ดีกว่า|เทียบ|vs|VS|ไหนดี)/i;
+
 const extractComparisonFoods = (text) => {
   const raw = String(text || "").trim();
-  const match = raw.match(/(?:ระหว่าง\s*)?(.+?)\s*(?:กับ|หรือ|vs|VS)\s*(.+?)(?:\s*(?:อันไหนดี|อะไรดี|เลือกอะไร|ดีกว่า|ไหนดี|ดีไหม|ดีมั้ย|ได้ไหม|ได้มั้ย))?$/i);
+
+  // อย่าให้ประโยคบันทึกอาหารธรรมดา เช่น
+  // “กินข้าวเปล่ากับหมูทอด” ถูกตีความเป็นการเปรียบเทียบ
+  if (!COMPARISON_CUE_PATTERN.test(raw)) return null;
+
+  const match = raw.match(/(?:ระหว่าง\s*)?(.+?)\s*(?:กับ|หรือ|vs|VS)\s*(.+?)(?:\s*(?:อันไหนดี|อะไรดี|เลือกอะไร|เลือกอันไหน|ดีกว่า|ไหนดี|ดีไหม|ดีมั้ย|ได้ไหม|ได้มั้ย))?$/i);
   if (!match) return null;
+
   const a = cleanFoodText(match[1]);
   const b = cleanFoodText(match[2]);
   if (!a || !b || a.length > 40 || b.length > 40) return null;
   if (!hasFoodKeyword(a) && !hasFoodKeyword(b)) return null;
+
   return [a, b];
 };
 
@@ -194,13 +212,29 @@ const isFoodKcalQuestionText = (text) => {
 
 const isNextMealAfterFoodText = (text) => {
   const value = normalizeText(text);
-  return hasFoodKeyword(value) && hasAnyText(value, ["แล้วเย็นนี้", "แล้วมื้อต่อไป", "ต่อไปกิน", "เย็นนี้กินอะไร", "มื้อต่อไปกินอะไร"]);
+  return hasFoodKeyword(value) && hasAnyText(value, [
+    "แล้วเย็นนี้", "แล้วคืนนี้", "แล้วมื้อต่อไป",
+    "ต่อไปกิน", "มื้อต่อไปกิน", "มื้อต่อไปควรกิน",
+    "เย็นนี้กินอะไร", "เย็นนี้จะกินอะไร", "คืนนี้กินอะไร", "คืนนี้จะกินอะไร"
+  ]);
+};
+
+const isFoodDesireAdviceText = (text) => {
+  const value = normalizeText(text);
+  if (!hasFoodKeyword(value)) return false;
+
+  return /^(อยากกิน|อยากลอง|ว่าจะกิน|กำลังจะกิน|เย็นนี้อยากกิน|คืนนี้อยากกิน|ขอกิน|กิน)\s*/i.test(value)
+    || hasAnyText(value, [
+      "อยากกิน", "กินดี", "กินได้", "กินปะ", "กินป่ะ", "กินดีปะ", "กินดีไหม", "กินดีมั้ย",
+      "กินได้ปะ", "กินได้ไหม", "ดีปะ", "ดีไหม", "ดีมั้ย", "พังไหม", "พังมั้ย", "โอเคไหม", "โอเคมั้ย"
+    ]);
 };
 
 const isFoodAdviceText = (text) => {
   const value = normalizeText(text);
-  if (!value || value.length > 100) return false;
+  if (!value || value.length > 120) return false;
   if (isFoodCompareText(value) || isFoodKcalQuestionText(value) || isNextMealAfterFoodText(value)) return true;
+  if (isFoodDesireAdviceText(value)) return true;
   const hasQuestion = FOOD_ADVICE_QUESTION_WORDS.some((word) => value.includes(word));
   return hasQuestion && hasFoodKeyword(value);
 };
@@ -247,9 +281,64 @@ ${menuName}
 แต่ใช้กะทางได้อยู่ 😄`;
 };
 
+const isPronounKcalQuestionText = (text) => {
+  const value = normalizeText(text);
+  if (!hasAnyText(value, ["กี่แคล", "กี่ kcal", "แคลเท่าไหร่", "แคลเท่าไร"])) return false;
+  return /^(มัน|อันนี้|อันนั้น|มื้อนี้|มื้อเมื่อกี้|เมื่อกี้|ที่กินไป|เมนูนี้)/i.test(value);
+};
+
+const getLatestMealForFollowUp = async ({ userId, session }) => {
+  if (session?.data?.lastMeal?.menuName) return session.data.lastMeal;
+
+  try {
+    const latest = await getLastMeal(userId);
+    return latest?.meal || null;
+  } catch {
+    return null;
+  }
+};
+
+const buildPronounKcalReply = ({ title, meal }) => {
+  if (!meal) {
+    return `${title} แปะยังไม่เจอมื้อก่อนหน้าให้เทียบน้า 😅
+
+พิมพ์ชื่อเมนูมาอีกทีได้เลย
+เช่น “ข้าวหมูทอดกี่แคล”`;
+  }
+
+  const menuName = meal.menuName || "มื้อเมื่อกี้";
+  const kcal = safeNumber(meal.kcal, 0);
+  const carb = safeNumber(meal.carb, 0);
+  const protein = safeNumber(meal.protein, 0);
+  const fat = safeNumber(meal.fat, 0);
+
+  return `${title} อันเมื่อกี้แปะตีไว้ประมาณนี้นะ 🔥
+
+${menuName}
+ประมาณ ${kcal} kcal
+
+คร่าว ๆ:
+🍚 คาร์บ ${carb} g
+💪 โปรตีน ${protein} g
+💧 ไขมัน ${fat} g
+
+ถ้าปริมาณไม่ตรง พิมพ์ “แก้มื้อล่าสุดเป็น ...” ได้เลยจ้า`;
+};
+
+const isLikelyFoodLogText = (text) => {
+  const value = normalizeText(text);
+  if (!value || value.length > 160) return false;
+  if (!EAT_LOG_PREFIX_PATTERN.test(value)) return false;
+  if (isNextMealAfterFoodText(value)) return false;
+  if (isFoodKcalQuestionText(value)) return false;
+  if (isFoodCompareText(value)) return false;
+  return hasFoodKeyword(value);
+};
+
 const buildNextMealAfterFoodReply = ({ title, text, summary }) => {
   const budget = getDayBudget(summary);
-  const food = cleanFoodText(text.replace(/แล้ว.*/i, ""));
+  const beforeNextMeal = String(text || "").split(/แล้ว|จากนั้น|ต่อไป/i)[0];
+  const food = cleanFoodText(beforeNextMeal);
 
   if (budget.isOver) {
     return `${title} ถ้ากิน ${food} ไปแล้ว
@@ -381,6 +470,102 @@ const isOnboardingCommandText = (text) => exactTexts([
   "วันนี้กินอะไรไปบ้าง",
 ], text);
 
+
+const normalizePaeMention = (text) => String(text || "")
+  .trim()
+  .toLowerCase()
+  .replace(/[\u200B-\u200D\uFEFF]/g, "")
+  .replace(/[\sๆ~!！?？.。…。、,，:：;；\-_=+*()\[\]{}"'“”‘’`]+/g, "")
+  .replace(/(ครับ|คับ|ค้าบ|ค๊าบ|ฮะ|ค่ะ|คะ|จ้า|จ๊ะ|จ๋า|นะ|น้า|หน่อย)$/g, "");
+
+const isPaeMentionOnlyText = (text) => {
+  const value = normalizePaeMention(text);
+
+  if (!value) return false;
+
+  const mentionWords = [
+    "แปะ",
+    "อาแปะ",
+    "เฮียแปะ",
+    "แปะแคล",
+    "แปะcal",
+    "paecal",
+    "pae",
+  ];
+
+  return mentionWords.includes(value);
+};
+
+const getPaeMentionReply = (title) => {
+  const options = [
+    `${title} แปะอยู่นี่จ้า 😄\n\nมีอะไรให้แปะดู ส่งมาได้เลย`,
+    `ว่าไง ${title} 👀\n\nจะถามเรื่องกิน หรือส่งรูปอาหารมาก็ได้ เดี๋ยวแปะดูให้`,
+    `${title} เรียกแปะเหรอ 😄\n\nมีเมนูไหนลังเล ส่งมาเลย`,
+  ];
+
+  return options[Math.floor(Math.random() * options.length)];
+};
+
+
+const TITLE_COMMAND_PATTERN = /^(?:เปลี่ยนคำเรียกเป็น|ตั้งคำเรียกเป็น|ตั้งคำเรียกว่า|คำเรียกเป็น|คำเรียกคือ|ให้แปะเรียกว่า|ให้แปะเรียกฉันว่า|ให้แปะเรียกผมว่า|แปะเรียกฉันว่า|แปะเรียกผมว่า)\s*(.+)$/i;
+
+const TITLE_FROM_CALL_PATTERN = /^(?:เรียกฉันว่า|เรียกผมว่า|เรียกเราว่า)\s*(.+)$/i;
+
+const TITLE_HELP_TEXTS = [
+  "เปลี่ยนคำเรียก",
+  "ตั้งคำเรียก",
+  "เลือกคำเรียก",
+  "แปะเรียกอะไรได้บ้าง",
+  "ให้แปะเรียกว่าอะไรได้บ้าง",
+];
+
+const KNOWN_TITLE_WORDS = [
+  "เฮีย", "เจ้", "เจ๊", "ซ้อ", "อาตี๋", "ตี๋", "อาหมวย", "หมวย", "อากง", "กง", "อาเจ๊", "อาซ้อ",
+];
+
+const cleanTitleText = (value) => String(value || "")
+  .trim()
+  .replace(/["“”'‘’`]/g, "")
+  .replace(/[.!！?？~]+$/g, "")
+  .trim();
+
+const looksLikeTitleText = (value) => {
+  const clean = cleanTitleText(value).toLowerCase();
+  if (!clean || clean.length > 24) return false;
+  if (KNOWN_TITLE_WORDS.includes(clean)) return true;
+  return /^(เฮีย|เจ้|เจ๊|ซ้อ|อาตี๋|ตี๋|อาหมวย|หมวย|อากง|กง|อาเจ๊|อาซ้อ)/i.test(clean);
+};
+
+const isTitleHelpText = (text) => exactTexts(TITLE_HELP_TEXTS, text);
+
+const getTitleCommandValue = (text) => {
+  const raw = String(text || "").trim();
+  const direct = raw.match(TITLE_COMMAND_PATTERN);
+  if (direct?.[1]) return cleanTitleText(direct[1]);
+
+  const call = raw.match(TITLE_FROM_CALL_PATTERN);
+  if (call?.[1] && looksLikeTitleText(call[1])) {
+    return cleanTitleText(call[1]);
+  }
+
+  return "";
+};
+
+const getTitleHelpText = (currentTitle) => {
+  return `${currentTitle} เลือกคำเรียกเองได้เลยนะ 😄
+
+พิมพ์แบบนี้ได้:
+- เปลี่ยนคำเรียกเป็น เฮีย
+- เปลี่ยนคำเรียกเป็น เจ๊
+- เปลี่ยนคำเรียกเป็น ซ้อ
+- เปลี่ยนคำเรียกเป็น อาตี๋
+- เปลี่ยนคำเรียกเป็น อาหมวย
+- เปลี่ยนคำเรียกเป็น อากง
+
+หรือพิมพ์คำที่อยากให้แปะเรียกได้เลย
+เช่น “เปลี่ยนคำเรียกเป็น คุณเบ๊นซ์”`;
+};
+
 const NAME_PATTERN = /^(?:เปลี่ยนชื่อเป็น|ฉันชื่อ|ผมชื่อ|ชื่อ|เรียกฉันว่า|เรียกผมว่า)\s*(.+)$/i;
 
 const isExplicitNameText = (text) => NAME_PATTERN.test(String(text || "").trim());
@@ -407,6 +592,7 @@ const getProfileAnswerText = ({ title, profile, session }) => {
 
 ถ้าอยากเปลี่ยน
 พิมพ์ “เปลี่ยนชื่อเป็นเบ๊นซ์”
+“เปลี่ยนคำเรียกเป็น เจ๊”
 หรือ “ตั้งเป้าสุขภาพ” ได้เลยจ้า`;
 };
 
@@ -714,6 +900,43 @@ export const handleTextMessage = async (event) => {
 
   const title = await getDisplayTitle({ userId, session });
 
+  if (isTitleHelpText(text)) {
+    await replyText(replyToken, getTitleHelpText(title));
+    return;
+  }
+
+  const requestedTitle = getTitleCommandValue(text);
+  if (requestedTitle) {
+    const profile = profileForOnboarding || {};
+    const nextTitle = requestedTitle;
+    const name = session.data?.name || profile.name || "";
+    const stats = session.data?.stats || profile.stats || "";
+    const goal = session.data?.goal || profile.goal || "";
+    const calorieTarget = session.data?.calorieTarget || profile.calorieTarget || DEFAULT_CALORIE_TARGET;
+
+    await saveProfile({ userId, name, title: nextTitle, stats, goal, calorieTarget });
+    await updateSession({
+      userId,
+      step: session.step || "READY",
+      sessionData: {
+        ...session.data,
+        name,
+        title: nextTitle,
+        stats,
+        goal,
+        calorieTarget,
+      },
+    });
+
+    await replyText(
+      replyToken,
+      `ได้เลย ต่อไปแปะจะเรียก ${nextTitle} นะ 😄
+
+ถ้าอยากเปลี่ยนอีก พิมพ์ “เปลี่ยนคำเรียกเป็น ...” ได้เลย`
+    );
+    return;
+  }
+
   if (text === "แปะรูปอาหาร") {
     await replyText(replyToken, `${title} ส่งรูปอาหารมาได้เลย 📸\n\nเอาให้เห็นจานชัด ๆ นะ\nเดี๋ยวแปะดูให้ว่าแคลประมาณเท่าไหร่จ้า`);
     return;
@@ -721,6 +944,11 @@ export const handleTextMessage = async (event) => {
 
   if (text === "ถามแปะ") {
     await replyText(replyToken, `ถามมาได้เลยนะ ${title} 🍚\n\nแปะถนัดเรื่องกิน แคล และโภชนาการ\nเช่น:\n\n- หิวแล้ว\n- เย็นนี้กินไรดี\n- วันนี้กินโปรตีนพอยัง\n- เมนูนี้หนักไปไหม`);
+    return;
+  }
+
+  if (isPaeMentionOnlyText(text)) {
+    await replyText(replyToken, getPaeMentionReply(title));
     return;
   }
 
@@ -755,6 +983,37 @@ export const handleTextMessage = async (event) => {
 
   if (session.step !== "READY") {
     await replyText(replyToken, "แปะขอรู้จักลื้อก่อนน้า\nพิมพ์ชื่อมาก่อนเลยจ้า 😊");
+    return;
+  }
+
+  if (isPronounKcalQuestionText(text)) {
+    const meal = await getLatestMealForFollowUp({ userId, session });
+    await replyText(replyToken, buildPronounKcalReply({ title, meal }));
+    return;
+  }
+
+  if (isLikelyFoodLogText(text)) {
+    const localIntent = getLocalIntent(text) || {
+      intent: "log_food_text",
+      foodText: stripEatLogPrefix(text),
+    };
+    const foodText = String(localIntent.foodText || text).trim();
+    const foodData = await estimateFoodFromText(foodText);
+    const kcal = safeNumber(foodData.kcal, 0);
+    const carb = safeNumber(foodData.carb, 0);
+    const protein = safeNumber(foodData.protein, 0);
+    const fat = safeNumber(foodData.fat, 0);
+    const menuName = foodData.menuName || foodText;
+
+    const sheetData = await logFood({ userId, name: session.data?.name || "", kcal, carb, protein, fat, menuName });
+    const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
+    const target = sheetData.calorieTarget || DEFAULT_CALORIE_TARGET;
+    const summary = { ...sheetData, todayCalories: total, totalToday: total, calorieTarget: target };
+    const meal = { menuName, kcal, carb, protein, fat };
+    const decision = decideFoodLog({ meal, summary });
+
+    await syncSessionFromProfile({ userId, session, extraData: { calorieTarget: target, lastMeal: meal } });
+    await replyTexts(replyToken, renderFoodLogMessages({ title, meal, summary, decision }));
     return;
   }
 
