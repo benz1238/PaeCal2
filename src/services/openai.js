@@ -202,6 +202,70 @@ export const estimateFoodFromText = async (text) => {
   };
 };
 
+export const reviseFoodEstimateFromCorrection = async ({ previousMeal, correctionText }) => {
+  const estimated = await openAIJson(
+    [
+      {
+        role: "system",
+        content: `
+คุณคือผู้ช่วยปรับประมาณการแคลอรี่จากข้อความแก้ไขของผู้ใช้
+ให้ใช้ previousMeal เป็นฐาน แล้วแก้เฉพาะสิ่งที่ผู้ใช้บอก
+เช่น แก้วใหญ่เป็นแก้วเล็ก, กินครึ่งห่อ, เอาหนังไก่ออก, ไม่ใช่เมนูนี้
+ส่งคืน JSON เท่านั้น
+
+รูปแบบ JSON:
+{
+  "kcal": 850,
+  "menuName": "ข้าวมันไก่เอาหนังออก + ชาไทยแก้วเล็ก + ขนมเลย์ครึ่งห่อ",
+  "carb": 95,
+  "protein": 32,
+  "fat": 28,
+  "items": [
+    { "name": "ข้าวมันไก่เอาหนังออก", "quantity": "1 จาน", "kcal": 520 },
+    { "name": "ชาไทยหวานน้อย", "quantity": "แก้วเล็ก", "kcal": 120 },
+    { "name": "ขนมเลย์", "quantity": "ครึ่งห่อ", "kcal": 120 }
+  ]
+}
+
+กฎสำคัญ:
+- อย่าทิ้งรายการเดิม ถ้าผู้ใช้ไม่ได้บอกให้ลบ
+- ปรับ kcal ให้สมเหตุสมผลตาม correctionText
+- ถ้ามีหลายรายการ ให้คง items หลายรายการไว้
+- kcal ด้านบนต้องเป็นผลรวมคร่าว ๆ ของ items
+- macro ด้านบนเป็นผลรวมคร่าว ๆ ทั้งมื้อ
+- ตอบ JSON เท่านั้น
+`,
+      },
+      {
+        role: "user",
+        content: `previousMeal:
+${JSON.stringify(previousMeal || {}, null, 2)}
+
+correctionText:
+${correctionText}`,
+      },
+    ],
+    { temperature: 0.15 }
+  );
+
+  return {
+    kcal: Number(estimated?.kcal) || Number(previousMeal?.kcal) || 0,
+    menuName: estimated?.menuName || previousMeal?.menuName || "อาหาร",
+    carb: Number(estimated?.carb) || Number(previousMeal?.carb) || 0,
+    protein: Number(estimated?.protein) || Number(previousMeal?.protein) || 0,
+    fat: Number(estimated?.fat) || Number(previousMeal?.fat) || 0,
+    items: Array.isArray(estimated?.items)
+      ? estimated.items
+          .map((item) => ({
+            name: String(item?.name || "").trim(),
+            quantity: String(item?.quantity || "").trim(),
+            kcal: Number(item?.kcal) || 0,
+          }))
+          .filter((item) => item.name && item.kcal > 0)
+      : Array.isArray(previousMeal?.items) ? previousMeal.items : [],
+  };
+};
+
 export const estimateFoodFromImage = async (base64Image) => {
   return await openAIJson(
     [
