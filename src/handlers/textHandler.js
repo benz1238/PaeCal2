@@ -432,6 +432,20 @@ ${menuName}
 ถ้าปริมาณไม่ตรง พิมพ์ “แก้มื้อล่าสุดเป็น ...” ได้เลยจ้า`;
 };
 
+
+const serializeMealItems = (items = []) => JSON.stringify(
+  Array.isArray(items)
+    ? items
+      .map((item) => ({
+        name: String(item?.name || "").trim(),
+        quantity: String(item?.quantity || "").trim(),
+        kcal: safeNumber(item?.kcal, 0),
+      }))
+      .filter((item) => item.name || item.kcal > 0)
+      .slice(0, 12)
+    : []
+);
+
 const SMART_MEAL_CORRECTION_PATTERN = /(ไม่ใช่|แก้|เปลี่ยน|ปรับ|เป็นแก้วเล็ก|แก้วเล็ก|ไซซ์เล็ก|ไซส์เล็ก|ครึ่งห่อ|ครึ่งเดียว|กินครึ่ง|เอาหนังออก|ไม่เอาหนัง|เอา.*ออก|ลดหวาน|หวานน้อยกว่า|ไม่หวาน|เพิ่ม|ลด|เมื่อกี้|มื้อก่อน|มื้อก่อนหน้า|อันก่อน|รายการก่อน)/i;
 
 const normalizeMealRecord = (meal = {}, extra = {}) => {
@@ -1309,6 +1323,7 @@ export const handleTextMessage = async (event) => {
         carb: updatedMeal.carb,
         protein: updatedMeal.protein,
         fat: updatedMeal.fat,
+        itemsJson: serializeMealItems(updatedMeal.items),
       };
 
       const updated = selectedMeal.requestId
@@ -1375,6 +1390,7 @@ export const handleTextMessage = async (event) => {
       fat,
       menuName,
       requestId,
+      itemsJson: serializeMealItems(items),
     });
     const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
     const target = sheetData.calorieTarget || DEFAULT_CALORIE_TARGET;
@@ -1519,6 +1535,7 @@ export const handleTextMessage = async (event) => {
       protein,
       fat,
       requestId: getMessageRequestId(event, "adjust-last-meal"),
+      itemsJson: serializeMealItems(lastMeal.items || []),
     });
 
     const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
@@ -1549,6 +1566,7 @@ export const handleTextMessage = async (event) => {
       fat,
       menuName,
       requestId: getMessageRequestId(event, "text-log"),
+      itemsJson: serializeMealItems(items),
     });
     const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
     const target = sheetData.calorieTarget || DEFAULT_CALORIE_TARGET;

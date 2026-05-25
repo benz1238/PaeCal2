@@ -47,6 +47,7 @@ export const handleImageMessage = async (event) => {
     fat,
     menuName,
     requestId: event.message?.id ? `${event.message.id}:image-log` : undefined,
+    itemsJson: "[]",
   });
 
   const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
@@ -58,7 +59,8 @@ export const handleImageMessage = async (event) => {
     calorieTarget: target,
   };
 
-  const meal = { menuName, kcal, carb, protein, fat };
+  const requestId = event.message?.id ? `${event.message.id}:image-log` : "";
+  const meal = { menuName, kcal, carb, protein, fat, requestId, items: [] };
 
   await refreshDailyMemorySnapshot({ userId, summary, fallbackMeal: meal });
   const memory7 = await get7DayMemorySummary(userId);
