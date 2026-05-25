@@ -119,7 +119,6 @@ const paeLaewGuideFlex = () => ({
         {
           type: "text",
           text: "หลายอย่างพิมพ์แยกบรรทัดได้เลย\nเดี๋ยวแปะแยกแคลให้ 😄",
-          weight: "bold"
           size: "sm",
           wrap: true,
           color: "#374151",
