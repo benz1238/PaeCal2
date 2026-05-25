@@ -1,0 +1,49 @@
+name: Setup PaeCal Rich Menu
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_path:
+        description: "Path ของภาพ rich menu ใน repo"
+        required: true
+        default: "assets/richmenu.png"
+      layout_path:
+        description: "Path ของไฟล์ layout JSON ใน repo"
+        required: true
+        default: "scripts/rich-menu-layout.paecal.json"
+      delete_old:
+        description: "ลบ rich menu เก่าก่อนสร้างใหม่ (true/false)"
+        required: true
+        default: "true"
+      set_default:
+        description: "ตั้ง rich menu นี้เป็น default (true/false)"
+        required: true
+        default: "true"
+
+jobs:
+  setup-rich-menu:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate files
+        run: |
+          test -f "${{ github.event.inputs.image_path }}"
+          test -f "${{ github.event.inputs.layout_path }}"
+
+      - name: Run Rich Menu setup
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          RICH_MENU_IMAGE_PATH: ${{ github.event.inputs.image_path }}
+          RICH_MENU_LAYOUT_PATH: ${{ github.event.inputs.layout_path }}
+          DELETE_OLD: ${{ github.event.inputs.delete_old }}
+          SET_DEFAULT: ${{ github.event.inputs.set_default }}
+        run: node scripts/setup-rich-menu-paelaew.js
