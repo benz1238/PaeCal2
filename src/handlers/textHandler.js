@@ -1514,7 +1514,10 @@ const splitExplicitMealText = (text) => {
     .replace(/\s*(และ)\s*(?=(?:มื้อ)?(?:เช้า|เที่ยง|กลางวัน|เย็น|เยน|ค่ำ|ดึก)\b)/gi, " และ ")
     .trim();
 
-  const mealPattern = /(^|[\s\n]|และ)(?:มื้อ)?(เช้า|เที่ยง|กลางวัน|เย็น|เยน|ค่ำ|ดึก)\s*(?:[:：\-])?/gi;
+  // Two patterns:
+  // 1) "มื้อเที่ยง..." can appear anywhere, e.g. "วันนี้มื้อเที่ยง..."
+  // 2) Plain "เที่ยง..." must be separated by start/space/และ to avoid matching words like "ชาเย็น"
+  const mealPattern = /(?:มื้อ(เช้า|เที่ยง|กลางวัน|เย็น|เยน|ค่ำ|ดึก)\s*(?:[:：\-])?|(^|[\s\n]|และ)(เช้า|เที่ยง|กลางวัน|เย็น|เยน|ค่ำ|ดึก)\s*(?:[:：\-])?)/gi;
   const matches = Array.from(source.matchAll(mealPattern));
 
   if (matches.length < 2) return [];
@@ -1523,15 +1526,14 @@ const splitExplicitMealText = (text) => {
 
   for (let i = 0; i < matches.length; i++) {
     const match = matches[i];
-    const prefix = match[1] || "";
-    const label = normalizeMealLabelForSplit(match[2] || "");
+    const label = normalizeMealLabelForSplit(match[1] || match[3] || "");
     const foodStart = match.index + match[0].length;
     const foodEnd = i + 1 < matches.length ? matches[i + 1].index : source.length;
     const foodText = source
       .slice(foodStart, foodEnd)
-      .replace(/(?:^|\s)(และ|แล้ว|ต่อด้วย)\s*$/i, "")
+      .replace(/(และ|แล้ว|ต่อด้วย)\s*$/i, "")
       .replace(/^(กิน|ทาน|คือ|เป็น)\s*/i, "")
-      .replace(/\s+(และ|แล้ว|ต่อด้วย)$/i, "")
+      .replace(/(และ|แล้ว|ต่อด้วย)\s*$/i, "")
       .trim();
 
     if (label && foodText) {
@@ -1542,8 +1544,8 @@ const splitExplicitMealText = (text) => {
   return segments.length >= 2 ? segments.slice(0, 5) : [];
 };
 
-
 const logExplicitMealSegments = async ({ event, userId, session, title, segments, goalText }) => {
+  console.log("Explicit meal split detected:", segments.map((s) => `${s.label}:${s.foodText}`).join(" | "));
   await replyText(
     event.replyToken,
     `${title} แปะกำลังแยกมื้อให้แป๊บนะ 👀\nหลายมื้อหน่อย เดี๋ยวรวมให้แบบไม่มั่ว 🍽️`
@@ -1991,6 +1993,20 @@ export const handleTextMessage = async (event) => {
 
   if (session.step !== "READY") {
     await replyText(replyToken, "แปะขอรู้จักลื้อก่อนน้า\nพิมพ์ชื่อมาก่อนเลยจ้า 😊");
+    return;
+  }
+
+  const explicitMealSegmentsBeforeIntent = splitExplicitMealText(text);
+
+  if (explicitMealSegmentsBeforeIntent.length >= 2) {
+    await logExplicitMealSegments({
+      event,
+      userId,
+      session,
+      title,
+      segments: explicitMealSegmentsBeforeIntent,
+      goalText,
+    });
     return;
   }
 
