@@ -324,11 +324,12 @@ const optionsByContext = ({ decision, timeContext }) => {
 
 export const renderMealSuggestionReply = ({ title, decision }) => {
   const { day, wantsConvenience } = decision;
+  const timeContext = getMealTimeContext();
   const progress = buildProgressBar(day.eaten, day.target);
-  const options = optionsByContext({ decision });
+  const options = optionsByContext({ decision, timeContext });
   const memoryLine = getContextMemoryLine(day.memory);
   const sevenDayLine = decision.mention7DayMemory ? get7DayMemoryLine(day.memory7) : "";
-  const memoryBlock = [memoryLine, sevenDayLine].filter(Boolean).join("\n");
+  const contextBlock = [memoryLine, sevenDayLine].filter(Boolean).join("\n") || "วันนี้ดูจากแคลที่เหลือก่อนนะ";
 
   if (day.isOver) {
     return `${title} วันนี้แคลล้ำเส้นไปแล้วนะ 😅
