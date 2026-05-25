@@ -18,56 +18,60 @@ const kcalStatusLine = ({ eaten, target }) => {
   return `🟢 เหลือประมาณ ${left} kcal`;
 };
 
-const compactMacroInsight = ({ carb, protein, fat }) => {
+const macroInsightLines = ({ carb, protein, fat }) => {
   const notes = [];
 
-  if (safeNumber(protein) >= 30) notes.push("โปรตีนถือว่ามีอยู่ 💪");
-  if (safeNumber(carb) >= 85) notes.push("คาร์บมาค่อนข้างแน่น 🍚");
-  if (safeNumber(fat) >= 35) notes.push("ไขมันก็แอบตามมานิดนึง 👀");
+  if (safeNumber(protein) >= 30) notes.push("💪 โปรตีนมีอยู่ แปะให้ผ่าน");
+  if (safeNumber(carb) >= 85) notes.push("🍚 คาร์บมาแน่น เหมือนรีบขึ้นรถไฟฟ้า");
+  if (safeNumber(fat) >= 35) notes.push("👀 ไขมันแอบตามมาด้วยนะ");
 
-  if (!notes.length) return "ภาพรวมมื้อนี้ค่อนข้างบาลานซ์นะ";
-  return notes.slice(0, 2).join("\n");
+  if (!notes.length) {
+    return ["🍽️ ภาพรวมมื้อนี้บาลานซ์ใช้ได้เลย"];
+  }
+
+  return notes.slice(0, 2);
+};
+
+const problemLineFromDecision = ({ decision }) => {
+  const { signals, day, mood } = decision;
+
+  if (day.isVeryOver) return "🔴 วันนี้แคลล้ำเส้นไปไกลแล้ว";
+  if (day.isOver) return "🟠 วันนี้เริ่มเกินเป้าแล้วนิดนึง";
+  if (mood === "fried_or_fat") return "👀 ของมันเริ่มโผล่มาแล้วนะ";
+  if (mood === "sweet_heavy") return "😭 หวานมาแล้วหนึ่ง แปะเห็นนะ";
+  if (signals.lowProtein) return "💪 โปรตีนยังบางไปนิด";
+  if (signals.highCarb) return "🍚 คาร์บค่อนข้างนำเกม";
+  return "😄 โดยรวมยังไปต่อได้";
 };
 
 const suggestionFromFoodDecision = ({ decision, title }) => {
   const { day, signals, mood } = decision;
 
   if (day.isVeryOver) {
-    return `วันนี้ล้ำเส้นไปไกลแล้วนะ ${title} 😅
-
-ถ้ายังหิวจริง ๆ
-เอาแค่อะไรเบา ๆ พออยู่ท้องน้า`;
+    return `🍲 ถ้ายังหิวจริง ๆ\nเอาแค่อะไรเบา ๆ พออยู่ท้องน้า\n\nพรุ่งนี้ค่อยบาลานซ์ใหม่ ไม่ต้องเครียดจ้า ❤️`;
   }
 
   if (day.isOver) {
-    return `วันนี้แตะเกินเป้าแล้วนะ ${title} 🟠
-
-มื้อถัดไปขอเบา ๆ หน่อย
-ไม่ต้องแก้ชีวิต แค่ไม่ซ้ำหนักก็พอ 😂`;
+    return `🍲 มื้อถัดไปขอเบา ๆ หน่อย\nต้ม / ย่าง / น้ำใส ได้หมด\n\nไม่ต้องแก้ชีวิตนะ ${title}\nแค่ไม่ซ้ำหนักก็เก่งแล้ว 😂`;
   }
 
   if (mood === "fried_or_fat") {
-    return `มื้อหน้าลองลดทอด/มันนิดนึงนะ
-แปะว่าเอาอยู่ 😄`;
+    return `🍲 มื้อหน้าขอพักของมันแป๊บนึง\nแปะว่าเปลี่ยนเป็นต้ม/ย่างก็เอาอยู่ 😄`;
   }
 
   if (mood === "sweet_heavy") {
-    return `หวานมาแล้วหนึ่ง 👀
-มื้อถัดไปขอไม่เติมน้ำหวานเพิ่มน้า`;
+    return `🍲 มื้อถัดไปขอไม่เติมน้ำหวานเพิ่มน้า\nเดี๋ยวแคลมันเนียนเกิน 😂`;
   }
 
   if (signals.lowProtein) {
-    return `มื้อหน้าหาโปรตีนเพิ่มนิดนึง
-ไข่ต้ม ไก่ ปลา เต้าหู้ ได้หมดเลยจ้า`;
+    return `🍲 มื้อหน้าลองเติมโปรตีนอีกนิด\nไข่ต้ม ไก่ ปลา เต้าหู้ ได้หมดเลยจ้า 💪`;
   }
 
   if (day.isNearLimit) {
-    return `วันนี้ใกล้เต็มเป้าแล้ว
-มื้อถัดไปเบา ๆ ก็สวยแล้วจ้า`;
+    return `🍲 วันนี้ใกล้เต็มเป้าแล้ว\nมื้อถัดไปเอาเบา ๆ ก็สวยแล้วจ้า`;
   }
 
-  return `กินให้อร่อยได้เลย
-เดี๋ยวแปะช่วยบาลานซ์มื้อถัดไปต่อ 😄`;
+  return `🍲 กินให้อร่อยได้เลย\nเดี๋ยวมื้อถัดไปแปะช่วยบาลานซ์ต่อให้ 😄`;
 };
 
 export const renderFoodLogReply = ({ title, meal, summary, decision }) => {
@@ -78,7 +82,7 @@ export const renderFoodLogReply = ({ title, meal, summary, decision }) => {
 
   const reactions = {
     over_calorie_heavy: [
-      `โอ้โห วันนี้จัดเต็มแบบมีหลักฐานนะ ${title} 😂`,
+      `โอ้โห ${title} วันนี้จัดเต็มแบบมีหลักฐานนะ 😂`,
       `เอ้า ${title} วันนี้แคลพุ่งไม่เบาเลยนะ 😅`,
     ],
     over_calorie: [
@@ -99,7 +103,7 @@ export const renderFoodLogReply = ({ title, meal, summary, decision }) => {
     ],
     heavy_meal: [
       `มื้อนี้มาแน่นนะ ${title} 🍛`,
-      `จานนี้ไม่เบาเลยนะเฮีย 😂`,
+      `จานนี้ไม่เบาเลยนะ ${title} 😂`,
     ],
     balanced: [
       `มื้อนี้ดูโอเคอยู่นะ ${title} 🍽️`,
@@ -107,22 +111,28 @@ export const renderFoodLogReply = ({ title, meal, summary, decision }) => {
     ],
   };
 
+  const macroLines = macroInsightLines(signals).join("\n");
+
   return `${pick(reactions[decision.mood] || reactions.balanced)}
 
-น่าจะเป็น:
-${signals.menuName} 🍽️
+🍽️ เมนูที่แปะเห็น
+${signals.menuName}
 
-ประมาณ ${signals.kcal} kcal
+🔥 ประมาณ ${signals.kcal} kcal
 
-${compactMacroInsight(signals)}
+📌 แปะขอเมนต์สั้น ๆ
+${macroLines}
+${problemLineFromDecision({ decision })}
 
-📊 วันนี้กินไปแล้ว:
+📊 วันนี้กินไปแล้ว
 ${day.eaten} / ${day.target} kcal
 ${kcalStatusLine({ eaten: day.eaten, target: day.target })}
 (${progress})
 
 ${suggestionFromFoodDecision({ decision, title })}`;
 };
+
+const listOptions = (items = []) => items.map((item) => `- ${item}`).join("\n");
 
 export const renderMealSuggestionReply = ({ title, decision }) => {
   const { day, wantsConvenience, mood } = decision;
@@ -135,13 +145,14 @@ export const renderMealSuggestionReply = ({ title, decision }) => {
 
     return `${title} วันนี้แคลล้ำเส้นไปแล้วนะ 😅
 
+📊 สถานะตอนนี้
 กินไปแล้ว ${day.eaten} / ${day.target} kcal
 (${progress})
 
-ถ้ายังหิวจริง ๆ
+🍲 ถ้ายังหิวจริง ๆ
 แปะอยากให้ไปทางเบา ๆ ก่อน:
 
-- ${options.join("\n- ")}
+${listOptions(options)}
 
 คืนนี้ไม่ต้องแก้ชีวิตหรอก
 แค่ไม่ซ้ำหนักก็เก่งแล้ว 😂`;
@@ -150,11 +161,11 @@ export const renderMealSuggestionReply = ({ title, decision }) => {
   if (day.isLowBudget) {
     return `${title} วันนี้เหลือแคลไม่เยอะแล้วนะ 🟠
 
-เหลือประมาณ ${day.left} kcal
+📊 เหลือประมาณ ${day.left} kcal
 
-ถ้าหิวจริง ๆ เอาเบา ๆ พอ:
+🥚 ถ้าหิวจริง ๆ เอาเบา ๆ พอ:
 
-- ไข่ต้ม 🥚
+- ไข่ต้ม
 - เต้าหู้
 - ซุปใส
 - โยเกิร์ตไม่หวาน
@@ -165,8 +176,9 @@ export const renderMealSuggestionReply = ({ title, decision }) => {
   if (day.isMediumBudget || mood === "high_fat_day" || mood === "high_carb_day") {
     return `${title} วันนี้ยังพอมีพื้นที่อยู่ 🍲
 
-เหลือประมาณ ${day.left} kcal
-แปะอยากให้กินอุ่น ๆ เบา ๆ หน่อย
+📊 เหลือประมาณ ${day.left} kcal
+
+แปะอยากให้กินอุ่น ๆ เบา ๆ หน่อย:
 
 - สุกี้น้ำไก่
 - เกาเหลา + ข้าวนิดเดียว
@@ -179,7 +191,8 @@ export const renderMealSuggestionReply = ({ title, decision }) => {
   if (wantsConvenience) {
     return `${title} ถ้าเอาแบบซื้อง่ายนะ 🏪
 
-วันนี้ยังเหลือประมาณ ${day.left} kcal
+📊 วันนี้ยังเหลือประมาณ ${day.left} kcal
+
 แปะเลือกให้แบบไม่วุ่นวาย:
 
 - อกไก่ + ไข่ต้ม
@@ -192,7 +205,8 @@ export const renderMealSuggestionReply = ({ title, decision }) => {
 
   return `${title} วันนี้ยังมีพื้นที่อยู่ 🍚
 
-เหลือประมาณ ${day.left} kcal
+📊 เหลือประมาณ ${day.left} kcal
+
 แปะว่าไปทางมื้ออุ่น ๆ ง่าย ๆ ดี:
 
 - สุกี้น้ำ
@@ -204,51 +218,57 @@ export const renderMealSuggestionReply = ({ title, decision }) => {
 };
 
 export const renderDailyRecapReply = ({ title, decision }) => {
-  const { day, problemMeal, proteinMeal, mood } = decision;
+  const { day, problemMeal, proteinMeal } = decision;
   const progress = buildProgressBar(day.eaten, day.target);
-  const headline = day.isOver
-    ? "วันนี้คือสายจัดเต็มนะ 😂"
-    : day.isNearLimit
-      ? "วันนี้เกือบเต็มหลอดแล้วนะ 👀"
-      : "วันนี้ทรงยังโอเคอยู่ 😄";
+
+  const headline = day.isVeryOver
+    ? "วันนี้คือสายจัดเต็มแบบมีหลักฐานนะ 😂"
+    : day.isOver
+      ? "วันนี้มีหลุดโค้งนิดนึงนะ 👀"
+      : day.isNearLimit
+        ? "วันนี้เกือบเต็มหลอดแล้วนะ 🟠"
+        : "วันนี้ทรงยังโอเคอยู่ 😄";
 
   const mvp = proteinMeal
-    ? `💪 ${proteinMeal.menuName || "มื้อโปรตีน"} — โปรตีนดูดีที่สุดของวัน`
-    : "💪 วันนี้ยังไม่มี MVP ชัด ๆ";
+    ? `💪 ${proteinMeal.menuName || "มื้อโปรตีน"}\nโปรตีนดูดีที่สุดของวัน` 
+    : "💪 วันนี้ยังไม่มี MVP ชัด ๆ\nแต่ยังตั้งหลักได้อยู่";
 
   const problem = problemMeal
-    ? `🍚 ${problemMeal.menuName || "มื้อหนักสุด"} — ตัวดันแคลวันนี้เลย 😂`
-    : "🍚 ยังไม่มีเมนูตัวปัญหาชัด ๆ";
+    ? `👀 ${problemMeal.menuName || "มื้อหนักสุด"}\nตัวดันแคลวันนี้เลย แปะเห็นนะ 😂`
+    : "👀 ยังไม่มีตัวปัญหาชัด ๆ\nถือว่ารอดไปก่อน";
 
   const moodLine = day.isVeryOver
-    ? "Mood รวม: หลุดแบบมีหลักฐาน แต่ไม่ต้องเครียดนะ 😅"
+    ? "😅 Mood รวม\nหลุดแบบมีหลักฐาน แต่ไม่ต้องเครียดนะ"
     : day.isOver
-      ? "Mood รวม: เกินนิด ๆ แต่ยังตั้งหลักได้"
+      ? "😅 Mood รวม\nเกินนิด ๆ แต่ยังตั้งหลักได้"
       : day.goodProteinDay
-        ? "Mood รวม: โปรตีนมาดี แปะยิ้มอยู่"
-        : "Mood รวม: ไปได้เรื่อย ๆ ยังไม่หลุดโค้ง";
+        ? "😄 Mood รวม\nโปรตีนมาดี แปะยิ้มอยู่"
+        : "😄 Mood รวม\nไปได้เรื่อย ๆ ยังไม่หลุดโค้ง";
 
   const tomorrow = day.isOver
-    ? "พรุ่งนี้เอาง่าย ๆ\nลดทอด ลดหวาน แล้วเติมผักกับโปรตีนก่อน\nเดี๋ยวก็กลับเข้าร่องได้จ้า ❤️"
-    : "มื้อถัดไปคุมของทอด/น้ำหวานนิดนึง\nแล้วเน้นโปรตีนดี ๆ ต่อ แปะว่าเริ่มสวยละ ❤️";
+    ? "❤️ พรุ่งนี้เอาง่าย ๆ\nเลี่ยงของทอด 1 มื้อก่อนพอ\nแล้วเติมผักกับโปรตีนกลับมา"
+    : "❤️ มื้อถัดไป\nคุมของทอด/น้ำหวานนิดนึง\nแล้วเน้นโปรตีนดี ๆ ต่อ";
 
   return `📊 สรุปวันนี้ของ${title}
 
 ${headline}
 
+🔥 ภาพรวมวันนี้
 กินไปแล้ว ${day.eaten} / ${day.target} kcal
 ${kcalStatusLine({ eaten: day.eaten, target: day.target })}
 (${progress})
 
-MVP วันนี้:
+🏆 MVP วันนี้
 ${mvp}
 
-ตัวปัญหาประจำวัน:
 ${problem}
 
 ${moodLine}
 
-${tomorrow}`;
+${tomorrow}
+
+ไม่ต้องทำตัวเป็นหุ่นยนต์นะ
+แค่กลับมาดูแลตัวเองต่อก็พอแล้วจ้า 😂`;
 };
 
 export const renderFallbackReply = () => {
@@ -263,4 +283,63 @@ export const renderNoFoodDetectedReply = () => {
 
 ส่งใหม่ใกล้ ๆ ได้มั้ย
 เอาให้เห็นอาหารชัด ๆ หน่อยน้า`;
+};
+
+export const renderFoodLogMessages = ({ title, meal, summary, decision }) => {
+  const day = decision.day;
+  const signals = decision.signals;
+  const progress = buildProgressBar(day.eaten, day.target);
+
+  const reactions = {
+    over_calorie_heavy: [
+      `โอ้โห ${title} วันนี้จัดเต็มแบบมีหลักฐานนะ 😂`,
+      `เอ้า ${title} วันนี้แคลพุ่งไม่เบาเลยนะ 😅`,
+    ],
+    over_calorie: [
+      `มื้อนี้ทำแคลล้ำเส้นแล้วนะ ${title} 😅`,
+      `วันนี้เริ่มเกินเป้าแล้วนะ ${title} 👀`,
+    ],
+    fried_or_fat: [
+      `โอเค มื้อนี้สายมันมาแล้วหนึ่ง 👀`,
+      `มื้อนี้ดูเพลิน แต่ไขมันแอบมานะ 😂`,
+    ],
+    sweet_heavy: [
+      `หวานมาแล้วนะ แปะเห็นนะ 😭`,
+      `ของหวานนี่มันชอบเนียนจริง ๆ เนอะ 😂`,
+    ],
+    protein_good: [
+      `อันนี้แปะให้ผ่าน โปรตีนมาดี 💪`,
+      `มื้อนี้มีทรงนะ โปรตีนไม่แย่เลย 😄`,
+    ],
+    heavy_meal: [
+      `มื้อนี้มาแน่นนะ ${title} 🍛`,
+      `จานนี้ไม่เบาเลยนะ ${title} 😂`,
+    ],
+    balanced: [
+      `มื้อนี้ดูโอเคอยู่นะ ${title} 🍽️`,
+      `แปะดูแล้ว มื้อนี้ไปได้อยู่ 😄`,
+    ],
+  };
+
+  const macroLines = macroInsightLines(signals).join("\n");
+
+  const firstMessage = `${pick(reactions[decision.mood] || reactions.balanced)}
+
+🍽️ เมนูที่แปะเห็น
+${signals.menuName}
+
+🔥 ประมาณ ${signals.kcal} kcal`;
+
+  const secondMessage = `📌 แปะขอเมนต์สั้น ๆ
+${macroLines}
+${problemLineFromDecision({ decision })}
+
+📊 วันนี้กินไปแล้ว
+${day.eaten} / ${day.target} kcal
+${kcalStatusLine({ eaten: day.eaten, target: day.target })}
+(${progress})
+
+${suggestionFromFoodDecision({ decision, title })}`;
+
+  return [firstMessage, secondMessage];
 };
