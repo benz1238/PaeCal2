@@ -4,6 +4,7 @@ const line = await import("./services/line.js");
 const helpers = await import("./utils/helpers.js");
 const profile = await import("./utils/profile.js");
 const advice = await import("./utils/advice.js");
+const memory = await import("./utils/memory.js");
 const decision = await import("./utils/decision.js");
 const personality = await import("./utils/personality.js");
 const reactions = await import("./utils/reactions.js");
@@ -21,7 +22,9 @@ const requiredExports = [
 
   [line, "client", "./services/line.js"],
   [line, "replyText", "./services/line.js"],
+  [line, "replyTexts", "./services/line.js"],
   [line, "pushText", "./services/line.js"],
+  [line, "pushTexts", "./services/line.js"],
   [line, "getLineDisplayName", "./services/line.js"],
   [line, "getLineImageBase64", "./services/line.js"],
 
@@ -41,6 +44,10 @@ const requiredExports = [
   [advice, "getSummaryText", "./utils/advice.js"],
   [advice, "getMealSuggestionText", "./utils/advice.js"],
 
+  [memory, "getMealMemoryTags", "./utils/memory.js"],
+  [memory, "summarizeMealMemory", "./utils/memory.js"],
+  [memory, "getContextMemoryLine", "./utils/memory.js"],
+
   [decision, "getDayContext", "./utils/decision.js"],
   [decision, "getMealSignals", "./utils/decision.js"],
   [decision, "decideFoodLog", "./utils/decision.js"],
@@ -48,6 +55,7 @@ const requiredExports = [
   [decision, "decideDailyRecap", "./utils/decision.js"],
 
   [personality, "renderFoodLogReply", "./utils/personality.js"],
+  [personality, "renderFoodLogMessages", "./utils/personality.js"],
   [personality, "renderMealSuggestionReply", "./utils/personality.js"],
   [personality, "renderDailyRecapReply", "./utils/personality.js"],
   [personality, "renderFallbackReply", "./utils/personality.js"],
