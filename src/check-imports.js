@@ -4,6 +4,9 @@ const line = await import("./services/line.js");
 const helpers = await import("./utils/helpers.js");
 const profile = await import("./utils/profile.js");
 const advice = await import("./utils/advice.js");
+const decision = await import("./utils/decision.js");
+const personality = await import("./utils/personality.js");
+const reactions = await import("./utils/reactions.js");
 const textHandler = await import("./handlers/textHandler.js");
 const imageHandler = await import("./handlers/imageHandler.js");
 
@@ -37,6 +40,21 @@ const requiredExports = [
   [advice, "getFoodLogText", "./utils/advice.js"],
   [advice, "getSummaryText", "./utils/advice.js"],
   [advice, "getMealSuggestionText", "./utils/advice.js"],
+
+  [decision, "getDayContext", "./utils/decision.js"],
+  [decision, "getMealSignals", "./utils/decision.js"],
+  [decision, "decideFoodLog", "./utils/decision.js"],
+  [decision, "decideMealSuggestion", "./utils/decision.js"],
+  [decision, "decideDailyRecap", "./utils/decision.js"],
+
+  [personality, "renderFoodLogReply", "./utils/personality.js"],
+  [personality, "renderMealSuggestionReply", "./utils/personality.js"],
+  [personality, "renderDailyRecapReply", "./utils/personality.js"],
+  [personality, "renderFallbackReply", "./utils/personality.js"],
+  [personality, "renderNoFoodDetectedReply", "./utils/personality.js"],
+
+  [reactions, "chooseReaction", "./utils/reactions.js"],
+  [reactions, "getReactionBank", "./utils/reactions.js"],
 
   [textHandler, "handleTextMessage", "./handlers/textHandler.js"],
   [imageHandler, "handleImageMessage", "./handlers/imageHandler.js"],
