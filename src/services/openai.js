@@ -145,7 +145,7 @@ intent ที่อนุญาต:
 };
 
 export const estimateFoodFromText = async (text) => {
-  return await openAIJson(
+  const estimated = await openAIJson(
     [
       {
         role: "system",
@@ -161,8 +161,19 @@ export const estimateFoodFromText = async (text) => {
   "menuName": "ข้าวกะเพราหมูไข่ดาว",
   "carb": 65,
   "protein": 25,
-  "fat": 28
+  "fat": 28,
+  "items": [
+    { "name": "ข้าวกะเพราหมูไข่ดาว", "quantity": "1 จาน", "kcal": 700 }
+  ]
 }
+
+กฎสำคัญสำหรับข้อความที่มีหลายรายการอาหาร:
+- ถ้าผู้ใช้พิมพ์หลายอย่างในข้อความเดียว เช่น ข้าวมันไก่ 1 จาน / ชาไทยหวานน้อย / ขนมเลย์ 1 ห่อ
+  ให้แยกรายการใน items ทุกครั้ง
+- kcal หลักด้านบนต้องเป็นผลรวมโดยประมาณของ items
+- carb/protein/fat ด้านบนเป็นผลรวมคร่าว ๆ ทั้งมื้อ
+- items แต่ละรายการใช้ kcal ต่อรายการเท่านั้น ไม่ต้องใส่ macro ราย item
+- quantity ให้คงตามที่ผู้ใช้บอก ถ้าไม่ชัดให้ใช้คำว่า "ประมาณ"
 `,
       },
       {
@@ -172,6 +183,23 @@ export const estimateFoodFromText = async (text) => {
     ],
     { temperature: 0.25 }
   );
+
+  return {
+    kcal: Number(estimated?.kcal) || 0,
+    menuName: estimated?.menuName || String(text || "").trim() || "อาหาร",
+    carb: Number(estimated?.carb) || 0,
+    protein: Number(estimated?.protein) || 0,
+    fat: Number(estimated?.fat) || 0,
+    items: Array.isArray(estimated?.items)
+      ? estimated.items
+          .map((item) => ({
+            name: String(item?.name || "").trim(),
+            quantity: String(item?.quantity || "").trim(),
+            kcal: Number(item?.kcal) || 0,
+          }))
+          .filter((item) => item.name && item.kcal > 0)
+      : [],
+  };
 };
 
 export const estimateFoodFromImage = async (base64Image) => {
