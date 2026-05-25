@@ -1,6 +1,6 @@
 import { replyText, replyTexts } from "../services/line.js";
 import { postToSheet } from "../services/sheet.js";
-import { estimateFoodFromText, parseUserIntent } from "../services/openai.js";
+import { estimateFoodFromText, parseUserIntent, reviseFoodEstimateFromCorrection } from "../services/openai.js";
 import {
   calculateTDEE,
   DEFAULT_CALORIE_TARGET,
@@ -63,6 +63,7 @@ const logFood = async (payload) => postToSheet({ action: "LOG_FOOD", ...payload 
 const getDailySummary = async (userId) => postToSheet({ action: "GET_DAILY_SUMMARY", userId });
 const getLastMeal = async (userId) => postToSheet({ action: "GET_LAST_MEAL", userId });
 const updateLastMeal = async (payload) => retryOnce(() => postToSheet({ action: "UPDATE_LAST_MEAL", ...payload }));
+const updateMealByRequestId = async (payload) => retryOnce(() => postToSheet({ action: "UPDATE_MEAL_BY_REQUEST_ID", ...payload }));
 const deleteLastMeal = async (userId) => retryOnce(() => postToSheet({ action: "DELETE_LAST_MEAL", userId }));
 
 const exactTexts = (list, text) => list.includes(String(text || "").trim());
@@ -429,6 +430,140 @@ ${menuName}
 💧 ไขมัน ${fat} g
 
 ถ้าปริมาณไม่ตรง พิมพ์ “แก้มื้อล่าสุดเป็น ...” ได้เลยจ้า`;
+};
+
+const SMART_MEAL_CORRECTION_PATTERN = /(ไม่ใช่|แก้|เปลี่ยน|ปรับ|เป็นแก้วเล็ก|แก้วเล็ก|ไซซ์เล็ก|ไซส์เล็ก|ครึ่งห่อ|ครึ่งเดียว|กินครึ่ง|เอาหนังออก|ไม่เอาหนัง|เอา.*ออก|ลดหวาน|หวานน้อยกว่า|ไม่หวาน|เพิ่ม|ลด|เมื่อกี้|มื้อก่อน|มื้อก่อนหน้า|อันก่อน|รายการก่อน)/i;
+
+const normalizeMealRecord = (meal = {}, extra = {}) => {
+  const menuName = meal.menuName || meal.name || "อาหาร";
+  return {
+    menuName,
+    kcal: safeNumber(meal.kcal, 0),
+    carb: safeNumber(meal.carb, 0),
+    protein: safeNumber(meal.protein, 0),
+    fat: safeNumber(meal.fat, 0),
+    items: Array.isArray(meal.items) ? meal.items : [],
+    requestId: meal.requestId || extra.requestId || "",
+    loggedAt: meal.loggedAt || extra.loggedAt || new Date().toISOString(),
+  };
+};
+
+const getRecentMealsFromSession = (session) => {
+  const recent = Array.isArray(session?.data?.recentMeals) ? session.data.recentMeals : [];
+  const fallback = session?.data?.lastMeal?.menuName ? [session.data.lastMeal] : [];
+  return (recent.length ? recent : fallback)
+    .filter((meal) => meal?.menuName)
+    .map((meal) => normalizeMealRecord(meal))
+    .slice(0, 5);
+};
+
+const upsertRecentMealList = (recentMeals = [], meal = {}) => {
+  const normalized = normalizeMealRecord(meal);
+  const key = normalized.requestId || normalized.loggedAt || normalized.menuName;
+  const withoutDuplicate = recentMeals.filter((item) => {
+    const itemKey = item.requestId || item.loggedAt || item.menuName;
+    return itemKey !== key;
+  });
+  return [normalized, ...withoutDuplicate].slice(0, 5);
+};
+
+const normalizeTokenText = (text) => normalizeText(text)
+  .replace(/[ๆ~!！?？.。…。、,，:：;；\-_=+*()\[\]{}"'“”‘’`]/g, " ")
+  .replace(/\s+/g, " ")
+  .trim();
+
+const extractFoodTokensForMealMatch = (text) => {
+  const value = normalizeTokenText(text);
+  const tokens = FOOD_ADVICE_KEYWORDS
+    .filter((word) => value.includes(normalizeText(word)))
+    .sort((a, b) => b.length - a.length);
+
+  const customTokens = value
+    .split(/\s+/g)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3 && hasFoodKeyword(token));
+
+  return [...new Set([...tokens, ...customTokens])].slice(0, 8);
+};
+
+const scoreMealForCorrection = (meal, tokens = []) => {
+  const haystack = normalizeTokenText([
+    meal.menuName,
+    ...(Array.isArray(meal.items) ? meal.items.map((item) => `${item.name || ""} ${item.quantity || ""}`) : []),
+  ].join(" "));
+
+  return tokens.reduce((score, token) => {
+    const cleanToken = normalizeText(token);
+    if (!cleanToken) return score;
+    return haystack.includes(cleanToken) ? score + Math.max(cleanToken.length, 2) : score;
+  }, 0);
+};
+
+const selectMealForCorrection = ({ text, session }) => {
+  const recentMeals = getRecentMealsFromSession(session);
+  if (!recentMeals.length) return { selectedMeal: null, recentMeals, reason: "no_meal" };
+
+  const value = normalizeText(text);
+  if (/(มื้อก่อนหน้า|มื้อก่อน|อันก่อน|รายการก่อน|ก่อนหน้านี้)/i.test(value) && recentMeals[1]) {
+    return { selectedMeal: recentMeals[1], recentMeals, reason: "previous_meal" };
+  }
+
+  if (/(มื้อล่าสุด|เมื่อกี้|อันเมื่อกี้|รายการล่าสุด)/i.test(value)) {
+    return { selectedMeal: recentMeals[0], recentMeals, reason: "latest_meal" };
+  }
+
+  const tokens = extractFoodTokensForMealMatch(text);
+  if (tokens.length) {
+    const ranked = recentMeals
+      .map((meal) => ({ meal, score: scoreMealForCorrection(meal, tokens) }))
+      .sort((a, b) => b.score - a.score);
+
+    if (ranked[0]?.score > 0) {
+      return { selectedMeal: ranked[0].meal, recentMeals, reason: "matched_food" };
+    }
+  }
+
+  return { selectedMeal: recentMeals[0], recentMeals, reason: "latest_fallback" };
+};
+
+const replaceRecentMeal = (recentMeals = [], selectedMeal = {}, updatedMeal = {}) => {
+  const selectedKey = selectedMeal.requestId || selectedMeal.loggedAt || selectedMeal.menuName;
+  return recentMeals.map((meal) => {
+    const key = meal.requestId || meal.loggedAt || meal.menuName;
+    return key === selectedKey ? normalizeMealRecord({ ...meal, ...updatedMeal }) : meal;
+  }).slice(0, 5);
+};
+
+const isSmartMealCorrectionText = (text) => {
+  const value = normalizeText(text);
+  if (!value || value.length > 220) return false;
+  if (isExactSummaryText(text) || isDeleteMealText(text) || isEditMealHelpText(text)) return false;
+  if (isFoodCompareText(text) || isNextMealAfterFoodText(text) || isFoodKcalQuestionText(text)) return false;
+  return SMART_MEAL_CORRECTION_PATTERN.test(value);
+};
+
+const getCorrectionTargetLabel = (reason) => {
+  if (reason === "previous_meal") return "มื้อก่อนหน้า";
+  if (reason === "matched_food") return "มื้อที่แปะหาเจอ";
+  return "มื้อล่าสุด";
+};
+
+const buildSmartCorrectionReplyMessages = ({ title, oldMeal, updatedMeal, summary, targetLabel }) => {
+  const total = summary.todayCalories ?? summary.totalToday ?? updatedMeal.kcal ?? 0;
+  const target = summary.calorieTarget || DEFAULT_CALORIE_TARGET;
+  const progress = buildProgressBar(total, target);
+  const items = Array.isArray(updatedMeal?.items) ? updatedMeal.items : [];
+  const itemLines = items.length > 1 ? items.map(formatFoodItemLine).join("\n") : "";
+
+  const mealBubble = items.length > 1
+    ? `${title} โอเค แปะปรับ${targetLabel || "มื้อล่าสุด"}ให้แล้วนะ 🧾\n\nจากเดิม:\n${oldMeal?.menuName || "มื้อก่อนหน้า"}\n\nปรับใหม่รวมประมาณ ${updatedMeal.kcal} kcal\n\nแยกให้คร่าว ๆ:\n${itemLines}`
+    : `${title} โอเค แปะปรับ${targetLabel || "มื้อล่าสุด"}ให้แล้วนะ 🧾\n\nจากเดิม:\n${oldMeal?.menuName || "มื้อก่อนหน้า"}\n\nเป็น:\n${updatedMeal.menuName || "อาหาร"}\nประมาณ ${updatedMeal.kcal} kcal`;
+
+  const progressBubble = `📊 วันนี้กินไปแล้ว\n${total} / ${target} kcal\n(${progress})`;
+
+  const commentBubble = `แบบนี้ชัดขึ้นละ 👀\nถ้ามีอะไรคลาดอีก บอกแปะต่อได้เลย`;
+
+  return [mealBubble, progressBubble, commentBubble];
 };
 
 const buildTextFoodLogMessages = ({ title, meal, summary, decision }) => {
@@ -1148,7 +1283,69 @@ export const handleTextMessage = async (event) => {
     return;
   }
 
-  if (isPronounKcalQuestionText(text)) {
+  if (isSmartMealCorrectionText(text)) {
+    const { selectedMeal, recentMeals, reason } = selectMealForCorrection({ text, session });
+
+    if (selectedMeal?.menuName) {
+      const revised = await reviseFoodEstimateFromCorrection({
+        previousMeal: selectedMeal,
+        correctionText: text,
+      });
+
+      const updatedMeal = normalizeMealRecord({
+        ...selectedMeal,
+        menuName: revised.menuName || selectedMeal.menuName || "อาหาร",
+        kcal: safeNumber(revised.kcal, selectedMeal.kcal || 0),
+        carb: safeNumber(revised.carb, selectedMeal.carb || 0),
+        protein: safeNumber(revised.protein, selectedMeal.protein || 0),
+        fat: safeNumber(revised.fat, selectedMeal.fat || 0),
+        items: normalizeEstimatedItems(revised, revised.menuName || selectedMeal.menuName || ""),
+      });
+
+      const updatePayload = {
+        userId,
+        menuName: updatedMeal.menuName,
+        kcal: updatedMeal.kcal,
+        carb: updatedMeal.carb,
+        protein: updatedMeal.protein,
+        fat: updatedMeal.fat,
+      };
+
+      const updated = selectedMeal.requestId
+        ? await updateMealByRequestId({ ...updatePayload, requestId: selectedMeal.requestId })
+        : await updateLastMeal(updatePayload);
+
+      if (updated.status !== "not_found") {
+        const summary = {
+          ...updated,
+          todayCalories: updated.todayCalories ?? updated.totalToday ?? updatedMeal.kcal,
+          totalToday: updated.totalToday ?? updated.todayCalories ?? updatedMeal.kcal,
+          calorieTarget: updated.calorieTarget || session.data?.calorieTarget || DEFAULT_CALORIE_TARGET,
+        };
+
+        const nextRecentMeals = replaceRecentMeal(recentMeals, selectedMeal, updatedMeal);
+
+        await syncSessionFromProfile({
+          userId,
+          session,
+          extraData: {
+            lastMeal: nextRecentMeals[0] || updatedMeal,
+            recentMeals: nextRecentMeals,
+            calorieTarget: summary.calorieTarget,
+          },
+        });
+
+        await replyTexts(replyToken, buildSmartCorrectionReplyMessages({
+          title,
+          oldMeal: selectedMeal,
+          updatedMeal,
+          summary,
+          targetLabel: getCorrectionTargetLabel(reason),
+        }));
+        return;
+      }
+    }
+  }\n\n  if (isPronounKcalQuestionText(text)) {
     const meal = await getLatestMealForFollowUp({ userId, session });
     await replyText(replyToken, buildPronounKcalReply({ title, meal }));
     return;
@@ -1168,6 +1365,7 @@ export const handleTextMessage = async (event) => {
     const menuName = foodData.menuName || foodText;
     const items = normalizeEstimatedItems(foodData, foodText);
 
+    const requestId = getMessageRequestId(event, "text-log");
     const sheetData = await logFood({
       userId,
       name: session.data?.name || "",
@@ -1176,15 +1374,16 @@ export const handleTextMessage = async (event) => {
       protein,
       fat,
       menuName,
-      requestId: getMessageRequestId(event, "text-log"),
+      requestId,
     });
     const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
     const target = sheetData.calorieTarget || DEFAULT_CALORIE_TARGET;
     const summary = { ...sheetData, todayCalories: total, totalToday: total, calorieTarget: target };
-    const meal = { menuName, kcal, carb, protein, fat, items };
+    const meal = normalizeMealRecord({ menuName, kcal, carb, protein, fat, items, requestId });
     const decision = decideFoodLog({ meal, summary });
+    const recentMeals = upsertRecentMealList(getRecentMealsFromSession(session), meal);
 
-    await syncSessionFromProfile({ userId, session, extraData: { calorieTarget: target, lastMeal: meal } });
+    await syncSessionFromProfile({ userId, session, extraData: { calorieTarget: target, lastMeal: meal, recentMeals } });
     await replyTexts(replyToken, buildTextFoodLogMessages({ title, meal, summary, decision }));
     return;
   }
