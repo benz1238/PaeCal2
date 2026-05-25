@@ -92,7 +92,7 @@ const paeLaewGuideFlex = () => ({
         },
         {
           type: "text",
-          text: "ส่งรูปอาหารหรือจะพิมพ์บอกแปะสั้น ๆ ก็ได้",
+          text: "ส่งรูปอาหารหรือจะพิมพ์บอกแปะสั้น ๆ",
           size: "md",
           wrap: true,
           color: "#374151",
@@ -103,7 +103,7 @@ const paeLaewGuideFlex = () => ({
         },
         {
           type: "text",
-          text: "เช่น:",
+          text: "พิมพ์แบบนี้ได้เลย:",
           weight: "bold",
           size: "sm",
           color: "#111827",
@@ -119,6 +119,7 @@ const paeLaewGuideFlex = () => ({
         {
           type: "text",
           text: "หลายอย่างพิมพ์แยกบรรทัดได้เลย\nเดี๋ยวแปะแยกแคลให้ 😄",
+          weight: "bold"
           size: "sm",
           wrap: true,
           color: "#374151",
