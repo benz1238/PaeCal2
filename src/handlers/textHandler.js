@@ -832,6 +832,49 @@ ${budget.isOver ? "วันนี้เกินเป้าแล้ว เอ
 };
 
 
+const getGoalAwareMealSuggestionAddon = ({ goalText = "", summary = {} }) => {
+  const goal = getGoalSignals(goalText);
+  if (!goal.hasGoal) return "";
+
+  const budget = getDayBudget(summary);
+
+  if (goal.fatLoss) {
+    return budget.isNear || budget.isOver
+      ? "ตามเป้าลดไขมัน มื้อนี้ขอโปรตีนไม่มัน + ผัก/ซุปนะ เลี่ยงทอดกับน้ำหวานก่อน 😮‍💨🍃"
+      : "ตามเป้าลดไขมัน เลือกเมนูโปรตีนดี ๆ ไม่มันจัด จะคุมง่ายสุด 👀";
+  }
+
+  if (goal.sweetControl) {
+    return "ตามเป้าคุมหวาน แปะขอเครื่องดื่มหวานน้อย/ไม่หวานก่อนนะ 🧋👀";
+  }
+
+  if (goal.muscleGain) {
+    return "ถ้าอยากดันโปรตีน มื้อนี้ขอมีไข่ ไก่ ปลา เต้าหู้ หรือหมูไม่ติดมันติดมาด้วย 💪🔥";
+  }
+
+  if (goal.lateControl) {
+    return "ถ้าเป็นมื้อเย็น/ดึก แปะเชียร์เบา ๆ พอ ไม่ต้องเล่นใหญ่ เดี๋ยวแน่นเกิน 😮‍💨";
+  }
+
+  if (goal.healthyEating) {
+    return "ตามเป้ากินสุขภาพดี ขอมีผักหรือซุปติดมาด้วยนิดนึง แปะให้ผ่านง่ายขึ้น 🥬";
+  }
+
+  if (goal.relaxed) {
+    return "แปะจำได้ว่าเอาแบบไม่กดดันนะ เลือกอันที่คุมง่ายแต่ยังอร่อยพอ ชิล ๆ 😄";
+  }
+
+  return "";
+};
+
+const buildGoalAwareMealSuggestionReply = ({ title, summary, text, goalText = "", decision }) => {
+  const base = renderMealSuggestionReply({ title, decision }) || getMealSuggestionText({ title, summary });
+  const addon = getGoalAwareMealSuggestionAddon({ goalText, summary });
+
+  return addon ? `${base}\n\n${addon}` : base;
+};
+
+
 const getMacroTargetsForSummary = (summary = {}) => {
   const target = Math.max(safeNumber(summary?.calorieTarget, DEFAULT_CALORIE_TARGET), 1);
   return {
@@ -944,7 +987,7 @@ const buildCarbStatusReply = ({ title, summary }) => {
   return `${title} คาร์บวันนี้ยังโอเคนะ 😄\n\nตอนนี้ประมาณ ${carb} g\nยังมีพื้นที่ให้เลือกมื้อถัดไปแบบไม่ตึงมาก`;
 };
 
-const buildLatestMealHeavyReply = async ({ title, userId, session }) => {
+const buildLatestMealHeavyReply = async ({ title, userId, session, goalText = "" }) => {
   const meal = await getLatestMealForFollowUp({ userId, session });
 
   if (!meal?.menuName) {
@@ -956,16 +999,23 @@ const buildLatestMealHeavyReply = async ({ title, userId, session }) => {
   const carb = safeNumber(meal.carb, 0);
   const protein = safeNumber(meal.protein, 0);
   const menuName = meal.menuName || "มื้อนี้";
+  const goalLine = getGoalAwareLine({
+    goalText,
+    foodText: menuName,
+    context: kcal >= 600 || fat >= 30 ? "heavy" : "general",
+    isLate: new Date().getHours() >= 21 || new Date().getHours() < 2,
+  });
+  const goalBlock = goalLine ? `\n\n${goalLine}` : "";
 
   if (kcal >= 850 || fat >= 35) {
-    return `${title} เมนูนี้ค่อนข้างหนักอยู่นะ 👀\n\n${menuName}\nประมาณ ${Math.round(kcal)} kcal${fat ? ` / ไขมัน ${Math.round(fat)} g` : ""}\n\nไม่ได้พัง แต่ถ้ามื้อต่อไปยังหิว เอาเบา ๆ พอ จะได้ไม่แน่นเกิน 😮‍💨🍃`;
+    return `${title} เมนูนี้ค่อนข้างหนักอยู่นะ 👀\n\n${menuName}\nประมาณ ${Math.round(kcal)} kcal${fat ? ` / ไขมัน ${Math.round(fat)} g` : ""}\n\nไม่ได้พัง แต่ถ้ามื้อต่อไปยังหิว เอาเบา ๆ พอ จะได้ไม่แน่นเกิน 😮‍💨🍃${goalBlock}`;
   }
 
   if (kcal >= 600 || carb >= 80) {
-    return `${title} เมนูนี้กลาง ๆ ไปทางแน่นนะ 😄\n\n${menuName}\nประมาณ ${Math.round(kcal)} kcal\n\nถ้าวันนี้ยังไม่เกิน แปะว่าโอเคอยู่ แค่มื้อต่อไปไม่ต้องเล่นใหญ่`;
+    return `${title} เมนูนี้กลาง ๆ ไปทางแน่นนะ 😄\n\n${menuName}\nประมาณ ${Math.round(kcal)} kcal\n\nถ้าวันนี้ยังไม่เกิน แปะว่าโอเคอยู่ แค่มื้อต่อไปไม่ต้องเล่นใหญ่${goalBlock}`;
   }
 
-  return `${title} เมนูนี้ยังโอเคอยู่นะ 😄\n\n${menuName}\nประมาณ ${Math.round(kcal)} kcal\nโปรตีน ${Math.round(protein)} g\n\nไม่ได้หนักเกิน แปะให้ผ่าน`;
+  return `${title} เมนูนี้ยังโอเคอยู่นะ 😄\n\n${menuName}\nประมาณ ${Math.round(kcal)} kcal\nโปรตีน ${Math.round(protein)} g\n\nไม่ได้หนักเกิน แปะให้ผ่าน${goalBlock}`;
 };
 
 
@@ -1446,41 +1496,52 @@ const formatMealNameForRecap = (meal = {}) => {
   return label && !name.includes(label) ? `${label}: ${name}` : name;
 };
 
+const normalizeMealLabelForSplit = (label = "") => {
+  const value = normalizeText(label);
+  if (value === "กลางวัน") return "เที่ยง";
+  if (value === "เยน") return "เย็น";
+  return value;
+};
+
 const splitExplicitMealText = (text) => {
   const raw = String(text || "").trim();
   if (!raw) return [];
 
-  const normalized = raw
+  const source = raw
     .replace(/\r/g, "\n")
     .replace(/[，,]+/g, "\n")
-    .replace(/(?=มื้อ(?:เช้า|เที่ยง|กลางวัน|เย็น|ค่ำ|ดึก))/g, "\n")
-    .replace(/(?=(?:เช้า|เที่ยง|กลางวัน|เย็น|ค่ำ|ดึก)\s*[:：])/g, "\n")
-    .replace(/\n{2,}/g, "\n")
+    .replace(/\s+/g, " ")
+    .replace(/\s*(และ)\s*(?=(?:มื้อ)?(?:เช้า|เที่ยง|กลางวัน|เย็น|เยน|ค่ำ|ดึก)\b)/gi, " และ ")
     .trim();
 
-  const lines = normalized
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const mealPattern = /(^|[\s\n]|และ)(?:มื้อ)?(เช้า|เที่ยง|กลางวัน|เย็น|เยน|ค่ำ|ดึก)\s*(?:[:：\-])?/gi;
+  const matches = Array.from(source.matchAll(mealPattern));
+
+  if (matches.length < 2) return [];
 
   const segments = [];
 
-  for (const line of lines) {
-    const match = line.match(/^(?:มื้อ)?(เช้า|เที่ยง|กลางวัน|เย็น|ค่ำ|ดึก)\s*(?:[:：\-])?\s*(.+)$/i);
-    if (!match) continue;
-
-    const label = match[1] === "กลางวัน" ? "เที่ยง" : match[1];
-    const foodText = String(match[2] || "")
+  for (let i = 0; i < matches.length; i++) {
+    const match = matches[i];
+    const prefix = match[1] || "";
+    const label = normalizeMealLabelForSplit(match[2] || "");
+    const foodStart = match.index + match[0].length;
+    const foodEnd = i + 1 < matches.length ? matches[i + 1].index : source.length;
+    const foodText = source
+      .slice(foodStart, foodEnd)
+      .replace(/(?:^|\s)(และ|แล้ว|ต่อด้วย)\s*$/i, "")
       .replace(/^(กิน|ทาน|คือ|เป็น)\s*/i, "")
+      .replace(/\s+(และ|แล้ว|ต่อด้วย)$/i, "")
       .trim();
 
-    if (foodText) {
+    if (label && foodText) {
       segments.push({ label, foodText });
     }
   }
 
   return segments.length >= 2 ? segments.slice(0, 5) : [];
 };
+
 
 const logExplicitMealSegments = async ({ event, userId, session, title, segments, goalText }) => {
   await replyText(
@@ -1887,7 +1948,7 @@ export const handleTextMessage = async (event) => {
   }
 
   if (isLatestMealHeavyQuestionText(text)) {
-    await replyText(replyToken, await buildLatestMealHeavyReply({ title, userId, session }));
+    await replyText(replyToken, await buildLatestMealHeavyReply({ title, userId, session, goalText }));
     return;
   }
 
@@ -2234,7 +2295,7 @@ export const handleTextMessage = async (event) => {
     const decision = decideMealSuggestion({ summary, text });
     await replyText(
       replyToken,
-      renderMealSuggestionReply({ title, decision }) || getMealSuggestionText({ title, summary })
+      buildGoalAwareMealSuggestionReply({ title, summary, text, goalText, decision })
     );
     return;
   }
