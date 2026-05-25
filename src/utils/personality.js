@@ -1,7 +1,7 @@
 import { DEFAULT_CALORIE_TARGET, safeNumber } from "./helpers.js";
 import { buildProgressBar } from "./advice.js";
 import { chooseReaction } from "./reactions.js";
-import { getContextMemoryLine, getMealMemoryTags } from "./memory.js";
+import { get7DayMemoryLine, getContextMemoryLine, getMealMemoryTags } from "./memory.js";
 
 const pick = (items = []) => {
   if (!items.length) return "";
@@ -136,6 +136,8 @@ export const renderFoodLogReply = ({ title, meal, summary, decision }) => {
   const progress = buildProgressBar(day.eaten, day.target);
   const insight = shortMealInsight(signals).join("\n");
   const memoryLine = getContextMemoryLine(day.memory);
+  const sevenDayLine = decision.mention7DayMemory ? get7DayMemoryLine(day.memory7) : "";
+  const memoryBlock = [memoryLine, sevenDayLine].filter(Boolean).join("\n");
 
   return `${reactionLineForFood({ title, decision })}
 
@@ -146,7 +148,7 @@ ${signals.menuName}
 
 📌 แปะขอเมนต์สั้น ๆ
 ${insight}
-${memoryLine}
+${memoryBlock}
 
 📊 วันนี้กินไปแล้ว
 ${day.eaten} / ${day.target} kcal
@@ -187,6 +189,8 @@ export const renderMealSuggestionReply = ({ title, decision }) => {
   const progress = buildProgressBar(day.eaten, day.target);
   const options = optionsByContext({ decision });
   const memoryLine = getContextMemoryLine(day.memory);
+  const sevenDayLine = decision.mention7DayMemory ? get7DayMemoryLine(day.memory7) : "";
+  const memoryBlock = [memoryLine, sevenDayLine].filter(Boolean).join("\n");
 
   if (day.isOver) {
     return `${title} วันนี้แคลล้ำเส้นไปแล้วนะ 😅
@@ -197,7 +201,7 @@ ${kcalStatusLine({ eaten: day.eaten, target: day.target })}
 (${progress})
 
 👀 แปะดูจากวันนี้
-${memoryLine}
+${memoryBlock}
 
 🍲 ถ้ายังหิวจริง ๆ
 แปะอยากให้ไปทางเบา ๆ ก่อน:
@@ -227,7 +231,7 @@ ${listOptions(options)}
 📊 เหลือประมาณ ${day.left} kcal
 
 👀 แปะดูจากวันนี้
-${memoryLine}
+${memoryBlock}
 
 มื้อนี้ไปทางอุ่น ๆ เบา ๆ ดีกว่า:
 
@@ -372,6 +376,7 @@ const nextStepLine = ({ day, memory }) => {
 export const renderDailyRecapMessages = ({ title, decision }) => {
   const { day, problemMeal, proteinMeal, memory = day.memory || {} } = decision;
   const progress = buildProgressBar(day.eaten, day.target);
+  const sevenDayLine = decision.mention7DayMemory ? get7DayMemoryLine(day.memory7) : "";
 
   const firstMessage = `📊 สรุปวันนี้ของ${title}
 
@@ -386,7 +391,7 @@ ${kcalStatusLine({ eaten: day.eaten, target: day.target })}
 ${mvpLine({ proteinMeal, memory })}`;
 
   const secondMessage = `👀 แต่...
-${problemLine({ problemMeal, memory })}
+${problemLine({ problemMeal, memory })}${sevenDayLine ? `\n${sevenDayLine}` : ""}
 
 ${moodLine({ day, memory })}
 
@@ -421,6 +426,8 @@ export const renderFoodLogMessages = ({ title, meal, summary, decision }) => {
   const progress = buildProgressBar(day.eaten, day.target);
   const insight = shortMealInsight(signals).join("\n");
   const memoryLine = getContextMemoryLine(day.memory);
+  const sevenDayLine = decision.mention7DayMemory ? get7DayMemoryLine(day.memory7) : "";
+  const memoryBlock = [memoryLine, sevenDayLine].filter(Boolean).join("\n");
 
   const firstMessage = `${reactionLineForFood({ title, decision })}
 
@@ -431,7 +438,7 @@ ${signals.menuName}
 
   const secondMessage = `📌 แปะขอเมนต์สั้น ๆ
 ${insight}
-${memoryLine}
+${memoryBlock}
 
 📊 วันนี้กินไปแล้ว
 ${day.eaten} / ${day.target} kcal

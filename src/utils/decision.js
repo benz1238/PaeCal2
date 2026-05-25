@@ -1,5 +1,5 @@
 import { DEFAULT_CALORIE_TARGET, safeNumber } from "./helpers.js";
-import { getMealMemoryTags, summarizeMealMemory } from "./memory.js";
+import { getMealMemoryTags, shouldMention7DayMemory, summarizeMealMemory } from "./memory.js";
 
 const HIGH_CARB_MEAL = 85;
 const HIGH_FAT_MEAL = 35;
@@ -21,6 +21,7 @@ export const getDayContext = (summary = {}) => {
   const mealCount = safeNumber(summary.mealCount, 0);
   const meals = Array.isArray(summary.meals) ? summary.meals : [];
   const memory = summarizeMealMemory(meals);
+  const memory7 = summary.memory7 || null;
 
   return {
     eaten,
@@ -34,6 +35,7 @@ export const getDayContext = (summary = {}) => {
     mealCount,
     meals,
     memory,
+    memory7,
     isOver: percent >= 1,
     isVeryOver: percent >= 1.2,
     isNearLimit: percent >= 0.8 && percent < 1,
@@ -106,7 +108,11 @@ export const decideFoodLog = ({ meal = {}, summary = {} }) => {
     emotion = "shocked";
   }
 
-  return { type: "food_log", day, signals, mood, action, emotion };
+  const decision = { type: "food_log", day, signals, mood, action, emotion };
+  return {
+    ...decision,
+    mention7DayMemory: shouldMention7DayMemory({ memory7: day.memory7, decision }),
+  };
 };
 
 export const decideMealSuggestion = ({ summary = {}, text = "" }) => {
@@ -155,13 +161,18 @@ export const decideMealSuggestion = ({ summary = {}, text = "" }) => {
     emotion = "thinking";
   }
 
-  return {
+  const decision = {
     type: "meal_suggestion",
     day,
     wantsConvenience,
     mood,
     action,
     emotion,
+  };
+
+  return {
+    ...decision,
+    mention7DayMemory: shouldMention7DayMemory({ memory7: day.memory7, decision }),
   };
 };
 
@@ -214,7 +225,7 @@ export const decideDailyRecap = ({ summary = {} }) => {
     emotion = "protein_good";
   }
 
-  return {
+  const decision = {
     type: "daily_recap",
     day,
     meals,
@@ -223,5 +234,10 @@ export const decideDailyRecap = ({ summary = {} }) => {
     proteinMeal,
     mood,
     emotion,
+  };
+
+  return {
+    ...decision,
+    mention7DayMemory: shouldMention7DayMemory({ memory7: day.memory7, decision }),
   };
 };
