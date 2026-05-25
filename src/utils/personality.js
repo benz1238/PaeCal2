@@ -35,7 +35,7 @@ const shortMealInsight = (signals = {}) => {
   if (signals.proteinGood) lines.push("💪 โปรตีนมีอยู่ อันนี้แปะให้ผ่าน");
   if (signals.highFat || signals.friedSignal) lines.push("👀 ของมันแอบมาด้วยนะ ไม่ได้มาเล่น ๆ");
   if (signals.highCarb) lines.push("🍚 คาร์บค่อนข้างนำเกมวันนี้");
-  if (signals.sweetSignal) lines.push("😭 หวานมาแบบเนียน ๆ แปะเห็นนะ");
+  if (signals.sweetSignal) lines.push("👀 หวานมาแบบเนียน ๆ แปะเห็นนะ");
   if (signals.lowProtein) lines.push("💪 โปรตีนยังบางไปนิด มื้อหน้าค่อยเติม");
 
   if (!lines.length) return ["🍽️ ภาพรวมมื้อนี้โอเคอยู่ ไม่ตึงเกิน"];
@@ -59,7 +59,7 @@ const reactionLineForFood = ({ title, decision }) => {
       `มื้อนี้ดูเพลิน แต่ไขมันแอบมานะ 😂`,
     ],
     sweet_heavy: [
-      `หวานมาแล้วนะ แปะเห็นนะ 😭`,
+      `หวานมาแล้วนะ แปะเห็นนะ 👀`,
       `ของหวานนี่มันชอบเนียนจริง ๆ เนอะ 😂`,
     ],
     protein_good: [
@@ -264,7 +264,7 @@ const recapHeadline = ({ day, memory }) => {
   if (day.isVeryOver || memory.hasHeavyPattern) return "วันนี้คือสายจัดเต็มแบบมีหลักฐานนะ 😂";
   if (day.isOver) return "วันนี้มีหลุดโค้งนิดนึงนะ 👀";
   if (memory.hasFriedPattern) return "วันนี้ของทอดมาแอบถี่นะ แปะเห็น 👀";
-  if (memory.hasSweetPattern) return "วันนี้หวานมาหลายจังหวะอยู่นะ 😭";
+  if (memory.hasSweetPattern) return "วันนี้หวานมาหลายจังหวะอยู่นะ 👀";
   if (day.isNearLimit) return "วันนี้เกือบเต็มหลอดแล้วนะ 🟠";
   if (day.goodProteinDay || memory.hasProteinWin) return "วันนี้โปรตีนมีทรง แปะยิ้มอยู่ 😄";
   return "วันนี้ทรงยังโอเคอยู่ 😄";
@@ -289,7 +289,7 @@ const mvpLine = ({ proteinMeal, memory }) => {
 const problemLine = ({ problemMeal, memory }) => {
   if (memory.hasSweetPattern) {
     return `ของหวาน
-วันนี้มาเกินหนึ่งจังหวะ แปะเห็นนะ 😭`;
+วันนี้มาเกินหนึ่งจังหวะ แปะเห็นนะ 👀`;
   }
 
   if (memory.hasFriedPattern) {
@@ -327,7 +327,7 @@ const moodLine = ({ day, memory }) => {
   }
 
   if (memory.hasSweetPattern) {
-    return `😭 Mood รวม
+    return `👀 Mood รวม
 หวานถี่ไปนิด แต่ยังเบรกทัน`;
   }
 
@@ -402,14 +402,14 @@ export const renderDailyRecapReply = ({ title, decision }) => {
 };
 
 export const renderFallbackReply = () => {
-  return `แปะขออภัย ระบบสะดุดนิดนึง 😭
+  return `แปะขออภัย ระบบสะดุดนิดนึง 😅
 
 ลองส่งใหม่อีกทีนะ
 เดี๋ยวแปะตั้งหลักแป๊บ`;
 };
 
 export const renderNoFoodDetectedReply = () => {
-  return `แปะมองไม่ทันอะ 😭
+  return `แปะมองไม่ทันอะ 😅
 
 ส่งใหม่ใกล้ ๆ ได้มั้ย
 เอาให้เห็นอาหารชัด ๆ หน่อยน้า`;

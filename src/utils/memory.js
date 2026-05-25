@@ -130,7 +130,7 @@ export const summarizeMealMemory = (meals = []) => {
 
 export const getContextMemoryLine = (memory = {}) => {
   if (memory.hasSweetPattern) {
-    return "ช่วงนี้หวานแอบถี่นะ แปะเริ่มเหล่แล้ว 😭";
+    return "ช่วงนี้หวานแอบถี่นะ แปะเริ่มเหล่แล้ว 👀";
   }
 
   if (memory.hasFriedPattern) {
