@@ -7,28 +7,76 @@
   },
   "areas": [
     {
-      "bounds": { "x": 0, "y": 0, "width": 921, "height": 851 },
-      "action": { "type": "postback", "data": "action=OPEN_PAELAEW_GUIDE" }
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 923,
+        "height": 930
+      },
+      "action": {
+        "type": "postback",
+        "data": "action=OPEN_PAELAEW_GUIDE"
+      }
     },
     {
-      "bounds": { "x": 921, "y": 0, "width": 762, "height": 851 },
-      "action": { "type": "message", "text": "สรุปวันนี้" }
+      "bounds": {
+        "x": 923,
+        "y": 0,
+        "width": 756,
+        "height": 930
+      },
+      "action": {
+        "type": "message",
+        "text": "สรุปวันนี้"
+      }
     },
     {
-      "bounds": { "x": 1683, "y": 0, "width": 817, "height": 851 },
-      "action": { "type": "message", "text": "กินอะไรดี" }
+      "bounds": {
+        "x": 1679,
+        "y": 0,
+        "width": 821,
+        "height": 930
+      },
+      "action": {
+        "type": "message",
+        "text": "กินอะไรดี"
+      }
     },
     {
-      "bounds": { "x": 0, "y": 851, "width": 833, "height": 708 },
-      "action": { "type": "message", "text": "เปลี่ยนเป้าสุขภาพ" }
+      "bounds": {
+        "x": 0,
+        "y": 930,
+        "width": 923,
+        "height": 627
+      },
+      "action": {
+        "type": "message",
+        "text": "เปลี่ยนเป้าสุขภาพ"
+      }
     },
     {
-      "bounds": { "x": 833, "y": 851, "width": 834, "height": 708 },
-      "action": { "type": "message", "text": "แก้มื้อล่าสุด" }
+      "bounds": {
+        "x": 923,
+        "y": 930,
+        "width": 756,
+        "height": 627
+      },
+      "action": {
+        "type": "message",
+        "text": "แก้มื้อล่าสุด"
+      }
     },
     {
-      "bounds": { "x": 1667, "y": 851, "width": 833, "height": 708 },
-      "action": { "type": "message", "text": "ถามแปะ" }
+      "bounds": {
+        "x": 1679,
+        "y": 930,
+        "width": 821,
+        "height": 627
+      },
+      "action": {
+        "type": "message",
+        "text": "ถามแปะ"
+      }
     }
   ]
 }
