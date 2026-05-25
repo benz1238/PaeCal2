@@ -44,13 +44,19 @@ router.post(
           continue;
         }
       } catch (err) {
-        console.error("LINE Webhook Error:", err?.response?.data || err);
+        console.error("LINE Webhook Error:", {
+          name: err?.name,
+          action: err?.action,
+          status: err?.status,
+          message: err?.message || String(err),
+          preview: err?.preview,
+        });
 
         try {
           if (event.replyToken) {
             await replyText(
               event.replyToken,
-              "แปะขออภัย ระบบสะดุดนิดนึง ลองส่งใหม่อีกทีนะจ๊ะ 🙏"
+              "เมื่อกี้แปะวูบไปแป๊บนึง 😵‍💫\nลองส่งใหม่อีกทีนะ"
             );
           }
         } catch (replyErr) {
