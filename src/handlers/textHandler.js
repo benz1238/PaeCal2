@@ -109,8 +109,8 @@ const getLocalIntent = (text) => {
     return { intent: "health_goal", confidence: 0.9, action: "update_goal", multiplier: 0, foodText: "", kcal: null, source: "local" };
   }
 
-  if (/^(กิน|เมื่อกี้กิน|วันนี้กิน|มื้อเช้ากิน|มื้อเที่ยงกิน|มื้อเย็นกิน)\s+/.test(value)) {
-    return { intent: "log_food_text", confidence: 0.88, action: "log_food", multiplier: 0, foodText: text.replace(/^(กิน|เมื่อกี้กิน|วันนี้กิน|มื้อเช้ากิน|มื้อเที่ยงกิน|มื้อเย็นกิน)\s+/i, "").trim(), kcal: null, source: "local" };
+  if (EAT_LOG_PREFIX_PATTERN.test(value) && hasFoodKeyword(stripEatLogPrefix(text))) {
+    return { intent: "log_food_text", confidence: 0.88, action: "log_food", multiplier: 0, foodText: stripEatLogPrefix(text), kcal: null, source: "local" };
   }
 
   return null;
@@ -138,6 +138,10 @@ const FOOD_ADVICE_KEYWORDS = [
 const FOOD_STOP_WORD_PATTERN = /(ดีไหม|ดีมั้ย|ดีปะ|ดีป่ะ|ดีป่าว|ดีเปล่า|โอเคไหม|โอเคมั้ย|โอเคปะ|โอเคป่ะ|ได้ไหม|ได้มั้ย|ได้ปะ|ได้ป่ะ|ได้ป่าว|เหมาะไหม|เหมาะมั้ย|ควรไหม|ควรมั้ย|ควรปะ|ควรป่ะ|กินได้ไหม|กินได้มั้ย|กินดีไหม|กินดีมั้ย|กินดีปะ|กินดีป่ะ|อ้วนไหม|อ้วนมั้ย|หนักไหม|หนักมั้ย|พังไหม|พังมั้ย|พังปะ|พังป่ะ|อันไหนดี|อะไรดี|ไหนดี|ดีกว่า|เลือกอะไร|กี่แคล|กี่ kcal|แคลเท่าไหร่|แคลเท่าไร).*/i;
 
 const hasFoodKeyword = (text) => FOOD_ADVICE_KEYWORDS.some((word) => normalizeText(text).includes(word));
+
+const EAT_LOG_PREFIX_PATTERN = /^(กิน|เมื่อกี้กิน|วันนี้กิน|มื้อเช้ากิน|มื้อเที่ยงกิน|มื้อเย็นกิน)\s*/i;
+
+const stripEatLogPrefix = (text) => String(text || "").trim().replace(EAT_LOG_PREFIX_PATTERN, "").trim();
 
 const cleanFoodText = (text) => {
   let value = String(text || "").trim();
@@ -321,10 +325,39 @@ ${menuName}
 ถ้าปริมาณไม่ตรง พิมพ์ “แก้มื้อล่าสุดเป็น ...” ได้เลยจ้า`;
 };
 
+
+const buildTextFoodLogMessages = ({ title, meal, summary, decision }) => {
+  const menuName = meal?.menuName || "อาหาร";
+  const kcal = safeNumber(meal?.kcal, 0);
+  const carb = safeNumber(meal?.carb, 0);
+  const protein = safeNumber(meal?.protein, 0);
+  const fat = safeNumber(meal?.fat, 0);
+  const total = safeNumber(summary?.todayCalories ?? summary?.totalToday, kcal);
+  const target = safeNumber(summary?.calorieTarget, DEFAULT_CALORIE_TARGET);
+  const progress = buildProgressBar(total, target);
+  const left = Math.max(target - total, 0);
+  const over = Math.max(total - target, 0);
+
+  const mealBubble = `${title} แปะบันทึกให้แล้วนะ 🍽️\n\n${menuName}\n🔥 ประมาณ ${kcal} kcal\n\nคร่าว ๆ:\n🍚 คาร์บ ${carb} g\n💪 โปรตีน ${protein} g\n💧 ไขมัน ${fat} g`;
+
+  const progressBubble = over > 0
+    ? `📊 วันนี้กินไปแล้ว\n${total} / ${target} kcal\n🔴 เกินเป้าไปประมาณ ${over} kcal\n(${progress})`
+    : `📊 วันนี้กินไปแล้ว\n${total} / ${target} kcal\n🟢 เหลือประมาณ ${left} kcal\n(${progress})`;
+
+  const tone = String(decision?.tone || decision?.level || "");
+  const commentBubble = over > 0
+    ? `วันนี้เกินเป้าแล้วนิดนึงนะ 👀\nถ้ายังหิวจริง ๆ เอาเบา ๆ พอ\nพรุ่งนี้ค่อยดึงกลับ ชิล ๆ 😄`
+    : tone.includes("warn") || kcal >= 700
+      ? `มื้อนี้ตัวเลขขึ้นไวอยู่ 👀\nแต่บันทึกไว้แล้ว จะได้คุมเกมต่อถูก\nมื้อต่อไปเอาเบาลงนิดก็พอ 😄`
+      : `ได้อยู่ มื้อนี้แปะให้ผ่าน 😄\nถ้ามีอะไรเพิ่ม ส่งมาได้เลย`;
+
+  return [mealBubble, progressBubble, commentBubble];
+};
+
 const isLikelyFoodLogText = (text) => {
   const value = normalizeText(text);
   if (!value || value.length > 160) return false;
-  if (!/^(กิน|เมื่อกี้กิน|วันนี้กิน|มื้อเช้ากิน|มื้อเที่ยงกิน|มื้อเย็นกิน)\s+/.test(value)) return false;
+  if (!EAT_LOG_PREFIX_PATTERN.test(value)) return false;
   if (isNextMealAfterFoodText(value)) return false;
   if (isFoodKcalQuestionText(value)) return false;
   if (isFoodCompareText(value)) return false;
@@ -991,7 +1024,7 @@ export const handleTextMessage = async (event) => {
   if (isLikelyFoodLogText(text)) {
     const localIntent = getLocalIntent(text) || {
       intent: "log_food_text",
-      foodText: text.replace(/^(กิน|เมื่อกี้กิน|วันนี้กิน|มื้อเช้ากิน|มื้อเที่ยงกิน|มื้อเย็นกิน)\s+/i, "").trim(),
+      foodText: stripEatLogPrefix(text),
     };
     const foodText = String(localIntent.foodText || text).trim();
     const foodData = await estimateFoodFromText(foodText);
@@ -1009,7 +1042,7 @@ export const handleTextMessage = async (event) => {
     const decision = decideFoodLog({ meal, summary });
 
     await syncSessionFromProfile({ userId, session, extraData: { calorieTarget: target, lastMeal: meal } });
-    await replyTexts(replyToken, renderFoodLogMessages({ title, meal, summary, decision }));
+    await replyTexts(replyToken, buildTextFoodLogMessages({ title, meal, summary, decision }));
     return;
   }
 
@@ -1171,7 +1204,7 @@ export const handleTextMessage = async (event) => {
     const decision = decideFoodLog({ meal, summary });
 
     await syncSessionFromProfile({ userId, session, extraData: { calorieTarget: target, lastMeal: meal } });
-    await replyTexts(replyToken, renderFoodLogMessages({ title, meal, summary, decision }));
+    await replyTexts(replyToken, buildTextFoodLogMessages({ title, meal, summary, decision }));
     return;
   }
 
