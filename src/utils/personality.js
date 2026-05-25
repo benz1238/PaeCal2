@@ -172,31 +172,7 @@ const foodLogCommentLine = ({ decision }) => {
 };
 
 export const renderFoodLogReply = ({ title, meal, summary, decision }) => {
-  const day = decision.day;
-  const signals = decision.signals;
-  const progress = buildProgressBar(day.eaten, day.target);
-  const insight = shortMealInsight(signals).join("\n");
-  const memoryLine = getContextMemoryLine(day.memory);
-  const sevenDayLine = decision.mention7DayMemory ? get7DayMemoryLine(day.memory7) : "";
-  const memoryBlock = [memoryLine, sevenDayLine].filter(Boolean).join("\n");
-
-  return `${reactionLineForFood({ title, decision })}
-
-🍽️ เมนูที่แปะเห็น
-${signals.menuName}
-
-🔥 ประมาณ ${signals.kcal} kcal
-
-📌 แปะขอเมนต์สั้น ๆ
-${insight}
-${memoryBlock}
-
-📊 วันนี้กินไปแล้ว
-${day.eaten} / ${day.target} kcal
-${kcalStatusLine({ eaten: day.eaten, target: day.target })}
-(${progress})
-
-${softSuggestionFromFood({ title, decision })}`;
+  return renderFoodLogMessages({ title, meal, summary, decision }).join("\n\n");
 };
 
 const listOptions = (items = []) => items.map((item) => `- ${item}`).join("\n");
