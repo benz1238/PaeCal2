@@ -771,9 +771,17 @@ const buildNextMealAfterFoodReply = ({ title, text, summary, goalText = "" }) =>
 วันนี้ยังพอคุมเกมได้อยู่`;
 };
 
-const buildFoodAdviceReply = ({ title, text, summary, goalText = "" }) => {
-  const food = getFoodProfile(text).name;
-  const profile = getFoodProfile(food);
+
+const isFoodHeavyQuestionLike = (text) => {
+  const value = normalizeText(text);
+  return hasAnyText(value, [
+    "หนักไปไหม", "หนักไปมั้ย", "หนักไหม", "หนักมั้ย",
+    "เยอะไปไหม", "เยอะไปมั้ย", "พังไหม", "พังมั้ย",
+    "อ้วนไหม", "อ้วนมั้ย", "แคลสูงไหม", "แคลสูงมั้ย"
+  ]);
+};
+
+const buildNamedFoodHeavyReply = ({ title, food, profile, summary, goalText = "" }) => {
   const budget = getDayBudget(summary);
   const goalLine = getGoalAwareLine({
     goalText,
@@ -784,16 +792,66 @@ const buildFoodAdviceReply = ({ title, text, summary, goalText = "" }) => {
   const goalBlock = goalLine ? `\n\n${goalLine}` : "";
 
   if (profile.isBigSocialMeal) {
-    return `${title} ได้ แต่แปะให้ผ่านแบบมีสติ 👀
+    return `${title} หนักได้ง่ายนะ 👀
 
-${food} มันไม่ได้ผิดนะ
-แต่มันชอบลากยาวโดยไม่รู้ตัว
+${food} ตัวมันไม่ได้ผิด
+แต่แคลชอบไหลเพราะกินเพลิน น้ำจิ้ม ของทอด น้ำหวาน แล้วก็นั่งยาว
+
+ถ้าจะกิน แปะให้ผ่านแบบมีลิมิต:
+- เน้นหมู/ไก่/ทะเลก่อน
+- ผักกับซุปช่วยคุมเกม
+- น้ำจิ้มไม่ต้องว่ายน้ำ
+- น้ำหวานพักก่อนรอบนี้
+
+${budget.isOver ? "วันนี้เกินเป้าแล้ว เอาแค่พอหายอยากพอนะ 😮‍💨🍃" : "กินได้ แต่เอาไซซ์พอดี ๆ ไม่ต้องบุฟเฟต์ยาว 😄"}${goalBlock}`;
+  }
+
+  if (profile.isFriedHeavy || profile.isSweet) {
+    return `${title} ค่อนข้างหนักอยู่นะ 👀
+
+${food} แคลขึ้นไว
+ถ้าจะกิน เอาไซซ์พอดี ๆ ไม่ต้องอัปเพิ่ม
+
+${budget.isOver ? "วันนี้เกินเป้าแล้ว เอาแค่พอหายอยากพอนะ 😮‍💨🍃" : `วันนี้ยังเหลือประมาณ ${budget.left} kcal อยู่ ยังพอจัดได้`}${goalBlock}`;
+  }
+
+  return `${title} ไม่ได้หนักเกินนะ 😄
+
+${food} ยังพอจัดได้
+แค่ดูปริมาณกับของที่กินคู่กันนิดนึง
+
+${budget.isOver ? "แต่วันนี้เกินเป้าแล้ว มื้อต่อไปเอาเบา ๆ พอ" : "ถ้าเพิ่มโปรตีน/ผักติดมาด้วย แปะว่าโอเคเลย"}${goalBlock}`;
+};
+
+const buildFoodAdviceReply = ({ title, text, summary, goalText = "" }) => {
+  const food = getFoodProfile(text).name;
+  const profile = getFoodProfile(food);
+  const budget = getDayBudget(summary);
+  const asksHeavy = isFoodHeavyQuestionLike(text);
+
+  if (asksHeavy) {
+    return buildNamedFoodHeavyReply({ title, food, profile, summary, goalText });
+  }
+
+  const goalLine = getGoalAwareLine({
+    goalText,
+    foodText: food,
+    context: profile.isSweet ? "sweet" : profile.isFriedHeavy || profile.isBigSocialMeal ? "heavy" : "general",
+    isLate: new Date().getHours() >= 21 || new Date().getHours() < 2,
+  });
+  const goalBlock = goalLine ? `\n\n${goalLine}` : "";
+
+  if (profile.isBigSocialMeal) {
+    return `${title} กินได้ แต่แปะขอให้คุมเกมนิดนึงนะ 👀
+
+${food} ชอบลากยาวโดยไม่รู้ตัว
+ถ้าจะกิน เอาให้พอดี ไม่ต้องจัดเต็มทุกอย่าง
 
 ทริคแปะ:
 - เริ่มจากโปรตีนก่อน
-- น้ำจิ้มไม่ต้องจุ่มจนว่ายน้ำ
+- ผัก/ซุปช่วยเบรก
+- น้ำจิ้มไม่ต้องเยอะ
 - น้ำหวานพักไว้ก่อน
-- อิ่มแล้วหยุด ไม่ต้องเกรงใจเตา
 
 ${budget.isOver ? "วันนี้เกินเป้าแล้ว เอาแค่พอสนุกพอนะ 😅" : "กินได้ แต่อย่าให้กลายเป็นประชุมยาว 😄"}${goalBlock}`;
   }
@@ -830,7 +888,6 @@ ${food} ถ้าไม่มันจัด ไม่หวานจัด ก�
 
 ${budget.isOver ? "วันนี้เกินเป้าแล้ว เอาเบา ๆ พอนะ 😅" : `วันนี้ยังเหลือประมาณ ${budget.left} kcal แปะว่าเลือกดี ๆ ได้อยู่ 😄`}${goalBlock}`;
 };
-
 
 const getGoalAwareMealSuggestionAddon = ({ goalText = "", summary = {} }) => {
   const goal = getGoalSignals(goalText);
