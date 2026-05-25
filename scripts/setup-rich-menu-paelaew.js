@@ -7,6 +7,9 @@ const layoutPath = process.env.RICH_MENU_LAYOUT_PATH || process.argv[3] || "scri
 const deleteOld = String(process.env.DELETE_OLD || "false").toLowerCase() === "true";
 const setDefault = String(process.env.SET_DEFAULT || "true").toLowerCase() === "true";
 
+const API_BASE = "https://api.line.me";
+const BLOB_API_BASE = "https://api-data.line.me";
+
 if (!token) {
   console.error("Missing LINE_CHANNEL_ACCESS_TOKEN");
   process.exit(1);
@@ -33,7 +36,15 @@ const contentType = getContentType(imageExt);
 const imageBuffer = fs.readFileSync(absoluteImagePath);
 
 const api = async (pathname, options = {}) => {
-  const res = await fetch(`https://api.line.me${pathname}`, {
+  return request(API_BASE, pathname, options);
+};
+
+const blobApi = async (pathname, options = {}) => {
+  return request(BLOB_API_BASE, pathname, options);
+};
+
+async function request(baseUrl, pathname, options = {}) {
+  const res = await fetch(`${baseUrl}${pathname}`, {
     ...options,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -43,16 +54,16 @@ const api = async (pathname, options = {}) => {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${options.method || "GET"} ${pathname} failed: ${res.status} ${text}`);
+    throw new Error(`${options.method || "GET"} ${baseUrl}${pathname} failed: ${res.status} ${text}`);
   }
 
-  const contentType = res.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) {
+  const responseContentType = res.headers.get("content-type") || "";
+  if (responseContentType.includes("application/json")) {
     return res.json();
   }
 
   return res.text();
-};
+}
 
 async function main() {
   console.log("Starting Rich Menu setup...");
@@ -92,7 +103,7 @@ async function main() {
   console.log(`Created rich menu: ${richMenuId}`);
 
   console.log("Uploading rich menu image...");
-  await api(`/v2/bot/richmenu/${richMenuId}/content`, {
+  await blobApi(`/v2/bot/richmenu/${richMenuId}/content`, {
     method: "POST",
     headers: { "Content-Type": contentType },
     body: imageBuffer,
@@ -137,14 +148,14 @@ function getContentType(ext) {
   throw new Error("Only .png, .jpg, and .jpeg are supported for rich menu images");
 }
 
-async function listRichMenus(api) {
-  const data = await api("/v2/bot/richmenu/list");
+async function listRichMenus(apiClient) {
+  const data = await apiClient("/v2/bot/richmenu/list");
   return Array.isArray(data.richmenus) ? data.richmenus : [];
 }
 
-async function safeDeleteDefault(api) {
+async function safeDeleteDefault(apiClient) {
   try {
-    await api("/v2/bot/user/all/richmenu", { method: "DELETE" });
+    await apiClient("/v2/bot/user/all/richmenu", { method: "DELETE" });
   } catch (err) {
     const msg = String(err && err.message ? err.message : err);
     if (!msg.includes("404") && !msg.includes("400")) {
