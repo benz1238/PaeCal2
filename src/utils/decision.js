@@ -1,4 +1,5 @@
 import { DEFAULT_CALORIE_TARGET, safeNumber } from "./helpers.js";
+import { getMealMemoryTags, summarizeMealMemory } from "./memory.js";
 
 const HIGH_CARB_MEAL = 85;
 const HIGH_FAT_MEAL = 35;
@@ -19,6 +20,7 @@ export const getDayContext = (summary = {}) => {
   const fat = safeNumber(summary.totalFat, 0);
   const mealCount = safeNumber(summary.mealCount, 0);
   const meals = Array.isArray(summary.meals) ? summary.meals : [];
+  const memory = summarizeMealMemory(meals);
 
   return {
     eaten,
@@ -31,6 +33,7 @@ export const getDayContext = (summary = {}) => {
     fat,
     mealCount,
     meals,
+    memory,
     isOver: percent >= 1,
     isVeryOver: percent >= 1.2,
     isNearLimit: percent >= 0.8 && percent < 1,
@@ -49,10 +52,7 @@ export const getMealSignals = (meal = {}) => {
   const carb = safeNumber(meal.carb, 0);
   const protein = safeNumber(meal.protein, 0);
   const fat = safeNumber(meal.fat, 0);
-  const lower = menuName.toLowerCase();
-
-  const friedKeywords = ["ทอด", "ไข่ดาว", "กรอบ", "fried", "หมูกรอบ", "ไก่ทอด"];
-  const sweetKeywords = ["หวาน", "ชาไทย", "ชานม", "น้ำหวาน", "เค้ก", "ขนม", "โกโก้", "กาแฟเย็น"];
+  const tags = getMealMemoryTags(meal);
 
   return {
     menuName,
@@ -66,8 +66,9 @@ export const getMealSignals = (meal = {}) => {
     highFat: fat >= HIGH_FAT_MEAL,
     lowProtein: protein < LOW_PROTEIN_MEAL && kcal >= 400,
     proteinGood: protein >= 30,
-    friedSignal: friedKeywords.some((word) => lower.includes(word)),
-    sweetSignal: sweetKeywords.some((word) => lower.includes(word)),
+    friedSignal: tags.isFried,
+    sweetSignal: tags.isSweet,
+    liquidCaloriesSignal: tags.isLiquidCalories,
   };
 };
 
@@ -164,27 +165,51 @@ export const decideMealSuggestion = ({ summary = {}, text = "" }) => {
   };
 };
 
+const getMealProblemScore = (meal = {}) => {
+  const tags = getMealMemoryTags(meal);
+  let score = 0;
+
+  score += Math.round(safeNumber(meal.kcal, 0) / 120);
+  score += tags.isFried ? 4 : 0;
+  score += tags.isSweet ? 4 : 0;
+  score += tags.highFat ? 3 : 0;
+  score += tags.highCarb ? 2 : 0;
+  score += tags.isLiquidCalories ? 2 : 0;
+
+  return score;
+};
+
 export const decideDailyRecap = ({ summary = {} }) => {
   const day = getDayContext(summary);
   const meals = day.meals;
+  const memory = day.memory;
 
-  const sortedByKcal = [...meals].sort((a, b) => safeNumber(b.kcal) - safeNumber(a.kcal));
-  const problemMeal = sortedByKcal[0] || null;
-  const proteinMeal = [...meals].sort((a, b) => safeNumber(b.protein) - safeNumber(a.protein))[0] || null;
+  const problemMeal = [...meals]
+    .sort((a, b) => getMealProblemScore(b) - getMealProblemScore(a))[0] || null;
+
+  const proteinMeal = [...meals]
+    .filter((meal) => safeNumber(meal.protein, 0) >= 20)
+    .sort((a, b) => safeNumber(b.protein) - safeNumber(a.protein))[0] || null;
 
   let mood = "balanced_day";
   let emotion = "happy";
 
-  if (day.isVeryOver) {
+  if (day.isVeryOver || memory.hasHeavyPattern) {
     mood = "big_day";
     emotion = "over_calorie";
   } else if (day.isOver) {
     mood = "slightly_over";
     emotion = "over_calorie";
+  } else if (memory.hasFriedPattern) {
+    mood = "fried_pattern";
+    emotion = "fried_heavy";
+  } else if (memory.hasSweetPattern) {
+    mood = "sweet_pattern";
+    emotion = "sweet_heavy";
   } else if (day.isNearLimit) {
     mood = "near_limit";
     emotion = "thinking";
-  } else if (day.goodProteinDay) {
+  } else if (day.goodProteinDay || memory.hasProteinWin) {
     mood = "protein_win";
     emotion = "protein_good";
   }
@@ -193,6 +218,7 @@ export const decideDailyRecap = ({ summary = {} }) => {
     type: "daily_recap",
     day,
     meals,
+    memory,
     problemMeal,
     proteinMeal,
     mood,
