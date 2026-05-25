@@ -1343,7 +1343,7 @@ const getGoalAwareRecapLine = ({ goalText = "", normalized, topMeal }) => {
   }
 
   if (goal.fatLoss && (normalized.over > 0 || hasFriedMeal || normalized.fat >= 65)) {
-    return "เป้าลดไขมันยังไปต่อได้อยู่ แค่พรุ่งนี้ขอทอด/มันเบาลงหน่อย แปะว่าเอากลับมาได้ 😄🍃";
+    return "เป้าลดไขมันยังไปต่อได้อยู่\nแค่พรุ่งนี้ขอทอด/มันเบาลงหน่อย\nแปะว่าเอากลับมาได้ 😄🍃";
   }
 
   if (goal.muscleGain && normalized.protein < 70 && normalized.mealCount > 0) {
@@ -1542,35 +1542,39 @@ const buildDailyRecapPayload = ({ title, summary, goalText = "" }) => {
   }
 
   const goalLine = getGoalAwareRecapLine({ goalText, normalized, topMeal });
-  const intro = status.mood === "over"
-    ? `${title} วันนี้เกินเป้าแล้วนะ 👀\n\nมื้อต่อไปถ้ายังหิว เอาเบา ๆ พอ เดี๋ยวพรุ่งนี้ค่อยดึงกลับ 😮‍💨🍃`
-    : status.mood === "near"
-      ? `${title} มื้อต่อไปถ้ายังหิว เอาเบา ๆ พอ จะได้ไม่แน่นเกิน 😮‍💨🍃`
-      : `${title} วันนี้รวม ๆ ยังโอเคเลย 😄\n\nมื้อต่อไปเลือกชิล ๆ ได้ แปะว่าไปต่อสวย ✨`;
-
   const insightParts = [];
 
   if (topMealName) {
-    insightParts.push(`มื้อเด่นสุดคือ ${topMealName}${topMealKcal ? ` ล่อไป ~${Math.round(topMealKcal)} kcal` : ""} 🍗🤯`);
+    insightParts.push(`${topMealName} ล่อไป ~${Math.round(topMealKcal)} kcal 🍗🤯`);
   }
 
-  if (macroStatus.fatNote) insightParts.push("ไขมันเริ่มสูงนิดนึง แปะขอเบาของทอด/มันลงหน่อย 🫣");
-  if (macroStatus.carbNote) insightParts.push("คาร์บวันนี้มาแน่นอยู่ พรุ่งนี้ค่อยบาลานซ์กลับ 🍚👀");
+  if (macroStatus.fatNote) {
+    insightParts.push("ไขมันเริ่มสูงนิดนึง แปะขอเบาของทอด/มันลงหน่อย 🫣");
+  }
+
+  if (macroStatus.carbNote) {
+    insightParts.push("คาร์บวันนี้มาแน่นอยู่ พรุ่งนี้ค่อยบาลานซ์กลับ 🍚👀");
+  }
+
   if (macroStatus.proteinNote && normalized.mealCount > 0) {
     insightParts.push(
       normalized.protein >= 70
-        ? "แต่โปรตีนดูดี! มีของให้กล้ามเนื้อทำงานอยู่ 💪🔥"
+        ? "แต่โปรตีนดูดี! 💪🔥"
         : "โปรตีนยังเติมได้อีกนิด พรุ่งนี้หาไข่/ไก่/เต้าหู้ช่วยได้ 💪"
     );
   }
 
-  const insight = insightParts.length || goalLine
-    ? `💡 อินไซต์จากแปะ:\n${insightParts.slice(0, 3).join("\n")}${goalLine ? `\n\n${goalLine}` : ""}`
-    : "💡 อินไซต์จากแปะ:\nวันนี้ดูรวม ๆ ยังพอคุมได้อยู่ 😄";
+  const cleanGoalLine = goalLine
+    ? goalLine
+        .replace("เป้าลดไขมันยังไปต่อได้อยู่ แค่พรุ่งนี้ขอทอด/มันเบาลงหน่อย แปะว่าเอากลับมาได้ 😄🍃", "เป้าลดไขมันยังไปต่อได้อยู่\nแค่พรุ่งนี้ขอทอด/มันเบาลงหน่อย\nแปะว่าเอากลับมาได้ 😄🍃")
+        .replace("เป้าลดไขมันยังไปต่อได้อยู่ แค่พรุ่งนี้ขอทอด/มันเบาลงหน่อย แปะว่าเอากลับมาได้ 😄", "เป้าลดไขมันยังไปต่อได้อยู่\nแค่พรุ่งนี้ขอทอด/มันเบาลงหน่อย\nแปะว่าเอากลับมาได้ 😄🍃")
+    : "";
+
+  const insight = `💡 อินไซต์จากแปะ\n${insightParts.slice(0, 3).join("\n\n")}${cleanGoalLine ? `\n\n${cleanGoalLine}` : ""}`;
 
   return {
     card,
-    bubbles: [intro, insight],
+    bubbles: [insight],
   };
 };
 
