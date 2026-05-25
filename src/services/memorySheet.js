@@ -19,40 +19,53 @@ export const getTodayDateString = (date = new Date()) => {
   }
 };
 
+const warnMemoryFailure = (label, error) => {
+  console.warn(`[memory] ${label} skipped`, {
+    action: error?.action,
+    message: error?.message || String(error),
+    preview: error?.preview,
+  });
+};
+
 export const upsertDailyMemorySnapshot = async (snapshot) => {
   if (!snapshot?.userId || !snapshot?.date) {
     return { status: "skipped", reason: "missing_user_or_date" };
   }
 
-  return await postToSheet({
-    action: MEMORY_SHEET_ACTIONS.upsertDaily,
-    ...snapshot,
-  });
+  try {
+    return await postToSheet({
+      action: MEMORY_SHEET_ACTIONS.upsertDaily,
+      ...snapshot,
+    });
+  } catch (error) {
+    warnMemoryFailure("UPSERT_DAILY_MEMORY", error);
+    return { status: "skipped", reason: "sheet_unavailable" };
+  }
 };
 
 export const getMemorySnapshotsLast7Days = async (userId) => {
   if (!userId) return [];
 
-  const res = await postToSheet({
-    action: MEMORY_SHEET_ACTIONS.getLast7Days,
-    userId,
-  });
+  try {
+    const res = await postToSheet({
+      action: MEMORY_SHEET_ACTIONS.getLast7Days,
+      userId,
+    });
 
-  if (Array.isArray(res)) return res;
-  if (Array.isArray(res?.rows)) return res.rows;
-  if (Array.isArray(res?.memoryRows)) return res.memoryRows;
-  if (Array.isArray(res?.data)) return res.data;
-  return [];
+    if (Array.isArray(res)) return res;
+    if (Array.isArray(res?.rows)) return res.rows;
+    if (Array.isArray(res?.memoryRows)) return res.memoryRows;
+    if (Array.isArray(res?.data)) return res.data;
+    return [];
+  } catch (error) {
+    warnMemoryFailure("GET_MEMORY_LAST_7_DAYS", error);
+    return [];
+  }
 };
 
 export const get7DayMemorySummary = async (userId) => {
-  try {
-    const rows = await getMemorySnapshotsLast7Days(userId);
-    return build7DayMemorySummary(rows);
-  } catch (error) {
-    console.warn("[memory] GET_MEMORY_LAST_7_DAYS failed", error?.message || error);
-    return build7DayMemorySummary([]);
-  }
+  const rows = await getMemorySnapshotsLast7Days(userId);
+  return build7DayMemorySummary(rows);
 };
 
 export const refreshDailyMemorySnapshot = async ({ userId, summary = {}, meals = [], fallbackMeal = null } = {}) => {
@@ -70,9 +83,9 @@ export const refreshDailyMemorySnapshot = async ({ userId, summary = {}, meals =
     }
 
     const result = await upsertDailyMemorySnapshot(snapshot);
-    return { status: "success", snapshot, result };
+    return { status: result?.status === "skipped" ? "skipped" : "success", snapshot, result };
   } catch (error) {
-    console.warn("[memory] refreshDailyMemorySnapshot failed", error?.message || error);
-    return { status: "failed", error: error?.message || String(error) };
+    warnMemoryFailure("refreshDailyMemorySnapshot", error);
+    return { status: "skipped", reason: "memory_build_failed" };
   }
 };
