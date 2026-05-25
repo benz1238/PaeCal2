@@ -60,6 +60,7 @@ const getMessageRequestId = (event, suffix = "text") => {
 const saveProfile = async (payload) => postToSheet({ action: "SAVE_PROFILE", ...payload });
 const updateSession = async (payload) => postToSheet({ action: "UPDATE_SESSION", ...payload });
 const logFood = async (payload) => postToSheet({ action: "LOG_FOOD", ...payload });
+const batchLogFood = async (payload) => postToSheet({ action: "BATCH_LOG_FOOD", ...payload });
 const getDailySummary = async (userId) => postToSheet({ action: "GET_DAILY_SUMMARY", userId });
 const getLastMeal = async (userId) => postToSheet({ action: "GET_LAST_MEAL", userId });
 const updateLastMeal = async (payload) => retryOnce(() => postToSheet({ action: "UPDATE_LAST_MEAL", ...payload }));
@@ -1268,8 +1269,10 @@ const splitExplicitMealText = (text) => {
   const normalized = raw
     .replace(/\r/g, "\n")
     .replace(/[，,]+/g, "\n")
-    .replace(/\s+(?=มื้อ(?:เช้า|เที่ยง|กลางวัน|เย็น|ค่ำ|ดึก)\b)/g, "\n")
-    .replace(/\s+(?=(?:เช้า|เที่ยง|กลางวัน|เย็น|ค่ำ|ดึก)\s*[:：])/g, "\n");
+    .replace(/(?=มื้อ(?:เช้า|เที่ยง|กลางวัน|เย็น|ค่ำ|ดึก))/g, "\n")
+    .replace(/(?=(?:เช้า|เที่ยง|กลางวัน|เย็น|ค่ำ|ดึก)\s*[:：])/g, "\n")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
 
   const lines = normalized
     .split(/\n+/)
@@ -1279,13 +1282,15 @@ const splitExplicitMealText = (text) => {
   const segments = [];
 
   for (const line of lines) {
-    const match = line.match(/^(?:มื้อ)?(เช้า|เที่ยง|กลางวัน|เย็น|ค่ำ|ดึก)\s*[:：\-]?\s*(.+)$/i);
+    const match = line.match(/^(?:มื้อ)?(เช้า|เที่ยง|กลางวัน|เย็น|ค่ำ|ดึก)\s*(?:[:：\-])?\s*(.+)$/i);
     if (!match) continue;
 
     const label = match[1] === "กลางวัน" ? "เที่ยง" : match[1];
-    const foodText = String(match[2] || "").trim();
+    const foodText = String(match[2] || "")
+      .replace(/^(กิน|ทาน|คือ|เป็น)\s*/i, "")
+      .trim();
 
-    if (foodText && hasFoodKeyword(foodText)) {
+    if (foodText) {
       segments.push({ label, foodText });
     }
   }
@@ -1294,45 +1299,52 @@ const splitExplicitMealText = (text) => {
 };
 
 const logExplicitMealSegments = async ({ event, userId, session, title, segments, goalText }) => {
-  let latestSummary = null;
-  const meals = [];
+  const estimatedMeals = await Promise.all(
+    segments.map(async (segment, index) => {
+      const foodData = await estimateFoodFromText(segment.foodText);
+      const kcal = safeNumber(foodData.kcal, 0);
+      const carb = safeNumber(foodData.carb, 0);
+      const protein = safeNumber(foodData.protein, 0);
+      const fat = safeNumber(foodData.fat, 0);
+      const menuName = `${segment.label}: ${foodData.menuName || segment.foodText}`;
+      const items = normalizeEstimatedItems(foodData, segment.foodText);
+      const requestId = `${getMessageRequestId(event, "text-log")}:part-${index + 1}`;
 
-  for (let i = 0; i < segments.length; i++) {
-    const segment = segments[i];
-    const foodData = await estimateFoodFromText(segment.foodText);
-    const kcal = safeNumber(foodData.kcal, 0);
-    const carb = safeNumber(foodData.carb, 0);
-    const protein = safeNumber(foodData.protein, 0);
-    const fat = safeNumber(foodData.fat, 0);
-    const menuName = `${segment.label}: ${foodData.menuName || segment.foodText}`;
-    const items = normalizeEstimatedItems(foodData, segment.foodText);
-    const requestId = `${getMessageRequestId(event, "text-log")}:part-${i + 1}`;
+      return normalizeMealRecord({
+        menuName,
+        kcal,
+        carb,
+        protein,
+        fat,
+        items,
+        requestId,
+        mealLabel: segment.label,
+      });
+    })
+  );
 
-    const sheetData = await logFood({
-      userId,
-      name: session.data?.name || "",
-      kcal,
-      carb,
-      protein,
-      fat,
-      menuName,
-      requestId,
-      itemsJson: serializeMealItems(items),
-    });
+  const sheetData = await batchLogFood({
+    userId,
+    name: session.data?.name || "",
+    meals: estimatedMeals.map((meal) => ({
+      menuName: meal.menuName,
+      kcal: meal.kcal,
+      carb: meal.carb,
+      protein: meal.protein,
+      fat: meal.fat,
+      requestId: meal.requestId,
+      itemsJson: serializeMealItems(meal.items || []),
+    })),
+  });
 
-    latestSummary = sheetData;
-    meals.push(normalizeMealRecord({ menuName, kcal, carb, protein, fat, items, requestId, mealLabel: segment.label }));
-  }
-
-  const total = latestSummary?.todayCalories ?? latestSummary?.totalToday ?? meals.reduce((sum, meal) => sum + safeNumber(meal.kcal, 0), 0);
-  const target = latestSummary?.calorieTarget || DEFAULT_CALORIE_TARGET;
-  const summary = { ...latestSummary, todayCalories: total, totalToday: total, calorieTarget: target };
-  const recentMeals = meals.reduce(
+  const target = sheetData?.calorieTarget || DEFAULT_CALORIE_TARGET;
+  const total = sheetData?.todayCalories ?? sheetData?.totalToday ?? estimatedMeals.reduce((sum, meal) => sum + safeNumber(meal.kcal, 0), 0);
+  const recentMeals = estimatedMeals.reduce(
     (list, meal) => upsertRecentMealList(list, meal),
     getRecentMealsFromSession(session)
   );
-  const lastMeal = meals[meals.length - 1] || null;
-  const loggedText = meals
+  const lastMeal = estimatedMeals[estimatedMeals.length - 1] || null;
+  const loggedText = estimatedMeals
     .map((meal) => `- ${meal.menuName} ${Math.round(safeNumber(meal.kcal, 0))} kcal`)
     .join("\n");
   const left = Math.max(Math.round(target - total), 0);
@@ -1344,8 +1356,8 @@ const logExplicitMealSegments = async ({ event, userId, session, title, segments
     extraData: { calorieTarget: target, lastMeal, recentMeals },
   });
 
-  await replyTexts(replyTokenFromEvent(event), [
-    `${title} แปะบันทึกแยกมื้อให้แล้วนะ 🍽️\n\n${loggedText}`,
+  await replyTexts(event.replyToken, [
+    `${title} แปะแยกมื้อให้แล้วนะ 🍽️\n\n${loggedText}`,
     `📊 วันนี้กินไปแล้ว\n${Math.round(total)} / ${Math.round(target)} kcal\n${total > target ? `เกินประมาณ ${Math.round(total - target)} kcal` : `เหลือประมาณ ${left} kcal`}\n(${progress})`,
     total > target
       ? "วันนี้เกินนิดนึง ไม่ต้องตกใจ พรุ่งนี้ค่อยดึงกลับจ้า 😄"
@@ -1353,7 +1365,7 @@ const logExplicitMealSegments = async ({ event, userId, session, title, segments
   ]);
 };
 
-const replyTokenFromEvent = (event) => event.replyToken;
+
 
 const buildDailyRecapPayload = ({ title, summary, goalText = "" }) => {
   const normalized = normalizeSummaryForRecap(summary);
