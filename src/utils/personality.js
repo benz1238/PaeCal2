@@ -201,28 +201,125 @@ ${softSuggestionFromFood({ title, decision })}`;
 
 const listOptions = (items = []) => items.map((item) => `- ${item}`).join("\n");
 
-const optionsByContext = ({ decision }) => {
-  const { day, wantsConvenience } = decision;
+const getBangkokHour = () => {
+  try {
+    const value = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Bangkok",
+      hour: "2-digit",
+      hour12: false,
+    }).format(new Date());
+
+    return Number(value) % 24;
+  } catch {
+    return new Date().getHours();
+  }
+};
+
+const getMealTimeContext = () => {
+  const hour = getBangkokHour();
+
+  if (hour >= 5 && hour < 10) {
+    return {
+      key: "breakfast",
+      label: "ตอนนี้ยังเช้าอยู่",
+      intro: "มื้อนี้เอาแบบอุ่น ๆ อยู่ท้องดีกว่า:",
+      closing: "เริ่มวันแบบไม่ตีกับท้อง แปะว่าโอเค 😄",
+    };
+  }
+
+  if (hour >= 10 && hour < 14) {
+    return {
+      key: "lunch",
+      label: "ช่วงนี้เป็นมื้อกลางวันพอดี",
+      intro: "เอาเป็นจานจริงได้ แต่ไม่ต้องมันจัด:",
+      closing: "กินให้อิ่มแบบไม่ง่วงบ่าย แปะเชียร์อันนี้ 😄",
+    };
+  }
+
+  if (hour >= 14 && hour < 17) {
+    return {
+      key: "pre_dinner",
+      label: "ตอนนี้ใกล้มื้อเย็นแล้ว",
+      intro: "ถ้าหิวตอนนี้ เอาแบบกันหลุดก่อนดีกว่า:",
+      closing: "อย่าเพิ่งจัดหนักตอนนี้ เดี๋ยวมื้อเย็นจะต่อยาก 😅",
+    };
+  }
+
+  if (hour >= 17 && hour < 21) {
+    return {
+      key: "dinner",
+      label: "ช่วงนี้เข้ามื้อเย็นแล้ว",
+      intro: "มื้อนี้เอาอิ่มแบบไม่ลากยาวดีกว่า:",
+      closing: "เอาให้อิ่มพอดี ๆ คืนนี้จะได้ไม่แน่นเกิน 😄",
+    };
+  }
+
+  if (hour >= 21 || hour < 2) {
+    return {
+      key: "late_night",
+      label: "ตอนนี้ดึกแล้วนะ",
+      intro: "ถ้ายังหิวจริง ๆ เอาเบา ๆ พอ:",
+      closing: "ดึกแล้ว ไม่ต้องเล่นใหญ่ เดี๋ยวท้องทำงานโอที 😂",
+    };
+  }
+
+  return {
+    key: "very_late",
+    label: "เวลานี้ควรนอนมากกว่ากินแล้วนะ 555",
+    intro: "ถ้าหิวจริง ๆ เอาแค่รองท้องเบา ๆ:",
+    closing: "กินกันวูบพอ แล้วไปพักนะ 😴",
+  };
+};
+
+const optionsForTime = ({ timeContext, day, wantsConvenience }) => {
+  const key = timeContext?.key || "dinner";
 
   if (day.isOver) {
+    if (key === "late_night" || key === "very_late") {
+      return ["ซุปใส/ต้มจืดถ้วยเล็ก", "ไข่ต้ม 1 ฟอง", "โยเกิร์ตไม่หวาน", "นมจืด/น้ำเต้าหู้ไม่หวาน"];
+    }
+
     return wantsConvenience
       ? ["ไข่ต้ม + น้ำเปล่า", "อกไก่/ปลาแบบไม่ทอด", "โยเกิร์ตไม่หวาน", "สลัดโปรตีน น้ำสลัดน้อย"]
       : ["ต้มจืดเต้าหู้หมูสับ", "เกาเหลาไม่ใส่กระเทียมเจียว", "ไข่ต้ม + ผัก", "ปลา/ไก่ย่างไม่มัน"];
   }
 
   if (day.isLowBudget) {
+    if (key === "late_night" || key === "very_late") {
+      return ["ไข่ต้ม", "ซุปใส", "โยเกิร์ตไม่หวาน", "นมจืด/น้ำเต้าหู้ไม่หวาน"];
+    }
+
     return ["ไข่ต้ม", "เต้าหู้", "ซุปใส", "โยเกิร์ตไม่หวาน"];
   }
 
-  if (day.isMediumBudget || day.highFatDay || day.highCarbDay || day.memory?.hasFriedPattern) {
-    return ["สุกี้น้ำไก่", "เกาเหลา + ข้าวนิดเดียว", "ต้มจืดเต้าหู้หมูสับ", "ข้าวครึ่งทัพพี + ไข่ต้ม"];
-  }
-
   if (wantsConvenience) {
+    if (key === "breakfast") return ["ไข่ต้ม + นมจืด", "โยเกิร์ตไม่หวาน + กล้วย", "ข้าวกล้อง + ทูน่า", "แซนด์วิชไก่ + น้ำเปล่า"];
+    if (key === "late_night" || key === "very_late") return ["ไข่ต้ม", "นมจืด", "โยเกิร์ตไม่หวาน", "อกไก่นิดเดียว"];
     return ["อกไก่ + ไข่ต้ม", "ข้าวกล้อง + ทูน่า/ปลา", "โยเกิร์ตไม่หวาน + ไข่ต้ม", "สลัดโปรตีน น้ำสลัดน้อย"];
   }
 
-  return ["สุกี้น้ำ", "ก๋วยเตี๋ยวน้ำ ไม่กระเทียมเจียว", "ข้าวกะเพราไม่มัน + ไข่ต้ม", "ข้าวปลา/ไก่ย่าง"];
+  if (key === "breakfast") {
+    return ["ข้าวต้มปลา/ไก่", "โจ๊กหมูใส่ไข่", "ไข่ต้ม + กล้วย", "โยเกิร์ตไม่หวาน + ผลไม้"];
+  }
+
+  if (key === "lunch") {
+    return ["ข้าวกะเพราไก่ไม่มัน + ไข่ต้ม", "ข้าวปลา/ไก่ย่าง + ผัก", "สุกี้น้ำไก่", "ก๋วยเตี๋ยวน้ำ ไม่กระเทียมเจียว"];
+  }
+
+  if (key === "pre_dinner") {
+    return ["สุกี้น้ำไก่", "ต้มจืดเต้าหู้หมูสับ", "เกาเหลา + ข้าวนิดเดียว", "ไข่ต้ม + โยเกิร์ตไม่หวาน"];
+  }
+
+  if (key === "dinner") {
+    return ["สุกี้น้ำ", "ข้าวปลา/ไก่ย่าง + ผัก", "ต้มจืดเต้าหู้หมูสับ + ข้าวครึ่งทัพพี", "ก๋วยเตี๋ยวน้ำ ไม่กระเทียมเจียว"];
+  }
+
+  return ["ซุปใส", "ไข่ต้ม", "โยเกิร์ตไม่หวาน", "นมจืด/น้ำเต้าหู้ไม่หวาน"];
+};
+
+const optionsByContext = ({ decision, timeContext }) => {
+  const { day, wantsConvenience } = decision;
+  return optionsForTime({ timeContext, day, wantsConvenience });
 };
 
 export const renderMealSuggestionReply = ({ title, decision }) => {
@@ -241,16 +338,14 @@ export const renderMealSuggestionReply = ({ title, decision }) => {
 ${kcalStatusLine({ eaten: day.eaten, target: day.target })}
 (${progress})
 
-👀 แปะดูจากวันนี้
-${memoryBlock}
+👀 แปะดูจากตอนนี้
+${contextBlock}
 
-🍲 ถ้ายังหิวจริง ๆ
-แปะอยากให้ไปทางเบา ๆ ก่อน:
+🍲 ${timeContext.intro}
 
 ${listOptions(options)}
 
-คืนนี้ไม่ต้องแก้ชีวิตหรอก
-แค่ไม่ซ้ำหนักก็เก่งแล้ว 😂`;
+${timeContext.closing}`;
   }
 
   if (day.isLowBudget) {
@@ -258,12 +353,12 @@ ${listOptions(options)}
 
 📊 เหลือประมาณ ${day.left} kcal
 
-🥚 ถ้าหิวจริง ๆ เอาเบา ๆ พอ:
+🥚 ${timeContext.label}
+${timeContext.intro}
 
 ${listOptions(options)}
 
-เอาพออยู่ท้องนะ
-ไม่ต้องฝืนอด แปะไม่เอาดราม่า 😂`;
+${timeContext.closing}`;
   }
 
   if (day.isMediumBudget || day.highFatDay || day.highCarbDay || day.memory?.hasFriedPattern) {
@@ -271,14 +366,14 @@ ${listOptions(options)}
 
 📊 เหลือประมาณ ${day.left} kcal
 
-👀 แปะดูจากวันนี้
-${memoryBlock}
+👀 แปะดูจากตอนนี้
+${contextBlock}
 
-มื้อนี้ไปทางอุ่น ๆ เบา ๆ ดีกว่า:
+${timeContext.intro}
 
 ${listOptions(options)}
 
-เอาแบบอิ่ม แต่ไม่หนักต่อเนื่องนะ 😄`;
+${timeContext.closing}`;
   }
 
   if (wantsConvenience) {
@@ -286,7 +381,8 @@ ${listOptions(options)}
 
 📊 วันนี้ยังเหลือประมาณ ${day.left} kcal
 
-แปะเลือกให้แบบไม่วุ่นวาย:
+${timeContext.label}
+${timeContext.intro}
 
 ${listOptions(options)}
 
@@ -297,12 +393,12 @@ ${listOptions(options)}
 
 📊 เหลือประมาณ ${day.left} kcal
 
-แปะว่าไปทางมื้ออุ่น ๆ ง่าย ๆ ดี:
+${timeContext.label}
+${timeContext.intro}
 
 ${listOptions(options)}
 
-เอาแบบอิ่ม
-แต่ไม่ลากยาวถึงพรุ่งนี้ 😂`;
+${timeContext.closing}`;
 };
 
 const recapHeadline = ({ day, memory }) => {
@@ -447,11 +543,21 @@ export const renderDailyRecapReply = ({ title, decision }) => {
   return renderDailyRecapMessages({ title, decision }).join("\n\n");
 };
 
-export const renderFallbackReply = () => {
-  return `แปะขออภัย ระบบสะดุดนิดนึง 😅
+const fallbackReplies = [
+  `เมื่อกี้แปะวูบไปแป๊บนึง 😵‍💫
+ลองส่งใหม่อีกทีนะ`,
+  `แปะสะดุดขาตัวเองนิดนึง 😅
+ส่งมาใหม่อีกที เดี๋ยวดูให้`,
+  `เมื่อกี้แปะหน้ามืดนิดนึง 555
+ลองอีกทีนะ`,
+  `แปะเผลอหลับตาไปแวบนึง 😴
+ลองส่งใหม่อีกทีนะ`,
+  `เมื่อกี้แปะหลุดโฟกัสนิดนึง 😅
+ส่งใหม่อีกทีนะ`
+];
 
-ลองส่งใหม่อีกทีนะ
-เดี๋ยวแปะตั้งหลักแป๊บ`;
+export const renderFallbackReply = () => {
+  return pick(fallbackReplies);
 };
 
 export const renderNoFoodDetectedReply = () => {
