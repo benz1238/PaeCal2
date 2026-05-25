@@ -1,0 +1,22 @@
+Syntax checks:
+PASS src/handlers/imageHandler.js
+PASS src/handlers/textHandler.js
+PASS src/services/line.js
+PASS src/services/memorySheet.js
+PASS src/services/openai.js
+PASS src/services/sheet.js
+PASS src/utils/advice.js
+PASS src/utils/decision.js
+PASS src/utils/helpers.js
+PASS src/utils/memory.js
+PASS src/utils/personality.js
+PASS src/utils/profile.js
+PASS src/utils/reactions.js
+PASS src/check-imports.js
+PASS src/line-webhook.js
+
+Named import/export check:
+All imports and named exports are OK
+
+Memory logic test:
+Memory phase local tests passed
