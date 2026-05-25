@@ -830,6 +830,144 @@ ${food} ถ้าไม่มันจัด ไม่หวานจัด ก�
 ${budget.isOver ? "วันนี้เกินเป้าแล้ว เอาเบา ๆ พอนะ 😅" : `วันนี้ยังเหลือประมาณ ${budget.left} kcal แปะว่าเลือกดี ๆ ได้อยู่ 😄`}${goalBlock}`;
 };
 
+
+const getMacroTargetsForSummary = (summary = {}) => {
+  const target = Math.max(safeNumber(summary?.calorieTarget, DEFAULT_CALORIE_TARGET), 1);
+  return {
+    protein: 70,
+    fat: Math.round(target * 0.30 / 9),
+    carb: Math.round(target * 0.55 / 4),
+  };
+};
+
+const isProteinStatusQuestionText = (text) => {
+  const value = normalizeText(text);
+  if (!value || value.length > 80) return false;
+  return hasAnyText(value, ["โปรตีน"]) && hasAnyText(value, [
+    "พอยัง", "พอไหม", "พอมั้ย", "พอรึยัง", "พอหรือยัง",
+    "ถึงยัง", "ถึงเป้าไหม", "ถึงเป้ามั้ย", "ขาดไหม", "ขาดมั้ย",
+    "ควรเติมไหม", "ควรเติมมั้ย", "เติมอีกไหม", "เติมอีกมั้ย"
+  ]);
+};
+
+const isFatStatusQuestionText = (text) => {
+  const value = normalizeText(text);
+  if (!value || value.length > 90) return false;
+  return hasAnyText(value, ["ไขมัน", "มัน"]) && hasAnyText(value, [
+    "เยอะไปไหม", "เยอะไปมั้ย", "สูงไปไหม", "สูงไปมั้ย",
+    "เกินไหม", "เกินมั้ย", "หนักไหม", "หนักมั้ย", "พังไหม", "พังมั้ย"
+  ]);
+};
+
+const isCarbStatusQuestionText = (text) => {
+  const value = normalizeText(text);
+  if (!value || value.length > 90) return false;
+  return hasAnyText(value, ["คาร์บ", "แป้ง", "ข้าว"]) && hasAnyText(value, [
+    "เยอะไปไหม", "เยอะไปมั้ย", "สูงไปไหม", "สูงไปมั้ย",
+    "เกินไหม", "เกินมั้ย", "หนักไหม", "หนักมั้ย"
+  ]);
+};
+
+const isLatestMealHeavyQuestionText = (text) => {
+  const value = normalizeText(text);
+  if (!value || value.length > 80) return false;
+  const refersLatest = hasAnyText(value, ["เมนูนี้", "มื้อนี้", "อันนี้", "เมื่อกี้", "ที่กิน"]);
+  const asksHeavy = hasAnyText(value, ["หนักไปไหม", "หนักไปมั้ย", "เยอะไปไหม", "เยอะไปมั้ย", "พังไหม", "พังมั้ย", "โอเคไหม", "โอเคมั้ย"]);
+  return refersLatest && asksHeavy;
+};
+
+const buildProteinStatusReply = ({ title, summary }) => {
+  const protein = Math.round(getSummaryValue(summary, ["totalProtein", "protein"], 0));
+  const mealCount = Number(summary?.mealCount || 0) || 0;
+  const targetProtein = getMacroTargetsForSummary(summary).protein;
+  const diff = protein - targetProtein;
+
+  if (!mealCount || protein <= 0) {
+    return `${title} วันนี้แปะยังไม่เห็นโปรตีนที่บันทึกไว้น้า 👀\n\nส่งรูปหรือพิมพ์มื้อที่กินมาก่อน เดี๋ยวแปะรวมให้เอง 💪`;
+  }
+
+  if (diff >= 15) {
+    return `${title} โปรตีนวันนี้พอแล้วจ้า 💪🔥\n\nตอนนี้ได้ประมาณ ${protein} g\nเกินเป้าคร่าว ๆ ไปนิดนึงแล้ว มื้อต่อไปไม่ต้องอัดหนักก็ได้ 😄`;
+  }
+
+  if (diff >= 0) {
+    return `${title} โปรตีนวันนี้พอแล้วนะ 💪🔥\n\nตอนนี้ได้ประมาณ ${protein} g\nมื้อต่อไปกินเบา ๆ ได้ ไม่ต้องไล่โปรตีนเพิ่มก็ยังโอเค 😄`;
+  }
+
+  if (diff >= -10) {
+    return `${title} โปรตีนวันนี้เกือบพอแล้วนะ 👀💪\n\nตอนนี้ได้ประมาณ ${protein} g\nขาดอีกนิดเดียวเอง ถ้ายังหิวเติมไข่ต้ม/อกไก่/เต้าหู้เบา ๆ ก็จบสวย 😄`;
+  }
+
+  return `${title} โปรตีนวันนี้ยังเติมได้อีกหน่อยนะ 💪\n\nตอนนี้ได้ประมาณ ${protein} g\nถ้ามื้อต่อไปยังมีที่ว่าง ลองเพิ่มไข่ ไก่ ปลา หรือเต้าหู้หน่อย แปะว่าโอเคเลย 🍳`;
+};
+
+const buildFatStatusReply = ({ title, summary }) => {
+  const fat = Math.round(getSummaryValue(summary, ["totalFat", "fat"], 0));
+  const mealCount = Number(summary?.mealCount || 0) || 0;
+  const fatTarget = getMacroTargetsForSummary(summary).fat;
+  const diff = fat - fatTarget;
+
+  if (!mealCount) {
+    return `${title} วันนี้ยังไม่มีข้อมูลพอให้ดูไขมันน้า 👀\n\nส่งรูปหรือพิมพ์เมนูมาก่อน เดี๋ยวแปะช่วยดูให้`;
+  }
+
+  if (diff > 15) {
+    return `${title} ไขมันวันนี้สูงไปหน่อยนะ 🫣\n\nตอนนี้ประมาณ ${fat} g\nมื้อต่อไปถ้ายังหิว ขอเบาทอด/มัน/กะทิลงหน่อย จะได้ไม่แน่นเกิน 😮‍💨🍃`;
+  }
+
+  if (diff > 0) {
+    return `${title} ไขมันเริ่มเกินนิดนึงแล้วนะ 👀\n\nตอนนี้ประมาณ ${fat} g\nยังไม่พัง แต่รอบต่อไปเอาเมนูน้ำ ๆ หรือย่าง/ต้มจะสวยกว่า 😄`;
+  }
+
+  return `${title} ไขมันวันนี้ยังโอเคอยู่ 😄\n\nตอนนี้ประมาณ ${fat} g\nถ้ามื้อต่อไปเลือกไม่มันจัด แปะว่าไปต่อได้สบาย 🍃`;
+};
+
+const buildCarbStatusReply = ({ title, summary }) => {
+  const carb = Math.round(getSummaryValue(summary, ["totalCarb", "carb"], 0));
+  const mealCount = Number(summary?.mealCount || 0) || 0;
+  const carbTarget = getMacroTargetsForSummary(summary).carb;
+  const diff = carb - carbTarget;
+
+  if (!mealCount) {
+    return `${title} วันนี้ยังไม่มีข้อมูลพอให้ดูคาร์บน้า 👀\n\nส่งรูปหรือพิมพ์เมนูมาก่อน เดี๋ยวแปะรวมให้`;
+  }
+
+  if (diff > 25) {
+    return `${title} คาร์บวันนี้มาแน่นอยู่นะ 🍚👀\n\nตอนนี้ประมาณ ${carb} g\nมื้อต่อไปลดข้าว/เส้นลงนิด แล้วเพิ่มโปรตีนหรือผักแทนจะบาลานซ์กว่า 😄`;
+  }
+
+  if (diff > 0) {
+    return `${title} คาร์บเริ่มเกินนิดนึง แต่ยังคุมได้อยู่ 🍚\n\nตอนนี้ประมาณ ${carb} g\nมื้อต่อไปเอาเบา ๆ ก็พอกลับมาสวยได้`;
+  }
+
+  return `${title} คาร์บวันนี้ยังโอเคนะ 😄\n\nตอนนี้ประมาณ ${carb} g\nยังมีพื้นที่ให้เลือกมื้อถัดไปแบบไม่ตึงมาก`;
+};
+
+const buildLatestMealHeavyReply = async ({ title, userId, session }) => {
+  const meal = await getLatestMealForFollowUp({ userId, session });
+
+  if (!meal?.menuName) {
+    return `${title} แปะยังไม่เจอมื้อล่าสุดให้ดูน้า 👀\n\nส่งรูปหรือพิมพ์เมนูมาก่อน เดี๋ยวแปะช่วยเช็กให้`;
+  }
+
+  const kcal = safeNumber(meal.kcal, 0);
+  const fat = safeNumber(meal.fat, 0);
+  const carb = safeNumber(meal.carb, 0);
+  const protein = safeNumber(meal.protein, 0);
+  const menuName = meal.menuName || "มื้อนี้";
+
+  if (kcal >= 850 || fat >= 35) {
+    return `${title} เมนูนี้ค่อนข้างหนักอยู่นะ 👀\n\n${menuName}\nประมาณ ${Math.round(kcal)} kcal${fat ? ` / ไขมัน ${Math.round(fat)} g` : ""}\n\nไม่ได้พัง แต่ถ้ามื้อต่อไปยังหิว เอาเบา ๆ พอ จะได้ไม่แน่นเกิน 😮‍💨🍃`;
+  }
+
+  if (kcal >= 600 || carb >= 80) {
+    return `${title} เมนูนี้กลาง ๆ ไปทางแน่นนะ 😄\n\n${menuName}\nประมาณ ${Math.round(kcal)} kcal\n\nถ้าวันนี้ยังไม่เกิน แปะว่าโอเคอยู่ แค่มื้อต่อไปไม่ต้องเล่นใหญ่`;
+  }
+
+  return `${title} เมนูนี้ยังโอเคอยู่นะ 😄\n\n${menuName}\nประมาณ ${Math.round(kcal)} kcal\nโปรตีน ${Math.round(protein)} g\n\nไม่ได้หนักเกิน แปะให้ผ่าน`;
+};
+
+
 const isExactSummaryText = (text) => exactTexts([
   "สรุปวันนี้",
   "วันนี้กินไปเท่าไหร่",
@@ -1201,11 +1339,11 @@ const getGoalAwareRecapLine = ({ goalText = "", normalized, topMeal }) => {
   const hasFriedMeal = hasAnyText(mealText, ["ทอด", "กรอบ", "หมูกรอบ", "ของทอด"]);
 
   if (goal.sweetControl && hasSweetMeal) {
-    return "เป้าคุมหวานของลื้อ แปะเห็นแล้วนะ วันนี้หวานมีโผล่มานิดนึง พรุ่งนี้ลดไซซ์ได้คือสวยเลย 🧋";
+    return "เป้าคุมหวานของลื้อ แปะเห็นแล้วนะ วันนี้หวานมีโผล่มานิดนึง พรุ่งนี้ลดไซซ์ได้คือสวยเลย 🧋👀";
   }
 
   if (goal.fatLoss && (normalized.over > 0 || hasFriedMeal || normalized.fat >= 65)) {
-    return "เป้าลดไขมันยังไปต่อได้อยู่ แค่พรุ่งนี้ขอทอด/มันเบาลงหน่อย แปะว่าเอากลับมาได้ 😄";
+    return "เป้าลดไขมันยังไปต่อได้อยู่ แค่พรุ่งนี้ขอทอด/มันเบาลงหน่อย แปะว่าเอากลับมาได้ 😄🍃";
   }
 
   if (goal.muscleGain && normalized.protein < 70 && normalized.mealCount > 0) {
@@ -1405,24 +1543,30 @@ const buildDailyRecapPayload = ({ title, summary, goalText = "" }) => {
 
   const goalLine = getGoalAwareRecapLine({ goalText, normalized, topMeal });
   const intro = status.mood === "over"
-    ? `${title} วันนี้เกินเป้าแล้วนะ 👀\n\nมื้อต่อไปถ้ายังหิว เอาเบา ๆ พอ เดี๋ยวพรุ่งนี้ค่อยดึงกลับ 😄`
+    ? `${title} วันนี้เกินเป้าแล้วนะ 👀\n\nมื้อต่อไปถ้ายังหิว เอาเบา ๆ พอ เดี๋ยวพรุ่งนี้ค่อยดึงกลับ 😮‍💨🍃`
     : status.mood === "near"
-      ? `${title} มื้อต่อไปถ้ายังหิว ก็เบา ๆ พอ จะได้ไม่แน่นเกิน 😄`
-      : `${title} วันนี้รวม ๆ ยังโอเคเลย 😄\n\nมื้อต่อไปเลือกชิล ๆ ได้ แปะว่าไปต่อสวย`;
+      ? `${title} มื้อต่อไปถ้ายังหิว เอาเบา ๆ พอ จะได้ไม่แน่นเกิน 😮‍💨🍃`
+      : `${title} วันนี้รวม ๆ ยังโอเคเลย 😄\n\nมื้อต่อไปเลือกชิล ๆ ได้ แปะว่าไปต่อสวย ✨`;
 
   const insightParts = [];
 
   if (topMealName) {
-    insightParts.push(`มื้อเด่นวันนี้คือ ${topMealName}${topMealKcal ? ` ประมาณ ${Math.round(topMealKcal)} kcal` : ""}`);
+    insightParts.push(`มื้อเด่นสุดคือ ${topMealName}${topMealKcal ? ` ล่อไป ~${Math.round(topMealKcal)} kcal` : ""} 🍗🤯`);
   }
 
-  if (macroStatus.fatNote) insightParts.push(macroStatus.fatNote);
-  if (macroStatus.carbNote) insightParts.push(macroStatus.carbNote);
-  if (macroStatus.proteinNote && normalized.mealCount > 0) insightParts.push(macroStatus.proteinNote);
+  if (macroStatus.fatNote) insightParts.push("ไขมันเริ่มสูงนิดนึง แปะขอเบาของทอด/มันลงหน่อย 🫣");
+  if (macroStatus.carbNote) insightParts.push("คาร์บวันนี้มาแน่นอยู่ พรุ่งนี้ค่อยบาลานซ์กลับ 🍚👀");
+  if (macroStatus.proteinNote && normalized.mealCount > 0) {
+    insightParts.push(
+      normalized.protein >= 70
+        ? "แต่โปรตีนดูดี! มีของให้กล้ามเนื้อทำงานอยู่ 💪🔥"
+        : "โปรตีนยังเติมได้อีกนิด พรุ่งนี้หาไข่/ไก่/เต้าหู้ช่วยได้ 💪"
+    );
+  }
 
   const insight = insightParts.length || goalLine
-    ? `อินไซต์จากแปะ 👀\n- ${insightParts.slice(0, 3).join("\n- ")}${goalLine ? `\n\n${goalLine}` : ""}`.replace("- \n", "")
-    : "อินไซต์จากแปะ 👀\nวันนี้ดูรวม ๆ ยังพอคุมได้อยู่";
+    ? `💡 อินไซต์จากแปะ:\n${insightParts.slice(0, 3).join("\n")}${goalLine ? `\n\n${goalLine}` : ""}`
+    : "💡 อินไซต์จากแปะ:\nวันนี้ดูรวม ๆ ยังพอคุมได้อยู่ 😄";
 
   return {
     card,
@@ -1661,6 +1805,29 @@ export const handleTextMessage = async (event) => {
 
   if (isPaeMentionOnlyText(text)) {
     await replyText(replyToken, getPaeMentionReply(title));
+    return;
+  }
+
+  if (isProteinStatusQuestionText(text)) {
+    const summary = await getDailySummary(userId);
+    await replyText(replyToken, buildProteinStatusReply({ title, summary }));
+    return;
+  }
+
+  if (isFatStatusQuestionText(text)) {
+    const summary = await getDailySummary(userId);
+    await replyText(replyToken, buildFatStatusReply({ title, summary }));
+    return;
+  }
+
+  if (isCarbStatusQuestionText(text)) {
+    const summary = await getDailySummary(userId);
+    await replyText(replyToken, buildCarbStatusReply({ title, summary }));
+    return;
+  }
+
+  if (isLatestMealHeavyQuestionText(text)) {
+    await replyText(replyToken, await buildLatestMealHeavyReply({ title, userId, session }));
     return;
   }
 
