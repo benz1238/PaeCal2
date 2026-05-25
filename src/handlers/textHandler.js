@@ -1,4 +1,4 @@
-import { replyText, replyTexts } from "../services/line.js";
+import { replyDailyRecapCardWithBubbles, replyText, replyTexts } from "../services/line.js";
 import { postToSheet } from "../services/sheet.js";
 import { estimateFoodFromText, parseUserIntent, reviseFoodEstimateFromCorrection } from "../services/openai.js";
 import {
@@ -1120,10 +1120,176 @@ ${total} / ${target} kcal
 (${progress})`;
 };
 
-const replySmartSummary = async ({ replyToken, userId, title }) => {
+const getSummaryValue = (summary, keys, fallback = 0) => {
+  for (const key of keys) {
+    const value = summary?.[key];
+    if (value !== undefined && value !== null && value !== "") return Number(value) || fallback;
+  }
+  return fallback;
+};
+
+const normalizeSummaryForRecap = (summary = {}) => {
+  const total = getSummaryValue(summary, ["todayCalories", "totalToday", "totalKcal", "totalCalories"], 0);
+  const target = getSummaryValue(summary, ["calorieTarget", "target", "targetKcal"], DEFAULT_CALORIE_TARGET);
+  const carb = getSummaryValue(summary, ["totalCarb", "carb"], 0);
+  const protein = getSummaryValue(summary, ["totalProtein", "protein"], 0);
+  const fat = getSummaryValue(summary, ["totalFat", "fat"], 0);
+  const meals = Array.isArray(summary.meals) ? summary.meals : [];
+  const mealCount = Number(summary.mealCount ?? meals.length ?? 0) || 0;
+  const left = Math.max(target - total, 0);
+  const over = Math.max(total - target, 0);
+
+  return { total, target, carb, protein, fat, meals, mealCount, left, over };
+};
+
+const getTopMealForRecap = (meals = []) => {
+  const activeMeals = meals.filter(Boolean);
+  if (!activeMeals.length) return null;
+
+  return activeMeals.reduce((top, meal) => {
+    const kcal = Number(meal?.kcal || meal?.totalKcal || 0) || 0;
+    const topKcal = Number(top?.kcal || top?.totalKcal || 0) || 0;
+    return kcal > topKcal ? meal : top;
+  }, activeMeals[0]);
+};
+
+const getRecapStatus = ({ total, target, left, over }) => {
+  if (total <= 0) {
+    return {
+      statusText: "วันนี้ยังไม่มีมื้อที่แปะบันทึกไว้นะ 😄",
+      statusColor: "#6B7280",
+      mood: "empty",
+    };
+  }
+
+  if (over > 0) {
+    return {
+      statusText: `เกินเป้าไปประมาณ ${Math.round(over)} kcal แล้วนะ 👀`,
+      statusColor: "#DC2626",
+      mood: "over",
+    };
+  }
+
+  if (left <= 250) {
+    return {
+      statusText: `เหลือประมาณ ${Math.round(left)} kcal ใกล้เต็มแล้วนะ 😅`,
+      statusColor: "#D97706",
+      mood: "near",
+    };
+  }
+
+  return {
+    statusText: `เหลือประมาณ ${Math.round(left)} kcal ยังหายใจได้อยู่ 😄`,
+    statusColor: "#047857",
+    mood: "ok",
+  };
+};
+
+const getGoalLabelForRecap = (goalText = "") => {
+  const goal = String(goalText || "").trim();
+  if (!goal) return "ยังไม่ได้ตั้งเป้าสุขภาพ";
+  return goal.length > 38 ? `${goal.slice(0, 38)}…` : goal;
+};
+
+const getGoalAwareRecapLine = ({ goalText = "", normalized, topMeal }) => {
+  const goal = getGoalSignals(goalText);
+  if (!goal.hasGoal) return "";
+
+  const mealText = normalizeText(topMeal?.menuName || "");
+  const hasSweetMeal = hasAnyText(mealText, ["หวาน", "ชา", "ชานม", "น้ำหวาน", "โกโก้", "ขนม", "เค้ก", "ไอติม"]);
+  const hasFriedMeal = hasAnyText(mealText, ["ทอด", "กรอบ", "หมูกรอบ", "ของทอด"]);
+
+  if (goal.sweetControl && hasSweetMeal) {
+    return "เป้าคุมหวานของลื้อ แปะเห็นแล้วนะ วันนี้หวานมีโผล่มานิดนึง พรุ่งนี้ลดไซซ์ได้คือสวยเลย 🧋";
+  }
+
+  if (goal.fatLoss && (normalized.over > 0 || hasFriedMeal || normalized.fat >= 65)) {
+    return "เป้าลดไขมันยังไปต่อได้อยู่ แค่พรุ่งนี้ขอทอด/มันเบาลงหน่อย แปะว่าเอากลับมาได้ 😄";
+  }
+
+  if (goal.muscleGain && normalized.protein < 70 && normalized.mealCount > 0) {
+    return "ถ้าเป้าเพิ่มกล้าม วันนี้โปรตีนยังเติมได้อีกนิดนะ พรุ่งนี้หาไข่ ไก่ ปลา หรือเต้าหู้ติดไว้หน่อย 💪";
+  }
+
+  if (goal.lateControl) {
+    return "เป้าไม่กินดึก แปะยังจำได้นะ คืนนี้ถ้าหิวจริง ๆ เอาเบา ๆ พอ ไม่ต้องเล่นใหญ่ 😅";
+  }
+
+  if (goal.healthyEating) {
+    return "เป้ากินสุขภาพดี วันนี้ดูรวม ๆ ได้อยู่ พรุ่งนี้เพิ่มผักหรือโปรตีนอีกนิด แปะให้ผ่านง่ายขึ้นเลย 🥬";
+  }
+
+  if (goal.relaxed) {
+    return "แปะจำได้ว่าเอาแบบไม่กดดันนะ วันนี้ดูเพื่อรู้ ไม่ได้ดูเพื่อดุ ชิล ๆ จ้า 😄";
+  }
+
+  return "เป้าที่ลื้อตั้งไว้ แปะจำอยู่นะ ค่อย ๆ ปรับให้เข้าทางตัวเองก็พอ 🎯";
+};
+
+const buildDailyRecapPayload = ({ title, summary, goalText = "" }) => {
+  const normalized = normalizeSummaryForRecap(summary);
+  const status = getRecapStatus(normalized);
+  const topMeal = getTopMealForRecap(normalized.meals);
+  const topMealName = topMeal?.menuName || topMeal?.name || "";
+  const topMealKcal = Number(topMeal?.kcal || topMeal?.totalKcal || 0) || 0;
+  const topMealText = topMealName
+    ? `${topMealName}${topMealKcal ? ` · ${Math.round(topMealKcal)} kcal` : ""}`
+    : "ยังไม่มีมื้อเด่น";
+
+  const card = {
+    statusText: status.statusText,
+    statusColor: status.statusColor,
+    kcalText: `${Math.round(normalized.total)} / ${Math.round(normalized.target)} kcal`,
+    carbText: `${Math.round(normalized.carb)} g`,
+    proteinText: `${Math.round(normalized.protein)} g`,
+    fatText: `${Math.round(normalized.fat)} g`,
+    mealCountText: `${normalized.mealCount} มื้อ`,
+    goalText: getGoalLabelForRecap(goalText),
+    topMealText,
+  };
+
+  if (status.mood === "empty") {
+    return {
+      card,
+      bubbles: [
+        `${title} วันนี้แปะยังไม่เห็นมื้อที่บันทึกไว้น้า 😄\n\nส่งรูปอาหารหรือพิมพ์เมนูมาได้เลย เดี๋ยวแปะรวมให้เอง`,
+      ],
+    };
+  }
+
+  const goalLine = getGoalAwareRecapLine({ goalText, normalized, topMeal });
+  const intro = status.mood === "over"
+    ? `${title} วันนี้เลยเป้ามานิดนึงนะ 😅\n\nไม่ต้องตกใจ เดี๋ยวพรุ่งนี้ค่อยดึงกลับ แปะว่าไม่พัง แค่มีแววซน`
+    : status.mood === "near"
+      ? `${title} วันนี้ใกล้เต็มแล้วนะ 👀\n\nมื้อต่อไปถ้ายังหิว เอาเบา ๆ พอ จะได้ไม่แน่นเกิน`
+      : `${title} วันนี้รวม ๆ ยังโอเคเลย 😄\n\nแปะว่าเดินเกมดีอยู่ ไม่ต้องซีเรียส`;
+
+  const insightParts = [];
+
+  if (topMealName) {
+    insightParts.push(`มื้อที่เด่นสุดวันนี้คือ ${topMealName}${topMealKcal ? ` ประมาณ ${Math.round(topMealKcal)} kcal` : ""}`);
+  }
+
+  if (normalized.protein >= 70) {
+    insightParts.push("โปรตีนวันนี้ดูดี มีของให้กล้ามเนื้อทำงานอยู่ 💪");
+  } else if (normalized.mealCount > 0) {
+    insightParts.push("โปรตีนยังเติมได้อีกนิด พรุ่งนี้เพิ่มไข่/ไก่/เต้าหู้คือดีเลย 💪");
+  }
+
+  const insight = insightParts.length
+    ? `อินไซต์จากแปะ:\n- ${insightParts.join("\n- ")}${goalLine ? `\n\n${goalLine}` : ""}`
+    : goalLine || "แปะดูรวม ๆ แล้ว วันนี้ยังพอคุมได้อยู่ 😄";
+
+  return {
+    card,
+    bubbles: [intro, insight],
+  };
+};
+
+const replySmartSummary = async ({ replyToken, userId, title, goalText = "" }) => {
   const summary = await getDailySummary(userId);
-  const decision = decideDailyRecap({ summary });
-  await replyTexts(replyToken, renderDailyRecapMessages({ title, decision }));
+  const payload = buildDailyRecapPayload({ title, summary, goalText });
+  await replyDailyRecapCardWithBubbles(replyToken, { title, ...payload });
 };
 
 export const handleTextMessage = async (event) => {
@@ -1355,7 +1521,7 @@ export const handleTextMessage = async (event) => {
   }
 
   if (isExactSummaryText(text)) {
-    await replySmartSummary({ replyToken, userId, title });
+    await replySmartSummary({ replyToken, userId, title, goalText });
     return;
   }
 
@@ -1673,7 +1839,7 @@ export const handleTextMessage = async (event) => {
   }
 
   if (intent.intent === "daily_summary") {
-    await replySmartSummary({ replyToken, userId, title });
+    await replySmartSummary({ replyToken, userId, title, goalText });
     return;
   }
 
