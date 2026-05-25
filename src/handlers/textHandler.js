@@ -52,6 +52,11 @@ const retryOnce = async (fn) => {
   }
 };
 
+const getMessageRequestId = (event, suffix = "text") => {
+  const messageId = event?.message?.id || `${event?.source?.userId || "user"}-${Date.now()}`;
+  return `${messageId}:${suffix}`;
+};
+
 const saveProfile = async (payload) => postToSheet({ action: "SAVE_PROFILE", ...payload });
 const updateSession = async (payload) => postToSheet({ action: "UPDATE_SESSION", ...payload });
 const logFood = async (payload) => postToSheet({ action: "LOG_FOOD", ...payload });
@@ -1034,7 +1039,16 @@ export const handleTextMessage = async (event) => {
     const fat = safeNumber(foodData.fat, 0);
     const menuName = foodData.menuName || foodText;
 
-    const sheetData = await logFood({ userId, name: session.data?.name || "", kcal, carb, protein, fat, menuName });
+    const sheetData = await logFood({
+      userId,
+      name: session.data?.name || "",
+      kcal,
+      carb,
+      protein,
+      fat,
+      menuName,
+      requestId: getMessageRequestId(event, "text-log"),
+    });
     const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
     const target = sheetData.calorieTarget || DEFAULT_CALORIE_TARGET;
     const summary = { ...sheetData, todayCalories: total, totalToday: total, calorieTarget: target };
@@ -1176,6 +1190,7 @@ export const handleTextMessage = async (event) => {
       carb,
       protein,
       fat,
+      requestId: getMessageRequestId(event, "adjust-last-meal"),
     });
 
     const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
@@ -1196,7 +1211,16 @@ export const handleTextMessage = async (event) => {
     const fat = safeNumber(foodData.fat, 0);
     const menuName = foodData.menuName || foodText;
 
-    const sheetData = await logFood({ userId, name: session.data?.name || "", kcal, carb, protein, fat, menuName });
+    const sheetData = await logFood({
+      userId,
+      name: session.data?.name || "",
+      kcal,
+      carb,
+      protein,
+      fat,
+      menuName,
+      requestId: getMessageRequestId(event, "text-log"),
+    });
     const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
     const target = sheetData.calorieTarget || DEFAULT_CALORIE_TARGET;
     const summary = { ...sheetData, todayCalories: total, totalToday: total, calorieTarget: target };

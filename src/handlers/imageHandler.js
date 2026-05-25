@@ -46,6 +46,7 @@ export const handleImageMessage = async (event) => {
     protein,
     fat,
     menuName,
+    requestId: event.message?.id ? `${event.message.id}:image-log` : undefined,
   });
 
   const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
