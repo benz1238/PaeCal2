@@ -58,7 +58,6 @@ const requiredExports = [
   [personality, "renderFoodLogMessages", "./utils/personality.js"],
   [personality, "renderMealSuggestionReply", "./utils/personality.js"],
   [personality, "renderDailyRecapReply", "./utils/personality.js"],
-  [personality, "renderDailyRecapMessages", "./utils/personality.js"],
   [personality, "renderFallbackReply", "./utils/personality.js"],
   [personality, "renderNoFoodDetectedReply", "./utils/personality.js"],
 
