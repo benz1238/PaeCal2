@@ -8,6 +8,16 @@ const pick = (items = []) => {
   return items[Math.floor(Math.random() * items.length)];
 };
 
+const shortClosing = () =>
+  pick([
+    "ได้อยู่ เดี๋ยวแปะดูให้ 😄",
+    "มื้อต่อไปค่อยลดนิดนึงพอ 👀",
+    "ไม่เป็นไร วันนี้โอแล้ว",
+    "พรุ่งนี้ค่อยเอาใหม่ ชิล ๆ จ้า",
+    "แปะว่าแค่นี้ยังทัน",
+    "รอบหน้าเดี๋ยวแปะช่วยเอง",
+  ]);
+
 const kcalStatusLine = ({ eaten, target }) => {
   const total = safeNumber(eaten, 0);
   const goal = safeNumber(target, DEFAULT_CALORIE_TARGET);
@@ -73,30 +83,51 @@ const softSuggestionFromFood = ({ title, decision }) => {
   const { day, signals, mood } = decision;
 
   if (day.isVeryOver) {
-    return `🍲 ถ้ายังหิวจริง ๆ\nเอาแค่อะไรเบา ๆ พออยู่ท้องน้า\n\nพรุ่งนี้ค่อยบาลานซ์ใหม่ ไม่ต้องเครียดจ้า ❤️`;
+    return `🍲 ถ้ายังหิวจริง ๆ
+เอาเบา ๆ พออยู่ท้องพอ
+
+${shortClosing()}`;
   }
 
   if (day.isOver) {
-    return `🍲 มื้อถัดไปขอเบา ๆ หน่อย\nต้ม / ย่าง / น้ำใส ได้หมด\n\nไม่ต้องแก้ชีวิตนะ ${title}\nแค่ไม่ซ้ำหนักก็เก่งแล้ว 😂`;
+    return `🍲 มื้อถัดไปขอเบา ๆ หน่อย
+ต้ม / ย่าง / น้ำใส ได้หมด
+
+${shortClosing()}`;
   }
 
   if (day.memory?.hasFriedPattern || mood === "fried_or_fat") {
-    return `🍲 มื้อหน้าขอพักของทอดแป๊บนึง\nแปะว่าไปทางต้ม/ย่างจะเซฟกว่า 😄`;
+    return `🍲 มื้อหน้าพักของทอดแป๊บนึง
+ไปทางต้ม/ย่างจะเซฟกว่า
+
+${shortClosing()}`;
   }
 
   if (day.memory?.hasSweetPattern || mood === "sweet_heavy") {
-    return `🍲 มื้อถัดไปขอไม่เติมหวานเพิ่มน้า\nเดี๋ยวแคลมันแอบไหลแบบเนียน ๆ 😂`;
+    return `🍲 มื้อถัดไปขอไม่เติมหวานเพิ่มน้า
+แคลมันชอบเนียนมาแบบนี้แหละ 😂
+
+${shortClosing()}`;
   }
 
   if (signals.lowProtein) {
-    return `🍲 มื้อหน้าลองเติมโปรตีนอีกนิด\nไข่ต้ม ไก่ ปลา เต้าหู้ ได้หมดเลยจ้า 💪`;
+    return `🍲 มื้อหน้าลองเติมโปรตีนอีกนิด
+ไข่ต้ม ไก่ ปลา เต้าหู้ ได้หมด
+
+${shortClosing()}`;
   }
 
   if (day.isNearLimit) {
-    return `🍲 วันนี้ใกล้เต็มเป้าแล้ว\nมื้อถัดไปเอาเบา ๆ ก็สวยแล้วจ้า`;
+    return `🍲 วันนี้ใกล้เต็มเป้าแล้ว
+มื้อถัดไปเอาเบา ๆ ก็พอ
+
+${shortClosing()}`;
   }
 
-  return `🍲 กินให้อร่อยได้เลย\nเดี๋ยวมื้อถัดไปแปะช่วยบาลานซ์ต่อให้ 😄`;
+  return `🍲 กินให้อร่อยได้เลย
+มื้อถัดไปเดี๋ยวค่อยบาลานซ์
+
+${shortClosing()}`;
 };
 
 export const renderFoodLogReply = ({ title, meal, summary, decision }) => {
@@ -241,23 +272,29 @@ const recapHeadline = ({ day, memory }) => {
 
 const mvpLine = ({ proteinMeal, memory }) => {
   if (proteinMeal) {
-    return `💪 ${proteinMeal.menuName || "มื้อโปรตีน"}\nโปรตีนดูดีที่สุดของวัน`;
+    return `💪 ${proteinMeal.menuName || "มื้อโปรตีน"}
+โปรตีนดูดีที่สุดของวัน
+อันนี้แปะชมก่อน`;
   }
 
   if (memory.hasProteinWin) {
-    return "💪 วันนี้มีโปรตีนดีอยู่\nแปะให้ผ่านแบบไม่ต้องประชุม";
+    return `💪 วันนี้มีโปรตีนดีอยู่
+แปะให้ผ่านแบบไม่ต้องประชุม`;
   }
 
-  return "💪 วันนี้ยังไม่มี MVP ชัด ๆ\nแต่ยังตั้งหลักได้อยู่";
+  return `💪 วันนี้ยังไม่มี MVP ชัด ๆ
+แต่ยังตั้งหลักได้อยู่`;
 };
 
 const problemLine = ({ problemMeal, memory }) => {
   if (memory.hasSweetPattern) {
-    return "😭 ของหวาน\nวันนี้มาเกินหนึ่งจังหวะ แปะเห็นนะ";
+    return `ของหวาน
+วันนี้มาเกินหนึ่งจังหวะ แปะเห็นนะ 😭`;
   }
 
   if (memory.hasFriedPattern) {
-    return "👀 ของทอด/ของมัน\nวันนี้มาใกล้กันหลายรอบอยู่";
+    return `ของทอด/ของมัน
+วันนี้มาใกล้กันหลายรอบอยู่ 👀`;
   }
 
   if (problemMeal) {
@@ -270,57 +307,73 @@ const problemLine = ({ problemMeal, memory }) => {
           ? "คาร์บมาแน่นสุดของวัน"
           : "ตัวดันแคลวันนี้เลย";
 
-    return `👀 ${problemMeal.menuName || "มื้อหนักสุด"}\n${reason} แปะจดไว้แล้ว 😂`;
+    return `${problemMeal.menuName || "มื้อหนักสุด"}
+${reason} แปะจดไว้แล้ว 😂`;
   }
 
-  return "👀 ยังไม่มีตัวปัญหาชัด ๆ\nถือว่ารอดไปก่อน";
+  return `ยังไม่มีตัวปัญหาชัด ๆ
+ถือว่ารอดไปก่อน`;
 };
 
 const moodLine = ({ day, memory }) => {
   if (day.isVeryOver || memory.hasHeavyPattern) {
-    return "😅 Mood รวม\nหลุดแบบมีหลักฐาน แต่ไม่ต้องเครียดนะ";
+    return `😅 Mood รวม
+หลุดแบบมีหลักฐาน แต่ยังตั้งหลักได้`;
   }
 
   if (day.isOver) {
-    return "😅 Mood รวม\nเกินนิด ๆ แต่ยังตั้งหลักได้";
+    return `😅 Mood รวม
+เกินนิด ๆ แต่ยังเอาอยู่`;
   }
 
   if (memory.hasSweetPattern) {
-    return "😭 Mood รวม\nหวานถี่ไปนิด แต่ยังเบรกทัน";
+    return `😭 Mood รวม
+หวานถี่ไปนิด แต่ยังเบรกทัน`;
   }
 
   if (memory.hasFriedPattern) {
-    return "👀 Mood รวม\nของทอดมาถี่ แปะขอเบรกมือเบา ๆ";
+    return `👀 Mood รวม
+ของทอดมาถี่ แปะขอเบรกมือเบา ๆ`;
   }
 
   if (day.goodProteinDay || memory.hasProteinWin) {
-    return "😄 Mood รวม\nโปรตีนมาดี แปะยิ้มอยู่";
+    return `😄 Mood รวม
+โปรตีนมาดี แปะยังยิ้มอยู่`;
   }
 
-  return "😄 Mood รวม\nไปได้เรื่อย ๆ ยังไม่หลุดโค้ง";
+  return `😄 Mood รวม
+ไปได้เรื่อย ๆ ยังไม่หลุดโค้ง`;
 };
 
 const nextStepLine = ({ day, memory }) => {
   if (day.isOver || memory.hasHeavyPattern) {
-    return "❤️ พรุ่งนี้เอาง่าย ๆ\nเลี่ยงของทอด 1 มื้อก่อนพอ\nแล้วเติมผักกับโปรตีนกลับมา";
+    return `❤️ มื้อต่อไป
+เลี่ยงทอดสักมื้อ
+เติมผักกับโปรตีนพอ`;
   }
 
   if (memory.hasSweetPattern) {
-    return "❤️ มื้อถัดไป\nพักน้ำหวานก่อนสักรอบ\nแล้วไปทางโปรตีนกับผัก แปะว่าเอาอยู่";
+    return `❤️ มื้อต่อไป
+พักน้ำหวานก่อนสักรอบ
+แล้วไปทางโปรตีนกับผัก`;
   }
 
   if (memory.hasFriedPattern) {
-    return "❤️ มื้อถัดไป\nพักทอดก่อนหนึ่งมื้อ\nไปทางต้ม/ย่าง แค่นี้ก็ดีขึ้นแล้ว";
+    return `❤️ มื้อต่อไป
+พักทอดก่อนหนึ่งมื้อ
+ไปทางต้ม/ย่างพอ`;
   }
 
-  return "❤️ มื้อถัดไป\nคุมของทอด/น้ำหวานนิดนึง\nแล้วเน้นโปรตีนดี ๆ ต่อ";
+  return `❤️ มื้อต่อไป
+คุมของทอด/น้ำหวานนิดนึง
+แล้วเน้นโปรตีนดี ๆ ต่อ`;
 };
 
-export const renderDailyRecapReply = ({ title, decision }) => {
+export const renderDailyRecapMessages = ({ title, decision }) => {
   const { day, problemMeal, proteinMeal, memory = day.memory || {} } = decision;
   const progress = buildProgressBar(day.eaten, day.target);
 
-  return `📊 สรุปวันนี้ของ${title}
+  const firstMessage = `📊 สรุปวันนี้ของ${title}
 
 ${recapHeadline({ day, memory })}
 
@@ -330,16 +383,22 @@ ${kcalStatusLine({ eaten: day.eaten, target: day.target })}
 (${progress})
 
 🏆 MVP วันนี้
-${mvpLine({ proteinMeal, memory })}
+${mvpLine({ proteinMeal, memory })}`;
 
+  const secondMessage = `👀 แต่...
 ${problemLine({ problemMeal, memory })}
 
 ${moodLine({ day, memory })}
 
 ${nextStepLine({ day, memory })}
 
-ไม่ต้องทำตัวเป็นหุ่นยนต์นะ
-แค่กลับมาดูแลตัวเองต่อก็พอแล้วจ้า 😂`;
+${shortClosing()}`;
+
+  return [firstMessage, secondMessage];
+};
+
+export const renderDailyRecapReply = ({ title, decision }) => {
+  return renderDailyRecapMessages({ title, decision }).join("\n\n");
 };
 
 export const renderFallbackReply = () => {
