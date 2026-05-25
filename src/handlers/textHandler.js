@@ -116,6 +116,232 @@ const getLocalIntent = (text) => {
   return null;
 };
 
+
+const FOOD_ADVICE_QUESTION_WORDS = [
+  "ดีไหม", "ดีมั้ย", "โอเคไหม", "โอเคมั้ย", "ได้ไหม", "ได้มั้ย", "ได้ปะ",
+  "เหมาะไหม", "เหมาะมั้ย", "ควรไหม", "ควรมั้ย", "กินได้ไหม", "กินได้มั้ย",
+  "อ้วนไหม", "อ้วนมั้ย", "หนักไหม", "หนักมั้ย", "พังไหม", "พังมั้ย"
+];
+
+const FOOD_ADVICE_KEYWORDS = [
+  "ข้าว", "ก๋วยเตี๋ยว", "สุกี้", "เกาเหลา", "ต้ม", "แกง", "ยำ", "สลัด", "ซุป", "โจ๊ก", "ข้าวต้ม",
+  "ไก่", "หมู", "ปลา", "กุ้ง", "ไข่", "เต้าหู้", "เนื้อ", "อกไก่", "ทะเล",
+  "ทอด", "ย่าง", "นึ่ง", "ลวก", "ผัด", "มัน", "หวาน", "น้ำหวาน", "ชานม", "กาแฟ", "โกโก้",
+  "ขนม", "เค้ก", "คุกกี้", "เบเกอรี่", "โยเกิร์ต", "นม", "หมูกระทะ", "ชาบู", "พิซซ่า", "เบอร์เกอร์"
+];
+
+const FOOD_STOP_WORD_PATTERN = /(ดีไหม|ดีมั้ย|โอเคไหม|โอเคมั้ย|ได้ไหม|ได้มั้ย|ได้ปะ|เหมาะไหม|เหมาะมั้ย|ควรไหม|ควรมั้ย|กินได้ไหม|กินได้มั้ย|อ้วนไหม|อ้วนมั้ย|หนักไหม|หนักมั้ย|พังไหม|พังมั้ย|อันไหนดี|อะไรดี|ไหนดี|ดีกว่า|เลือกอะไร|กี่แคล|กี่ kcal|แคลเท่าไหร่|แคลเท่าไร).*/i;
+
+const hasFoodKeyword = (text) => FOOD_ADVICE_KEYWORDS.some((word) => normalizeText(text).includes(word));
+
+const cleanFoodText = (text) => {
+  let value = String(text || "").trim();
+  value = value.replace(/^(วันนี้|มื้อนี้|เย็นนี้|คืนนี้|พรุ่งนี้|ตอนนี้)\s*/i, "");
+  value = value.replace(/^(ถ้ากิน|กิน|จะกิน|อยากกิน|ควรกิน|ขอถามหน่อย)\s*/i, "");
+  value = value.replace(FOOD_STOP_WORD_PATTERN, "");
+  value = value.replace(/[?？!！~]+/g, "").replace(/นะ+$/i, "").trim();
+  return value || String(text || "").trim();
+};
+
+const getFoodProfile = (foodText) => {
+  const value = normalizeText(foodText);
+  return {
+    name: cleanFoodText(foodText),
+    isSoupLight: hasAnyText(value, ["สุกี้", "ต้ม", "เกาเหลา", "ซุป", "แกงจืด", "ลวก", "นึ่ง", "ข้าวต้ม"]),
+    isFriedHeavy: hasAnyText(value, ["ทอด", "หมูกรอบ", "ไก่กรอบ", "เฟรนช์ฟราย", "ของทอด", "กรอบ"]),
+    isSweet: hasAnyText(value, ["หวาน", "ชานม", "น้ำหวาน", "โกโก้", "เค้ก", "ขนม", "คุกกี้", "เบเกอรี่", "ไอติม"]),
+    isBigSocialMeal: hasAnyText(value, ["หมูกระทะ", "บุฟเฟต์", "ชาบู", "ปิ้งย่าง", "พิซซ่า", "เบอร์เกอร์"]),
+    hasProtein: hasAnyText(value, ["ไก่", "หมู", "ปลา", "กุ้ง", "ไข่", "เต้าหู้", "เนื้อ", "อกไก่", "ทะเล"]),
+    hasCarb: hasAnyText(value, ["ข้าว", "เส้น", "ก๋วยเตี๋ยว", "บะหมี่", "โจ๊ก", "ข้าวต้ม"]),
+  };
+};
+
+const scoreFoodChoice = (foodText) => {
+  const food = getFoodProfile(foodText);
+  let score = 0;
+  if (food.isSoupLight) score += 3;
+  if (food.hasProtein) score += 2;
+  if (food.hasCarb) score -= 0.5;
+  if (food.isFriedHeavy) score -= 3;
+  if (food.isSweet) score -= 3;
+  if (food.isBigSocialMeal) score -= 2;
+  return score;
+};
+
+const getDayBudget = (summary) => {
+  const total = Number(summary?.todayCalories ?? summary?.totalToday ?? 0) || 0;
+  const target = Number(summary?.calorieTarget || DEFAULT_CALORIE_TARGET);
+  return { total, target, left: Math.max(target - total, 0), isOver: total > target, isNear: target - total <= 350 };
+};
+
+const extractComparisonFoods = (text) => {
+  const raw = String(text || "").trim();
+  const match = raw.match(/(?:ระหว่าง\s*)?(.+?)\s*(?:กับ|หรือ|vs|VS)\s*(.+?)(?:\s*(?:อันไหนดี|อะไรดี|เลือกอะไร|ดีกว่า|ไหนดี|ดีไหม|ดีมั้ย|ได้ไหม|ได้มั้ย))?$/i);
+  if (!match) return null;
+  const a = cleanFoodText(match[1]);
+  const b = cleanFoodText(match[2]);
+  if (!a || !b || a.length > 40 || b.length > 40) return null;
+  if (!hasFoodKeyword(a) && !hasFoodKeyword(b)) return null;
+  return [a, b];
+};
+
+const isFoodCompareText = (text) => Boolean(extractComparisonFoods(text));
+
+const isFoodKcalQuestionText = (text) => {
+  const value = normalizeText(text);
+  return hasFoodKeyword(value) && hasAnyText(value, ["กี่แคล", "กี่ kcal", "แคลเท่าไหร่", "แคลเท่าไร"]);
+};
+
+const isNextMealAfterFoodText = (text) => {
+  const value = normalizeText(text);
+  return hasFoodKeyword(value) && hasAnyText(value, ["แล้วเย็นนี้", "แล้วมื้อต่อไป", "ต่อไปกิน", "เย็นนี้กินอะไร", "มื้อต่อไปกินอะไร"]);
+};
+
+const isFoodAdviceText = (text) => {
+  const value = normalizeText(text);
+  if (!value || value.length > 100) return false;
+  if (isFoodCompareText(value) || isFoodKcalQuestionText(value) || isNextMealAfterFoodText(value)) return true;
+  const hasQuestion = FOOD_ADVICE_QUESTION_WORDS.some((word) => value.includes(word));
+  return hasQuestion && hasFoodKeyword(value);
+};
+
+const buildFoodCompareReply = ({ title, text, summary }) => {
+  const foods = extractComparisonFoods(text);
+  if (!foods) return "";
+  const [a, b] = foods;
+  const scoreA = scoreFoodChoice(a);
+  const scoreB = scoreFoodChoice(b);
+  const winner = scoreA >= scoreB ? a : b;
+  const loser = scoreA >= scoreB ? b : a;
+  const budget = getDayBudget(summary);
+
+  return `${title} ถ้าให้แปะเลือกนะ 👀
+
+แปะเชียร์: ${winner}
+มากกว่า ${loser}
+
+เหตุผลสั้น ๆ คือมันคุมง่ายกว่า
+ไม่ลากแคลไปไกลเท่าไหร่
+
+${budget.isOver ? "แต่วันนี้เกินเป้าแล้ว เอาไซซ์พอดี ๆ พอนะ 😅" : `วันนี้ยังเหลือประมาณ ${budget.left} kcal เลือกดี ๆ ได้อยู่ 😄`}`;
+};
+
+const buildFoodKcalReply = ({ title, foodData, foodText }) => {
+  const menuName = foodData.menuName || cleanFoodText(foodText);
+  const kcal = safeNumber(foodData.kcal, 0);
+  const protein = safeNumber(foodData.protein, 0);
+  const carb = safeNumber(foodData.carb, 0);
+  const fat = safeNumber(foodData.fat, 0);
+
+  return `${title} แปะตีให้คร่าว ๆ นะ 🔥
+
+${menuName}
+ประมาณ ${kcal} kcal
+
+คร่าว ๆ:
+🍚 คาร์บ ${carb} g
+💪 โปรตีน ${protein} g
+💧 ไขมัน ${fat} g
+
+ตัวเลขอาจแกว่งตามร้านกับปริมาณนะ
+แต่ใช้กะทางได้อยู่ 😄`;
+};
+
+const buildNextMealAfterFoodReply = ({ title, text, summary }) => {
+  const budget = getDayBudget(summary);
+  const food = cleanFoodText(text.replace(/แล้ว.*/i, ""));
+
+  if (budget.isOver) {
+    return `${title} ถ้ากิน ${food} ไปแล้ว
+มื้อต่อไปเอาเบา ๆ พอเลยนะ 👀
+
+แปะแนะนำ:
+- ต้มจืด / ซุปใส
+- เกาเหลาไม่กระเทียมเจียว
+- ไข่ต้ม + ผัก
+- ปลา/ไก่ย่างไม่มัน
+
+วันนี้ไม่ต้องแก้โหด
+แค่ไม่เติมหนักต่อก็พอ 😄`;
+  }
+
+  if (budget.isNear) {
+    return `${title} ถ้ากิน ${food} ไปแล้ว
+วันนี้เหลือพื้นที่ไม่เยอะละ 🟠
+
+มื้อต่อไปเอาแนวนี้พอ:
+- สุกี้น้ำ
+- ต้มจืดเต้าหู้หมูสับ
+- ไข่ต้ม + โยเกิร์ตไม่หวาน
+- เกาเหลา + ข้าวนิดเดียว
+
+แปะว่าเอาให้จบสวย ๆ พอ 😄`;
+  }
+
+  return `${title} ถ้ากิน ${food} ไปแล้ว
+มื้อต่อไปบาลานซ์ง่าย ๆ ก็พอ 😄
+
+เลือกทางนี้ได้:
+- เพิ่มโปรตีนดี ๆ
+- ผัก/ซุปติดมา
+- ของทอดกับน้ำหวานพักก่อนหนึ่งรอบ
+
+วันนี้ยังพอคุมเกมได้อยู่`;
+};
+
+const buildFoodAdviceReply = ({ title, text, summary }) => {
+  const food = getFoodProfile(text).name;
+  const profile = getFoodProfile(food);
+  const budget = getDayBudget(summary);
+
+  if (profile.isBigSocialMeal) {
+    return `${title} ได้ แต่แปะให้ผ่านแบบมีสติ 👀
+
+${food} มันไม่ได้ผิดนะ
+แต่มันชอบลากยาวโดยไม่รู้ตัว
+
+ทริคแปะ:
+- เริ่มจากโปรตีนก่อน
+- น้ำจิ้มไม่ต้องจุ่มจนว่ายน้ำ
+- น้ำหวานพักไว้ก่อน
+- อิ่มแล้วหยุด ไม่ต้องเกรงใจเตา
+
+${budget.isOver ? "วันนี้เกินเป้าแล้ว เอาแค่พอสนุกพอนะ 😅" : "กินได้ แต่อย่าให้กลายเป็นประชุมยาว 😄"}`;
+  }
+
+  if (profile.isFriedHeavy || profile.isSweet) {
+    return `${title} ได้ แต่แปะให้ผ่านแบบมีเงื่อนไขนะ 👀
+
+${food} ตัวนี้แคลขึ้นไว
+ถ้าจะกิน เอาไซซ์พอดี ๆ ไม่ต้องอัปเพิ่ม
+
+${budget.isOver ? "วันนี้เกินเป้าแล้วด้วย เอาแค่พอหายอยากพอนะ 😅" : `วันนี้ยังเหลือประมาณ ${budget.left} kcal อยู่ ยังพอจัดได้`}
+
+แปะว่าได้ แต่อย่าให้มันลากยาว 😄`;
+  }
+
+  if (profile.isSoupLight) {
+    return `${title} ดีเลย อันนี้แปะเชียร์ 🍲
+
+${food} ถือว่าโอเคนะ
+มีน้ำ ๆ ไม่หนักเกิน คุมง่ายกว่าเมนูมัน ๆ
+
+ถ้าเลือกได้:
+- เพิ่มไข่ / ไก่ / ทะเล
+- น้ำจิ้มแยกหรือน้อยหน่อย
+- ไม่ต้องเบิ้ลเส้นเยอะ
+
+${budget.isOver ? "วันนี้แคลเกินแล้ว เอาชามพอดี ๆ พอนะ 😅" : "แปะให้ผ่าน 😄"}`;
+  }
+
+  return `${title} กินได้จ้า แต่อยู่ที่ปริมาณนิดนึง 👀
+
+${food} ถ้าไม่มันจัด ไม่หวานจัด ก็โอเคอยู่
+ลองให้มีโปรตีน + ผักติดมาด้วยจะสวยกว่า
+
+${budget.isOver ? "วันนี้เกินเป้าแล้ว เอาเบา ๆ พอนะ 😅" : `วันนี้ยังเหลือประมาณ ${budget.left} kcal แปะว่าเลือกดี ๆ ได้อยู่ 😄`}`;
+};
+
 const isExactSummaryText = (text) => exactTexts([
   "สรุปวันนี้",
   "วันนี้กินไปเท่าไหร่",
@@ -154,6 +380,42 @@ const isOnboardingCommandText = (text) => exactTexts([
   "ลบมื้อล่าสุด",
   "วันนี้กินอะไรไปบ้าง",
 ], text);
+
+
+const normalizePaeMention = (text) => String(text || "")
+  .trim()
+  .toLowerCase()
+  .replace(/[\u200B-\u200D\uFEFF]/g, "")
+  .replace(/[\sๆ~!！?？.。…。、,，:：;；\-_=+*()\[\]{}"'“”‘’`]+/g, "")
+  .replace(/(ครับ|คับ|ค้าบ|ค๊าบ|ฮะ|ค่ะ|คะ|จ้า|จ๊ะ|จ๋า|นะ|น้า|หน่อย)$/g, "");
+
+const isPaeMentionOnlyText = (text) => {
+  const value = normalizePaeMention(text);
+
+  if (!value) return false;
+
+  const mentionWords = [
+    "แปะ",
+    "อาแปะ",
+    "เฮียแปะ",
+    "แปะแคล",
+    "แปะcal",
+    "paecal",
+    "pae",
+  ];
+
+  return mentionWords.includes(value);
+};
+
+const getPaeMentionReply = (title) => {
+  const options = [
+    `${title} แปะอยู่นี่จ้า 😄\n\nมีอะไรให้แปะดู ส่งมาได้เลย`,
+    `ว่าไง ${title} 👀\n\nจะถามเรื่องกิน หรือส่งรูปอาหารมาก็ได้ เดี๋ยวแปะดูให้`,
+    `${title} เรียกแปะเหรอ 😄\n\nมีเมนูไหนลังเล ส่งมาเลย`,
+  ];
+
+  return options[Math.floor(Math.random() * options.length)];
+};
 
 const NAME_PATTERN = /^(?:เปลี่ยนชื่อเป็น|ฉันชื่อ|ผมชื่อ|ชื่อ|เรียกฉันว่า|เรียกผมว่า)\s*(.+)$/i;
 
@@ -498,6 +760,11 @@ export const handleTextMessage = async (event) => {
     return;
   }
 
+  if (isPaeMentionOnlyText(text)) {
+    await replyText(replyToken, getPaeMentionReply(title));
+    return;
+  }
+
   if (isExactSummaryText(text)) {
     await replySmartSummary({ replyToken, userId, title });
     return;
@@ -529,6 +796,30 @@ export const handleTextMessage = async (event) => {
 
   if (session.step !== "READY") {
     await replyText(replyToken, "แปะขอรู้จักลื้อก่อนน้า\nพิมพ์ชื่อมาก่อนเลยจ้า 😊");
+    return;
+  }
+
+  if (isFoodAdviceText(text)) {
+    const summary = await getDailySummary(userId);
+
+    if (isFoodCompareText(text)) {
+      await replyText(replyToken, buildFoodCompareReply({ title, text, summary }));
+      return;
+    }
+
+    if (isFoodKcalQuestionText(text)) {
+      const foodText = cleanFoodText(text);
+      const foodData = await estimateFoodFromText(foodText);
+      await replyText(replyToken, buildFoodKcalReply({ title, foodData, foodText }));
+      return;
+    }
+
+    if (isNextMealAfterFoodText(text)) {
+      await replyText(replyToken, buildNextMealAfterFoodReply({ title, text, summary }));
+      return;
+    }
+
+    await replyText(replyToken, buildFoodAdviceReply({ title, text, summary }));
     return;
   }
 
