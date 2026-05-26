@@ -1,5 +1,6 @@
 import { pushTexts, replyText, getLineImageBase64 } from "../services/line.js";
 import { postToSheet } from "../services/sheet.js";
+import { refreshSummaryCacheFromSheetResponse } from "../utils/summaryCache.js";
 import { estimateFoodFromImage } from "../services/openai.js";
 import { DEFAULT_CALORIE_TARGET, safeNumber } from "../utils/helpers.js";
 import { getDisplayTitle, syncSessionFromProfile } from "../utils/profile.js";
@@ -82,7 +83,8 @@ export const handleImageMessage = async (event) => {
     requestId: event.message?.id ? `${event.message.id}:image-log` : undefined,
     itemsJson: "[]",
   });
-  logTiming("image", "sheetLogFood", logFoodT);
+  refreshSummaryCacheFromSheetResponse(userId, sheetData);
+  logTiming("image", "sheetLogFood", logFoodT, "summaryCache=updated");
 
   const buildT = nowMs();
   const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;

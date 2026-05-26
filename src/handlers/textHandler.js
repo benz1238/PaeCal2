@@ -1,5 +1,11 @@
 import { pushDailyRecapCardWithBubbles, pushTexts, replyDailyRecapCardWithBubbles, replyText, replyTexts } from "../services/line.js";
 import { postToSheet } from "../services/sheet.js";
+import {
+  getCachedSummary,
+  invalidateSummaryCache,
+  refreshSummaryCacheFromSheetResponse,
+  setCachedSummary,
+} from "../utils/summaryCache.js";
 import { estimateFoodFromText, parseUserIntent, reviseFoodEstimateFromCorrection } from "../services/openai.js";
 import {
   calculateTDEE,
@@ -66,14 +72,39 @@ const getMessageRequestId = (event, suffix = "text") => {
   return `${messageId}:${suffix}`;
 };
 
-const saveProfile = async (payload) => postToSheet({ action: "SAVE_PROFILE", ...payload });
+const saveProfile = async (payload) => {
+  const result = await postToSheet({ action: "SAVE_PROFILE", ...payload });
+  invalidateSummaryCache(payload?.userId);
+  return result;
+};
+
 const updateSession = async (payload) => postToSheet({ action: "UPDATE_SESSION", ...payload });
-const logFood = async (payload) => postToSheet({ action: "LOG_FOOD", ...payload });
-const batchLogFood = async (payload) => postToSheet({ action: "BATCH_LOG_FOOD", ...payload });
+
+const logFood = async (payload) => {
+  const result = await postToSheet({ action: "LOG_FOOD", ...payload });
+  refreshSummaryCacheFromSheetResponse(payload?.userId, result);
+  return result;
+};
+
+const batchLogFood = async (payload) => {
+  const result = await postToSheet({ action: "BATCH_LOG_FOOD", ...payload });
+  refreshSummaryCacheFromSheetResponse(payload?.userId, result);
+  return result;
+};
+
 const getDailySummary = async (userId) => {
   const t = nowMs();
+  const cached = getCachedSummary(userId);
+
+  if (cached) {
+    logTiming("text", "getDailySummaryMemoryHit", t, `meals=${cached?.mealCount ?? "?"}`);
+    return cached;
+  }
+
   try {
-    return await postToSheet({ action: "GET_DAILY_SUMMARY", userId });
+    const result = await postToSheet({ action: "GET_DAILY_SUMMARY", userId });
+    setCachedSummary(userId, result);
+    return result;
   } finally {
     logTiming("text", "getDailySummary", t);
   }
@@ -81,16 +112,36 @@ const getDailySummary = async (userId) => {
 
 const getDailySummaryFresh = async (userId) => {
   const t = nowMs();
+  invalidateSummaryCache(userId);
+
   try {
-    return await postToSheet({ action: "GET_DAILY_SUMMARY", userId, forceRebuild: true });
+    const result = await postToSheet({ action: "GET_DAILY_SUMMARY", userId, forceRebuild: true });
+    setCachedSummary(userId, result);
+    return result;
   } finally {
     logTiming("text", "getDailySummaryFresh", t);
   }
 };
+
 const getLastMeal = async (userId) => postToSheet({ action: "GET_LAST_MEAL", userId });
-const updateLastMeal = async (payload) => retryOnce(() => postToSheet({ action: "UPDATE_LAST_MEAL", ...payload }));
-const updateMealByRequestId = async (payload) => retryOnce(() => postToSheet({ action: "UPDATE_MEAL_BY_REQUEST_ID", ...payload }));
-const deleteLastMeal = async (userId) => retryOnce(() => postToSheet({ action: "DELETE_LAST_MEAL", userId }));
+
+const updateLastMeal = async (payload) => retryOnce(async () => {
+  const result = await postToSheet({ action: "UPDATE_LAST_MEAL", ...payload });
+  refreshSummaryCacheFromSheetResponse(payload?.userId, result);
+  return result;
+});
+
+const updateMealByRequestId = async (payload) => retryOnce(async () => {
+  const result = await postToSheet({ action: "UPDATE_MEAL_BY_REQUEST_ID", ...payload });
+  refreshSummaryCacheFromSheetResponse(payload?.userId, result);
+  return result;
+});
+
+const deleteLastMeal = async (userId) => retryOnce(async () => {
+  const result = await postToSheet({ action: "DELETE_LAST_MEAL", userId });
+  refreshSummaryCacheFromSheetResponse(userId, result);
+  return result;
+});
 
 const exactTexts = (list, text) => list.includes(String(text || "").trim());
 
