@@ -141,8 +141,7 @@ const foodLogCommentLine = ({ decision }) => {
     line = "โปรตีนโอเคอยู่ แปะให้ผ่าน 💪";
   }
 
-  return [line, memoryLine].filter(Boolean).join("
-");
+  return [line, memoryLine].filter(Boolean).join("\n");
 };
 
 export const renderFoodLogReply = ({ title, meal, summary, decision }) => {
@@ -637,8 +636,7 @@ export const renderFoodLogMessages = ({ title, meal, summary, decision }) => {
   const includesSolid = hasSolidFoodInName(signals.menuName) || (!includesSugarType);
   const sugarLine = includesSugarType ? drinkSugarLine({ menuName: signals.menuName, kcal: signals.kcal, carb: signals.carb, allowAnyDrink: true }) : "";
   const macroLine = includesSolid ? nutritionLine({ carb: signals.carb, protein: signals.protein, fat: signals.fat }) : "";
-  const detailLines = [macroLine, sugarLine].filter(Boolean).join("
-");
+  const detailLines = [macroLine, sugarLine].filter(Boolean).join("\n");
 
   const firstMessage = `${reactionLineForFood({ title, decision })}
 
