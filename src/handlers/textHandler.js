@@ -66,14 +66,43 @@ const normalizeText = (text) => String(text || "").trim().toLowerCase();
 
 const EATING_GUILT_PATTERN = /(วันนี้)?\s*(กินเละ|กินพัง|หลุดหนัก|กินเยอะมาก|กินเยอะไป|กินอ้วนแน่|อ้วนแน่|วันนี้อ้วนแน่|พังแน่|แย่แล้ว.*กิน|กินจนรู้สึกผิด)/i;
 
-const isEatingGuiltText = (text) => EATING_GUILT_PATTERN.test(String(text || "").trim());
+const normalizeLooseText = (text) => String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
 
-const buildEatingGuiltReply = () => {
+const isEatingGuiltText = (text) => {
+  const value = normalizeLooseText(text);
+
+  if (!value) return false;
+
+  if (EATING_GUILT_PATTERN.test(value)) return true;
+
+  if (/(กินไป)?เยอะมาก+|กินอย่างหนัก|กินหนักมาก|กินหนักไป|กินไปอย่างหนัก|จุกมาก|กินจุก|อิ่มจุก|แน่นมาก|หลุดยับ|หลุดแรง|กินเกิน|บวมแน่|น้ำหนักขึ้น|ขึ้น\s*\d+\s*(โล|กก|kg)/i.test(value)) {
+    return true;
+  }
+
+  const hasEatingSignal = /(กิน|จุก|แน่น|อิ่ม|หลุด|เละ|พัง|น้ำหนัก)/i.test(value);
+  const hasWorrySignal = /(เยอะ|หนัก|เกิน|อ้วน|พัง|แย่|ขึ้น|บวม|รู้สึกผิด)/i.test(value);
+
+  return hasEatingSignal && hasWorrySignal;
+};
+
+const buildEatingGuiltReply = (text = "") => {
+  const value = normalizeLooseText(text);
+
+  if (/(น้ำหนักขึ้น|ขึ้น\s*\d+\s*(โล|กก|kg)|อ้วนแน่|วันนี้อ้วนแน่|บวมแน่)/i.test(value)) {
+    const weightReplies = [
+      "ใจเย็นก่อนน้า 😅\nตัวเลขขึ้นไม่กี่วันยังไม่ใช่เกมจบ\nเดี๋ยวมื้อต่อไปคุมเบา ๆ แปะว่าเอากลับมาได้",
+      "อย่าเพิ่งตกใจกับเลขบนตาชั่งเลย 👀\nวีคนึงขึ้นลงได้หลายอย่างอยู่\nค่อยดึงของหวานทอดลงนิดนึง เดี๋ยวดีขึ้นเอง",
+      "แปะขอเบรกคำว่าอ้วนก่อนนะ 😅\nช่วงนี้อาจกินหนักไปหน่อย แต่ยังทันอยู่\nมื้อต่อไปเอาเบา ๆ แล้วค่อยกลับมาใหม่"
+    ];
+
+    return weightReplies[Math.floor(Math.random() * weightReplies.length)];
+  }
+
   const replies = [
-    "เอ้า ใจเย็นก่อน 😂\nมื้อเดียวไม่ทำให้ใครพังหรอก\nวันนี้แค่หลุดนิดหน่อย เดี๋ยวมื้อต่อไปเบาลงก็พอ 😄🍃",
-    "ไม่ต้องตีตัวเองก่อนน้า 👀\nกินเยอะวันนึงไม่ได้แปลว่าอ้วนทันที\nแปะว่าเอากลับมาได้ มื้อต่อไปคุมเกมเบา ๆ พอ 😄",
-    "โอเค วันนี้อาจจะจัดเต็มไปหน่อย 😂\nแต่ยังไม่ต้องแพนิค\nพักของทอด/หวานรอบถัดไปนิดนึง เดี๋ยวบาลานซ์กลับได้",
-    "แปะขอเบรกคำว่าอ้วนก่อนนะ 😅\nวันนี้กินเยอะได้ แต่ไม่ต้องด่าตัวเอง\nมื้อต่อไปเอาเบา ๆ หน่อย แค่นี้ยังทัน"
+    "เอ้า ใจเย็นก่อน 😂\nมื้อเดียวไม่ทำให้พังหรอก\nมื้อต่อไปเบาลงหน่อยก็กลับมาได้ 😄🍃",
+    "ไม่ต้องตีตัวเองก่อนน้า 👀\nกินเยอะวันนึงไม่ได้แปลว่าอ้วนทันที\nเดี๋ยวมื้อต่อไปคุมเกมเบา ๆ พอ",
+    "โอเค วันนี้อาจจัดเต็มไปหน่อย 😂\nแต่ยังไม่ต้องแพนิคนะ\nพักของทอดหวานรอบถัดไปนิดนึงก็โอเคแล้ว",
+    "จุกได้ หลุดได้ เป็นเรื่องปกติ 😅\nไม่ต้องด่าตัวเองแรงขนาดนั้น\nแปะว่าแค่นี้ยังทัน"
   ];
 
   return replies[Math.floor(Math.random() * replies.length)];
@@ -747,7 +776,7 @@ export const handleTextMessage = async (event) => {
 
   if (isEatingGuiltText(text)) {
     console.log(`[PaeCalTiming] text:eatingGuiltLocal 0ms`);
-    await replyText(replyToken, buildEatingGuiltReply());
+    await replyText(replyToken, buildEatingGuiltReply(text));
     return;
   }
 

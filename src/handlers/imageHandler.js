@@ -216,7 +216,7 @@ export const handleImageMessage = async (event) => {
 
   const ackPromise = replyText(
     event.replyToken,
-    "แปะกำลังดูรูปให้นะ 👀\nขอซูมแป๊บ เดี๋ยวบอกให้ว่าเมนูนี้ประมาณเท่าไหร่ 🍽️"
+    "แปะกำลังดูรูปให้นะ 👀 ขอซูมแป๊บ"
   ).then(() => {
     logTiming("image", "replyAck", ackT);
   });
