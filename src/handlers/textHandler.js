@@ -1,4 +1,4 @@
-import { replyText, replyTexts } from "../services/line.js";
+import { replyDailyRecapCardWithBubbles, replyText, replyTexts } from "../services/line.js";
 import { postToSheet } from "../services/sheet.js";
 import { estimateFoodFromText, parseUserIntent } from "../services/openai.js";
 import {
@@ -208,6 +208,10 @@ const getLocalIntent = (text) => {
     return { intent: "log_food_text", confidence: 0.88, action: "log_food", multiplier: 0, foodText: stripEatLogPrefix(text), kcal: null, source: "local" };
   }
 
+  if (isFoodListText(text)) {
+    return { intent: "log_food_text", confidence: 0.96, action: "log_food", multiplier: 0, foodText: String(text || "").trim(), kcal: null, source: "local_food_list" };
+  }
+
   // Food-only short texts such as "ชานม", "ชาไทยหวานน้อย", "ข้าวมันไก่"
   // should be logged as food directly. Do not send them to the AI intent parser,
   // because short noun-only inputs can be misread as daily_summary/unknown.
@@ -232,6 +236,7 @@ const FOOD_ADVICE_KEYWORDS = [
   "ข้าว", "ก๋วยเตี๋ยว", "สุกี้", "เกาเหลา", "ต้ม", "แกง", "ยำ", "สลัด", "ซุป", "โจ๊ก", "ข้าวต้ม",
   "ไก่", "หมู", "ปลา", "กุ้ง", "ไข่", "เต้าหู้", "เนื้อ", "อกไก่", "ทะเล",
   "ทอด", "ย่าง", "นึ่ง", "ลวก", "ผัด", "มัน", "หวาน", "น้ำหวาน", "หวานเย็น", "น้ำแดง", "น้ำเขียว",
+  "ชามะนาว", "มะนาว", "มะม่วง", "ส้มโอ", "ส้ม", "แตงโม", "ฝรั่ง", "แอปเปิ้ล", "กล้วย", "องุ่น", "ผลไม้",
   "ชานม", "ชาไทย", "ชาเขียว", "มัทฉะ", "กาแฟ", "โกโก้", "นม", "ลาเต้", "คาปูชิโน", "อเมริกาโน่",
   "โค้ก", "โค๊ก", "โคคา", "โคล่า", "coke", "cola", "pepsi", "เป๊ปซี่", "น้ำอัดลม", "สไปรท์", "แฟนต้า",
   "ขนม", "เค้ก", "คุกกี้", "เบเกอรี่", "โยเกิร์ต", "หมูกระทะ", "ชาบู", "พิซซ่า", "เบอร์เกอร์",
@@ -247,6 +252,29 @@ const NOUN_ONLY_FOOD_BLOCKLIST = [
   "สรุป", "สรุปวันนี้", "แคลวันนี้", "เหลือกี่แคล", "กินไปเท่าไหร่", "กินไปเท่าไร",
   "กินไรดี", "กินอะไรดี", "หิว", "ตั้งเป้า", "เปลี่ยนเป้า", "แก้มื้อล่าสุด", "ลบมื้อล่าสุด"
 ];
+
+
+const FOOD_LIST_SEPARATOR_PATTERN = /(\n|\/|,|,|และ|กับ)/i;
+
+const getFoodListParts = (text) => String(text || "")
+  .split(/\n|\/|,|,|และ|กับ/i)
+  .map((part) => cleanFoodText(part).trim())
+  .filter(Boolean);
+
+const isFoodListText = (text) => {
+  const value = String(text || "").trim();
+
+  if (!value || value.length > 120) return false;
+  if (!FOOD_LIST_SEPARATOR_PATTERN.test(value)) return false;
+  if (/[?？]/.test(value)) return false;
+  if (isFoodAdviceText(value) || isFoodKcalQuestionText(value) || isFoodCompareText(value) || isNextMealAfterFoodText(value)) return false;
+
+  const parts = getFoodListParts(value);
+  if (parts.length < 2) return false;
+
+  const foodParts = parts.filter((part) => hasFoodKeyword(part));
+  return foodParts.length >= 2;
+};
 
 const isNounOnlyFoodText = (text) => {
   const value = normalizeText(text);
@@ -839,10 +867,58 @@ ${total} / ${target} kcal
 (${progress})`;
 };
 
+const buildDailyRecapCard = ({ decision, summary = {}, title }) => {
+  const day = decision?.day || {};
+  const topMeal = decision?.problemMeal || (Array.isArray(day.meals) ? day.meals[0] : null);
+  const eaten = safeNumber(day.eaten ?? summary.todayCalories ?? summary.totalToday, 0);
+  const target = safeNumber(day.target ?? summary.calorieTarget, DEFAULT_CALORIE_TARGET);
+  const over = Math.max(eaten - target, 0);
+  const left = Math.max(target - eaten, 0);
+
+  let statusText = `วันนี้ยังเหลือประมาณ ${Math.round(left)} kcal อยู่ 😄`;
+  let statusColor = "#047857";
+
+  if (eaten <= 0) {
+    statusText = "วันนี้ยังไม่มีมื้อที่แปะบันทึกไว้นะ";
+    statusColor = "#6B7280";
+  } else if (over > 0) {
+    statusText = `เกินเป้าไปประมาณ ${Math.round(over)} kcal แล้วนะ 👀`;
+    statusColor = "#DC2626";
+  } else if (left <= 250) {
+    statusText = `เหลือประมาณ ${Math.round(left)} kcal ใกล้เต็มแล้วนะ 😅`;
+    statusColor = "#D97706";
+  }
+
+  const topMealName = String(topMeal?.menuName || topMeal?.name || "").trim();
+  const topMealKcal = safeNumber(topMeal?.kcal || topMeal?.totalKcal, 0);
+
+  return {
+    statusText,
+    statusColor,
+    kcalText: `${Math.round(eaten)} / ${Math.round(target)} kcal`,
+    kcalColor: over > 0 ? "#DC2626" : left <= 250 ? "#D97706" : "#111827",
+    carbText: `${Math.round(safeNumber(day.carb ?? summary.totalCarb, 0))} g`,
+    carbColor: safeNumber(day.carb ?? summary.totalCarb, 0) >= 220 ? "#DC2626" : "#111827",
+    proteinText: `${Math.round(safeNumber(day.protein ?? summary.totalProtein, 0))} g`,
+    proteinColor: safeNumber(day.protein ?? summary.totalProtein, 0) >= 70 ? "#047857" : "#D97706",
+    fatText: `${Math.round(safeNumber(day.fat ?? summary.totalFat, 0))} g`,
+    fatColor: safeNumber(day.fat ?? summary.totalFat, 0) >= 80 ? "#DC2626" : "#111827",
+    mealCountText: `${Math.round(safeNumber(day.mealCount ?? summary.mealCount, 0))} มื้อ`,
+    goalText: String(summary.goal || summary.healthGoal || summary.userGoal || "ยังไม่ได้ตั้งเป้าสุขภาพ").trim() || "ยังไม่ได้ตั้งเป้าสุขภาพ",
+    topMealText: topMealName ? `${topMealName}${topMealKcal ? ` · ${Math.round(topMealKcal)} kcal` : ""}` : "ยังไม่มีมื้อเด่น",
+  };
+};
+
 const replySmartSummary = async ({ replyToken, userId, title }) => {
   const summary = await getDailySummary(userId);
   const decision = decideDailyRecap({ summary });
-  await replyTexts(replyToken, renderDailyRecapMessages({ title, decision }));
+  const messages = renderDailyRecapMessages({ title, decision });
+  const card = buildDailyRecapCard({ decision, summary, title });
+  await replyDailyRecapCardWithBubbles(replyToken, {
+    title,
+    card,
+    bubbles: messages.slice(1),
+  });
 };
 
 const replyEatingConcern = async ({ replyToken, text, reason = "local" }) => {
@@ -1117,7 +1193,7 @@ export const handleTextMessage = async (event) => {
     return;
   }
 
-  if (isNounOnlyFoodText(text)) {
+  if (isNounOnlyFoodText(text) || isFoodListText(text)) {
     console.log(`[PaeCalTiming] text:foodNounLocal 0ms text=${text}`);
     const foodText = String(text || "").trim();
     const foodData = await estimateFoodFromText(foodText);

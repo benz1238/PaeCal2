@@ -4,6 +4,7 @@ import { refreshSummaryCacheFromSheetResponse } from "../utils/summaryCache.js";
 import { getCachedSession, mergeCachedSession, setCachedSession } from "../utils/sessionCache.js";
 import { estimateFoodFromImage } from "../services/openai.js";
 import { DEFAULT_CALORIE_TARGET, safeNumber } from "../utils/helpers.js";
+import { buildProgressBar } from "../utils/advice.js";
 import { renderNoFoodDetectedReply } from "../utils/personality.js";
 
 const nowMs = () => Date.now();
@@ -22,7 +23,7 @@ const resolveFastTitle = (session) => {
 const normalizeText = (value) => String(value || "").trim();
 
 const DRINK_IMAGE_PATTERN = /(โค้ก|โค๊ก|โคคา|โคล่า|coke|cola|pepsi|เป๊ปซี่|น้ำอัดลม|สไปรท์|แฟนต้า|ชานม|ชาไทย|ชาเขียว|มัทฉะ|กาแฟ|โกโก้|นม|น้ำหวาน|หวานเย็น|น้ำแดง|น้ำเขียว|เครื่องดื่ม|แก้วน้ำ|กระป๋อง|ขวด)/i;
-const NON_DRINK_MAIN_SUBJECT_PATTERN = /(แมว|หมา|สุนัข|ไก่|นก|คน|หน้า|selfie|เซลฟี่|เอกสาร|จอคอม|หน้าจอ|รถ|วิว)/i;
+const NON_DRINK_MAIN_SUBJECT_PATTERN = /(แมว|หมา|สุนัข|ไก่|นก|เอกสาร|จอคอม|หน้าจอ|รถ|วิว)/i;
 
 const inferDrinkFromImage = ({ imageSubject, imageCaption, gptData }) => {
   const subject = normalizeText(imageSubject);
@@ -190,6 +191,46 @@ const inferPortionInfo = ({ menuName, kcal, portionLevel, portionNote }) => {
   };
 };
 
+
+const isDrinkMenu = (menuName = "") => /(ชานม|ชาไทย|ชาเขียว|โกโก้|กาแฟ|ลาเต้|นม|โค้ก|โคก|เป๊ปซี่|น้ำอัดลม|น้ำหวาน|หวานเย็น|น้ำผลไม้|สมูทตี้|ชา|เครื่องดื่ม|coke|cola|pepsi|coffee|tea|milk|cocoa|latte|smoothie|juice)/i.test(String(menuName || ""));
+
+const buildDrinkSugarLine = ({ menuName = "", kcal = 0, carb = 0 } = {}) => {
+  if (!isDrinkMenu(menuName)) return "";
+
+  const kcalValue = safeNumber(kcal, 0);
+  const carbValue = safeNumber(carb, 0);
+
+  if (/หวานน้อย|ไม่หวาน|0\s*%|zero|ซีโร่|sugar\s*free/i.test(menuName)) {
+    return "🍬 น้ำตาล: น่าจะเบากว่าปกติ แต่อย่าเพิ่งไว้ใจหมดนะ 👀";
+  }
+
+  if (kcalValue >= 250 || carbValue >= 45) {
+    return "🍬 น้ำตาล: น่าจะมาแน่นพอตัวเลยนะ 555+";
+  }
+
+  if (kcalValue >= 120 || carbValue >= 20) {
+    return "🍬 น้ำตาล: มีมาพอให้แปะเห็นอยู่นะ 👀";
+  }
+
+  return "🍬 น้ำตาล: ดูไม่แรงมาก แต่ก็แปะไว้ก่อนนะ";
+};
+
+const buildImageDailyProgressMessage = ({ summary = {} }) => {
+  const total = safeNumber(summary.todayCalories ?? summary.totalToday, 0);
+  const target = safeNumber(summary.calorieTarget, DEFAULT_CALORIE_TARGET);
+  const over = Math.max(total - target, 0);
+  const left = Math.max(target - total, 0);
+  const progress = buildProgressBar(total, target);
+  const status = over > 0
+    ? `🔴 เกินเป้าไปประมาณ ${Math.round(over)} kcal`
+    : `🟢 เหลือประมาณ ${Math.round(left)} kcal`;
+
+  return `📊 วันนี้กินไปแล้ว
+${Math.round(total)} / ${Math.round(target)} kcal
+${status}
+(${progress})`;
+};
+
 const buildImageInsight = ({ meal, summary, goalText }) => {
   const fat = safeNumber(meal?.fat, 0);
   const protein = safeNumber(meal?.protein, 0);
@@ -232,7 +273,8 @@ const buildImageInsight = ({ meal, summary, goalText }) => {
 };
 
 const buildImageFoodMessages = ({ meal, summary, title, session }) => {
-  const firstMessage = `${meal.reaction} ${title} แปะดูให้แล้ว\n\n🍽️ ${meal.menuName}\n🔥 ~${meal.kcal} kcal\n📏 ปริมาณ: ${meal.portionLabel}`;
+  const sugarLine = buildDrinkSugarLine({ menuName: meal.menuName, kcal: meal.kcal, carb: meal.carb });
+  const firstMessage = `${meal.reaction} ${title} แปะดูให้แล้ว\n\n🍽️ เมนู\n${meal.menuName}\n🔥 ~${meal.kcal} kcal${sugarLine ? `\n${sugarLine}` : ""}\n📏 ปริมาณ: ${meal.portionLabel}`;
 
   const { macroLine, goalLine } = buildImageInsight({
     meal,
@@ -250,74 +292,45 @@ const buildImageFoodMessages = ({ meal, summary, title, session }) => {
     secondLines.push("👀 แปะประเมินจากรูปคร่าว ๆ นะ");
   }
 
-  return [firstMessage, secondLines.join("\n")];
+  return [firstMessage, buildImageDailyProgressMessage({ summary }), secondLines.join("\n")];
 };
 
-export const handleImageMessage = async (event) => {
-  const totalT = nowMs();
-  const userId = event.source.userId;
-  console.log(`[PaeCalTiming] image:start user=${userId || "unknown"} message=${event.message?.id || "unknown"}`);
+const IMAGE_BATCH_WINDOW_MS = 900;
+const imageBatchByUser = new Map();
 
+const getSessionForImage = async (userId, totalT) => {
   const sessionT = nowMs();
   const cachedSession = getCachedSession(userId);
 
-  const sessionPromise = cachedSession
-    ? Promise.resolve(cachedSession).then((session) => {
-      logTiming("image", "getSessionMemoryHit", sessionT);
-      return session;
-    })
-    : postToSheet({ action: "GET_SESSION", userId }).then((session) => {
-      const normalized = {
-        step: session?.step || "READY",
-        data: session?.data || {},
-        ...session,
-      };
-      setCachedSession(userId, normalized);
-      logTiming("image", "getSession", sessionT);
-      return normalized;
-    });
-
-  const session = await sessionPromise;
-
-  if (session.step !== "READY") {
-    const pushT = nowMs();
-    await pushTexts(userId, [
-      ["แปะขอรู้จักลื้อก่อนน้า", "พิมพ์ชื่อมาก่อนเลยจ้า 😊"].join("\n"),
-    ]);
-    logTiming("image", "pushNeedProfile", pushT);
-    logTiming("image", "total", totalT);
-    return;
+  if (cachedSession) {
+    logTiming("image", "getSessionMemoryHit", sessionT);
+    return cachedSession;
   }
 
-  const ackT = nowMs();
+  const session = await postToSheet({ action: "GET_SESSION", userId });
+  const normalized = {
+    step: session?.step || "READY",
+    data: session?.data || {},
+    ...session,
+  };
+  setCachedSession(userId, normalized);
+  logTiming("image", "getSession", sessionT);
+  return normalized;
+};
+
+const analyzeImageEvent = async (event) => {
   const downloadT = nowMs();
+  const base64Image = await getLineImageBase64(event.message.id);
+  logTiming("image", "downloadLineImage", downloadT, `message=${event.message.id} base64Len=${base64Image.length}`);
 
-  const ackPromise = replyText(
-    event.replyToken,
-    "ขอแปะดูแป๊ป 👀"
-  ).then(() => {
-    logTiming("image", "replyAck", ackT);
-  });
-
-  const base64Promise = getLineImageBase64(event.message.id).then((base64Image) => {
-    logTiming("image", "downloadLineImage", downloadT, `base64Len=${base64Image.length}`);
-    return base64Image;
-  });
-
-  const aiPromise = base64Promise.then(async (base64Image) => {
-    const aiT = nowMs();
-    const gptData = await estimateFoodFromImage(base64Image);
-    logTiming(
-      "image",
-      "openaiVision",
-      aiT,
-      `menu=${gptData?.menuName || "unknown"} kcal=${gptData?.kcal || 0} subject=${gptData?.imageSubject || ""}`
-    );
-    return gptData;
-  });
-
-  const [gptData] = await Promise.all([aiPromise, ackPromise])
-    .then(([resolvedGptData]) => [resolvedGptData]);
+  const aiT = nowMs();
+  const gptData = await estimateFoodFromImage(base64Image);
+  logTiming(
+    "image",
+    "openaiVision",
+    aiT,
+    `message=${event.message.id} menu=${gptData?.menuName || "unknown"} kcal=${gptData?.kcal || 0} subject=${gptData?.imageSubject || ""}`
+  );
 
   const imageSubject = normalizeText(gptData?.imageSubject || gptData?.subject || gptData?.detectedObject || "");
   const imageCaption = normalizeText(gptData?.imageCaption || gptData?.caption || gptData?.sceneDescription || "");
@@ -329,18 +342,18 @@ export const handleImageMessage = async (event) => {
   const protein = safeNumber(analyzedData?.protein, 0);
   const fat = safeNumber(analyzedData?.fat, 0);
   const menuName = normalizeText(analyzedData?.menuName) || "อาหาร";
-
   const isFoodImage = analyzedData?.isFood !== false;
 
   if (!isFoodImage || !menuName || kcal <= 0) {
-    const pushNoFoodT = nowMs();
-    await pushTexts(userId, [renderNoFoodDetectedReply({ imageSubject, imageCaption })]);
-    logTiming("image", "pushNoFood", pushNoFoodT, `subject=${imageSubject || "unknown"}`);
-    logTiming("image", "total", totalT);
-    return;
+    return {
+      event,
+      isFood: false,
+      imageSubject,
+      imageCaption,
+      analyzedData,
+    };
   }
 
-  const portionT = nowMs();
   const portion = inferPortionInfo({
     menuName,
     kcal,
@@ -348,61 +361,167 @@ export const handleImageMessage = async (event) => {
     portionNote: analyzedData?.portionNote,
   });
 
-  const imageItems = [
-    {
-      name: menuName,
-      kcal,
-      carb,
-      protein,
-      fat,
-      portionLevel: portion.level,
-      portionLabel: portion.label,
-      portionNote: portion.note,
-      source: "image_estimate",
-    },
-  ];
-  logTiming("image", "buildPortion", portionT, `portion=${portion.level}`);
+  return {
+    event,
+    isFood: true,
+    imageSubject,
+    imageCaption,
+    analyzedData,
+    menuName,
+    kcal,
+    carb,
+    protein,
+    fat,
+    portion,
+    confidence: normalizeText(analyzedData?.confidence || analyzedData?.estimateConfidence || ""),
+  };
+};
 
+const buildMealFromAnalyzedImages = (foodResults) => {
+  const count = foodResults.length;
+  const kcal = foodResults.reduce((sum, item) => sum + safeNumber(item.kcal, 0), 0);
+  const carb = foodResults.reduce((sum, item) => sum + safeNumber(item.carb, 0), 0);
+  const protein = foodResults.reduce((sum, item) => sum + safeNumber(item.protein, 0), 0);
+  const fat = foodResults.reduce((sum, item) => sum + safeNumber(item.fat, 0), 0);
+  const menuNames = foodResults.map((item) => item.menuName).filter(Boolean);
+  const menuName = count === 1 ? menuNames[0] : menuNames.join(" + ");
+
+  const portion = count === 1
+    ? foodResults[0].portion
+    : inferPortionInfo({
+      menuName,
+      kcal,
+      portionLevel: kcal > 700 ? "heavy" : "normal",
+      portionNote: `รอบนี้แปะรวมจาก ${count} รูปให้นะ 👀`,
+    });
+
+  const imageItems = foodResults.map((item) => ({
+    name: item.menuName,
+    kcal: item.kcal,
+    carb: item.carb,
+    protein: item.protein,
+    fat: item.fat,
+    portionLevel: item.portion?.level || "normal",
+    portionLabel: item.portion?.label || "พอดี",
+    portionNote: item.portion?.note || "แปะประเมินจากรูปคร่าว ๆ นะ",
+    source: "image_estimate",
+    messageId: item.event?.message?.id || "",
+  }));
+
+  return {
+    menuName,
+    kcal,
+    carb,
+    protein,
+    fat,
+    imageItems,
+    portion,
+    confidence: foodResults.some((item) => item.confidence === "low") ? "low" : "medium",
+  };
+};
+
+const processImageBatch = async ({ userId, events }) => {
+  const totalT = nowMs();
+  const firstEvent = events[0];
+  console.log(`[PaeCalTiming] imageBatch:start user=${userId || "unknown"} count=${events.length}`);
+
+  const session = await getSessionForImage(userId, totalT);
+
+  if (session.step !== "READY") {
+    const pushT = nowMs();
+    await pushTexts(userId, [
+      ["แปะขอรู้จักลื้อก่อนน้า", "พิมพ์ชื่อมาก่อนเลยจ้า 😊"].join("\n"),
+    ]);
+    logTiming("image", "pushNeedProfile", pushT);
+    logTiming("imageBatch", "total", totalT);
+    return;
+  }
+
+  const ackT = nowMs();
+  await replyText(firstEvent.replyToken, "ขอแปะดูแป๊ป 👀")
+    .then(() => logTiming("image", "replyAck", ackT))
+    .catch((err) => console.warn("[PaeCalTiming] image:replyAck failed", err?.message || err));
+
+  const summaryBeforeT = nowMs();
+  const summaryBeforePromise = postToSheet({ action: "GET_DAILY_SUMMARY", userId })
+    .then((summaryBefore) => {
+      logTiming("image", "getSummaryBeforeLog", summaryBeforeT);
+      return summaryBefore;
+    })
+    .catch((err) => {
+      console.warn("[PaeCalTiming] image:getSummaryBeforeLog failed", err?.message || err);
+      return null;
+    });
+
+  const analyzeT = nowMs();
+  const analyzedResults = await Promise.all(events.map((event) => analyzeImageEvent(event)));
+  logTiming("imageBatch", "analyzeAll", analyzeT, `count=${analyzedResults.length}`);
+
+  const foodResults = analyzedResults.filter((item) => item.isFood);
+
+  if (foodResults.length === 0) {
+    const firstNoFood = analyzedResults[0] || {};
+    const pushNoFoodT = nowMs();
+    await pushTexts(userId, [renderNoFoodDetectedReply({
+      imageSubject: firstNoFood.imageSubject,
+      imageCaption: firstNoFood.imageCaption,
+    })]);
+    logTiming("image", "pushNoFood", pushNoFoodT, `subject=${firstNoFood.imageSubject || "unknown"}`);
+    logTiming("imageBatch", "total", totalT);
+    return;
+  }
+
+  const portionT = nowMs();
+  const mealDraft = buildMealFromAnalyzedImages(foodResults);
+  logTiming("image", "buildPortion", portionT, `portion=${mealDraft.portion?.level || "normal"} imageCount=${foodResults.length}`);
+
+  const summaryBefore = await summaryBeforePromise;
+
+  const firstMessageId = firstEvent.message?.id || "image";
+  const requestId = `${firstMessageId}:image-batch-${events.length}`;
   const logFoodT = nowMs();
   const sheetData = await postToSheet({
     action: "LOG_FOOD",
     userId,
     name: session.data?.name || "",
-    kcal,
-    carb,
-    protein,
-    fat,
-    menuName,
-    requestId: event.message?.id ? `${event.message.id}:image-log` : undefined,
-    itemsJson: JSON.stringify(imageItems),
+    kcal: mealDraft.kcal,
+    carb: mealDraft.carb,
+    protein: mealDraft.protein,
+    fat: mealDraft.fat,
+    menuName: mealDraft.menuName,
+    requestId,
+    itemsJson: JSON.stringify(mealDraft.imageItems),
   });
-  refreshSummaryCacheFromSheetResponse(userId, sheetData);
-  logTiming("image", "sheetLogFood", logFoodT, "summaryCache=updated");
+  logTiming("image", "sheetLogFood", logFoodT, `imageCount=${foodResults.length}`);
 
   const buildT = nowMs();
-  const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
-  const target = sheetData.calorieTarget || DEFAULT_CALORIE_TARGET;
+  const sheetTotal = safeNumber(sheetData.todayCalories ?? sheetData.totalToday, 0);
+  const beforeTotal = safeNumber(summaryBefore?.todayCalories ?? summaryBefore?.totalToday, 0);
+  const total = Math.max(sheetTotal, beforeTotal + mealDraft.kcal, mealDraft.kcal);
+  const target = sheetData.calorieTarget || summaryBefore?.calorieTarget || DEFAULT_CALORIE_TARGET;
   const summary = {
+    ...summaryBefore,
     ...sheetData,
     todayCalories: total,
     totalToday: total,
     calorieTarget: target,
   };
+  refreshSummaryCacheFromSheetResponse(userId, summary);
+  console.log(`[PaeCalTiming] image:summaryResolved before=${beforeTotal} sheet=${sheetTotal} meal=${mealDraft.kcal} total=${total}`);
 
-  const requestId = event.message?.id ? `${event.message.id}:image-log` : "";
   const meal = {
-    menuName,
-    kcal,
-    carb,
-    protein,
-    fat,
+    menuName: mealDraft.menuName,
+    kcal: mealDraft.kcal,
+    carb: mealDraft.carb,
+    protein: mealDraft.protein,
+    fat: mealDraft.fat,
     requestId,
-    items: imageItems,
-    portionLevel: portion.level,
-    portionLabel: portion.label,
-    portionNote: portion.note,
-    reaction: portion.reaction,
-    confidence: normalizeText(analyzedData?.confidence || analyzedData?.estimateConfidence || ""),
+    items: mealDraft.imageItems,
+    portionLevel: mealDraft.portion?.level || "normal",
+    portionLabel: mealDraft.portion?.label || "พอดี",
+    portionNote: mealDraft.portion?.note || "แปะประเมินจากรูปคร่าว ๆ นะ",
+    reaction: mealDraft.portion?.reaction || "😋",
+    confidence: mealDraft.confidence,
   };
   logTiming("image", "buildSummaryObjects", buildT);
 
@@ -427,5 +546,28 @@ export const handleImageMessage = async (event) => {
   await pushTexts(userId, messages);
   logTiming("image", "pushResult", pushT);
 
-  logTiming("image", "total", totalT);
+  logTiming("imageBatch", "total", totalT);
+};
+
+export const handleImageMessage = async (event) => {
+  const userId = event.source.userId;
+  console.log(`[PaeCalTiming] image:queued user=${userId || "unknown"} message=${event.message?.id || "unknown"}`);
+
+  const existing = imageBatchByUser.get(userId) || { userId, events: [], timer: null };
+  existing.events.push(event);
+
+  if (existing.timer) clearTimeout(existing.timer);
+  existing.timer = setTimeout(() => {
+    const batch = imageBatchByUser.get(userId);
+    imageBatchByUser.delete(userId);
+
+    if (!batch?.events?.length) return;
+
+    processImageBatch({ userId, events: batch.events }).catch((err) => {
+      console.error("[PaeCalTiming] imageBatch:error", err?.message || err);
+      pushTexts(userId, ["แปะสะดุดตอนดูรูปนิดนึง 😅\nส่งมาใหม่อีกที เดี๋ยวแปะดูให้"]).catch(() => {});
+    });
+  }, IMAGE_BATCH_WINDOW_MS);
+
+  imageBatchByUser.set(userId, existing);
 };
