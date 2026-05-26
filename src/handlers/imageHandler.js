@@ -4,7 +4,6 @@ import { estimateFoodFromImage } from "../services/openai.js";
 import { DEFAULT_CALORIE_TARGET, safeNumber } from "../utils/helpers.js";
 import { getDisplayTitle, syncSessionFromProfile } from "../utils/profile.js";
 import { decideFoodLog } from "../utils/decision.js";
-import { get7DayMemorySummary, refreshDailyMemorySnapshot } from "../services/memorySheet.js";
 import {
   renderFoodLogMessages,
   renderFoodLogReply,
@@ -99,22 +98,18 @@ export const handleImageMessage = async (event) => {
   const meal = { menuName, kcal, carb, protein, fat, requestId, items: [] };
   logTiming("image", "buildSummaryObjects", buildT);
 
-  const memoryRefreshT = nowMs();
-  await refreshDailyMemorySnapshot({ userId, summary, fallbackMeal: meal });
-  logTiming("image", "refreshDailyMemory", memoryRefreshT);
-
-  const memory7T = nowMs();
-  const memory7 = await get7DayMemorySummary(userId);
-  logTiming("image", "get7DayMemory", memory7T);
-
+  // Speed Opt V1:
+  // Skip long-term memory read/write during image logging.
+  // It costs seconds and is not required for the immediate food-log reply.
+  // Core data remains: LOG_FOOD, DailySummary, lastMeal, kcal target.
   const titleT = nowMs();
   const title = await getDisplayTitle({ userId, session });
   logTiming("image", "getDisplayTitle", titleT);
 
   const decisionT = nowMs();
-  const summaryWithMemory = { ...summary, memory7 };
+  const summaryWithMemory = summary;
   const decision = decideFoodLog({ meal, summary: summaryWithMemory });
-  logTiming("image", "decideFoodLog", decisionT);
+  logTiming("image", "decideFoodLog", decisionT, "memory=skipped");
 
   const syncT = nowMs();
   await syncSessionFromProfile({
