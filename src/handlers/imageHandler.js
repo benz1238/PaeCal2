@@ -280,21 +280,37 @@ const inferPortionInfo = ({ menuName, kcal, portionLevel, portionNote }) => {
 };
 
 
+const DRINK_MENU_PATTERN = /(ชานม|ชามะนาว|ชาไทย|ชาเขียว|ชาดำ|ชาเย็น|มัทฉะ|โกโก้|กาแฟ|ลาเต้|คาปูชิโน|อเมริกาโน่|นมเย็น|นมสด|โค้ก|โคก|โค๊ก|เป๊ปซี่|น้ำอัดลม|สไปรท์|แฟนต้า|น้ำหวาน|หวานเย็น|น้ำแดง|น้ำเขียว|น้ำผลไม้|สมูทตี้|เครื่องดื่ม|coke|cola|pepsi|coffee|tea|milk|cocoa|latte|smoothie|juice|moccona|มอคโคน่า|nescafe|เนสกาแฟ|birdy|เบอร์ดี้|milo|ไมโล|ovaltine|โอวัลติน)/i;
+const SWEET_MENU_PATTERN = /(ของหวาน|ขนม|เค้ก|คุกกี้|โดนัท|บราวนี่|ไอศกรีม|บิงซู|ฮันนี่โทสต์|dessert|cookie|cake|donut|brownie|ice\s*cream|pudding|โรตี|แพนเค้ก|waffle|วาฟเฟิล|ครัวซองต์|ช็อกโกแลต)/i;
+const SOLID_FOOD_PATTERN = /(ข้าว|หมู|ไก่|ปลา|กุ้ง|ไข่|เนื้อ|ก๋วยเตี๋ยว|บะหมี่|เส้น|ผัด|ทอด|ย่าง|ต้ม|แกง|ยำ|สลัด|ซุป|ผลไม้|มะม่วง|ส้มโอ|ส้ม|กล้วย|แตงโม|อาหาร|จาน|มื้อ|ขาหมู|กะเพรา|กระเพรา|ส้มตำ|ลาบ|หมูกระทะ|ชาบู|พิซซ่า|เบอร์เกอร์)/i;
+
 const isDrinkMenu = (menuName = "") => {
   const name = String(menuName || "").trim();
   if (!name) return false;
 
   if (/^(ชา|นม|กาแฟ|โกโก้|โค้ก|โค๊ก|เป๊ปซี่|น้ำอัดลม|น้ำหวาน|เครื่องดื่ม)$/i.test(name)) return true;
 
-  return /(ชานม|ชามะนาว|ชาไทย|ชาเขียว|ชาดำ|ชาเย็น|มัทฉะ|โกโก้|กาแฟ|ลาเต้|คาปูชิโน|อเมริกาโน่|นมเย็น|นมสด|โค้ก|โคก|โค๊ก|เป๊ปซี่|น้ำอัดลม|สไปรท์|แฟนต้า|น้ำหวาน|หวานเย็น|น้ำแดง|น้ำเขียว|น้ำผลไม้|สมูทตี้|เครื่องดื่ม|coke|cola|pepsi|coffee|tea|milk|cocoa|latte|smoothie|juice|moccona|มอคโคน่า|nescafe|เนสกาแฟ|birdy|เบอร์ดี้|milo|ไมโล|ovaltine|โอวัลติน)/i.test(name);
+  return DRINK_MENU_PATTERN.test(name);
+};
+
+const hasSolidFood = (meal = {}) => {
+  const itemNames = Array.isArray(meal.items) ? meal.items.map((item) => item?.name).filter(Boolean).join(" + ") : "";
+  const text = `${meal.menuName || ""} ${itemNames}`;
+  return SOLID_FOOD_PATTERN.test(text);
+};
+
+const hasDrink = (meal = {}) => {
+  const itemNames = Array.isArray(meal.items) ? meal.items.map((item) => item?.name).filter(Boolean).join(" + ") : "";
+  const text = `${meal.menuName || ""} ${itemNames}`;
+  return isDrinkMenu(text);
 };
 
 const buildNutritionLine = ({ carb = 0, protein = 0, fat = 0 } = {}) => {
-  return `🥦 โภชนาการ: คาร์บ ${Math.round(safeNumber(carb, 0))}g / โปรตีน ${Math.round(safeNumber(protein, 0))}g / ไขมัน ${Math.round(safeNumber(fat, 0))}g`;
+  return `🥦 โภชนาการ: C ${Math.round(safeNumber(carb, 0))}g / P ${Math.round(safeNumber(protein, 0))}g / F ${Math.round(safeNumber(fat, 0))}g`;
 };
 
-const buildDrinkSugarLine = ({ menuName = "", kcal = 0, carb = 0 } = {}) => {
-  if (!isDrinkMenu(menuName)) return "";
+const buildDrinkSugarLine = ({ menuName = "", kcal = 0, carb = 0, allowAnyDrink = false } = {}) => {
+  if (!allowAnyDrink && !isDrinkMenu(menuName)) return "";
 
   const kcalValue = safeNumber(kcal, 0);
   const carbValue = safeNumber(carb, 0);
@@ -372,16 +388,20 @@ const buildImageInsight = ({ meal, summary, goalText }) => {
 };
 
 const buildImageFoodMessages = ({ meal, summary, title, session }) => {
-  const isDrink = isDrinkMenu(meal.menuName);
-  const sugarLine = isDrink ? buildDrinkSugarLine({ menuName: meal.menuName, kcal: meal.kcal, carb: meal.carb }) : "";
-  const nutritionLine = !isDrink ? buildNutritionLine({ carb: meal.carb, protein: meal.protein, fat: meal.fat }) : "";
+  const includesDrink = hasDrink(meal);
+  const includesSweet = hasSweet(meal);
+  const includesSugarType = includesDrink || includesSweet;
+  const includesSolid = hasSolidFood(meal) || (!includesSugarType);
+  const sugarLine = includesSugarType ? buildDrinkSugarLine({ menuName: meal.menuName, kcal: meal.kcal, carb: meal.carb, allowAnyDrink: true }) : "";
+  const nutritionLine = includesSolid ? buildNutritionLine({ carb: meal.carb, protein: meal.protein, fat: meal.fat }) : "";
+  const detailLines = [nutritionLine, sugarLine].filter(Boolean).join("
+");
   const firstMessage = `${meal.reaction} ${title} แปะดูให้แล้ว
 
 🍽️ เมนู
 ${meal.menuName}
-🔥 ~${meal.kcal} kcal${sugarLine ? `
-${sugarLine}` : ""}${nutritionLine ? `
-${nutritionLine}` : ""}
+🔥 ~${meal.kcal} kcal${detailLines ? `
+${detailLines}` : ""}
 📏 ปริมาณ: ${meal.portionLabel}`;
 
   const { macroLine, goalLine } = buildImageInsight({
@@ -391,8 +411,7 @@ ${nutritionLine}` : ""}
   });
 
   const secondLines = [
-    `💡 ${meal.portionNote}`,
-    macroLine,
+    `💡 ${macroLine}`,
     goalLine,
   ];
 
