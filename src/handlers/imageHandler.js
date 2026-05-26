@@ -193,38 +193,31 @@ export const handleImageMessage = async (event) => {
   console.log(`[PaeCalTiming] image:start user=${userId || "unknown"} message=${event.message?.id || "unknown"}`);
 
   const sessionT = nowMs();
-  let session = getCachedSession(userId);
+  const cachedSession = getCachedSession(userId);
 
-  if (session) {
-    logTiming("image", "getSessionMemoryHit", sessionT);
-  } else {
-    session = await postToSheet({ action: "GET_SESSION", userId });
-    session = {
-      step: session?.step || "READY",
-      data: session?.data || {},
-      ...session,
-    };
-    setCachedSession(userId, session);
-    logTiming("image", "getSession", sessionT);
-  }
-
-  if (session.step !== "READY") {
-    const replyT = nowMs();
-    await replyText(
-      event.replyToken,
-      "แปะขอรู้จักลื้อก่อนน้า\nพิมพ์ชื่อมาก่อนเลยจ้า 😊"
-    );
-    logTiming("image", "replyNeedProfile", replyT);
-    logTiming("image", "total", totalT);
-    return;
-  }
+  const sessionPromise = cachedSession
+    ? Promise.resolve(cachedSession).then((session) => {
+      logTiming("image", "getSessionMemoryHit", sessionT);
+      return session;
+    })
+    : postToSheet({ action: "GET_SESSION", userId }).then((session) => {
+      const normalized = {
+        step: session?.step || "READY",
+        data: session?.data || {},
+        ...session,
+      };
+      setCachedSession(userId, normalized);
+      logTiming("image", "getSession", sessionT);
+      return normalized;
+    });
 
   const ackT = nowMs();
   const downloadT = nowMs();
 
   const ackPromise = replyText(
     event.replyToken,
-    "แปะกำลังดูรูปให้นะ 👀\nขอซูมแป๊บ เดี๋ยวบอกให้ว่าเมนูนี้ประมาณเท่าไหร่ 🍽️"
+    "แปะกำลังดูรูปให้นะ 👀
+ขอซูมแป๊บ เดี๋ยวบอกให้ว่าเมนูนี้ประมาณเท่าไหร่ 🍽️"
   ).then(() => {
     logTiming("image", "replyAck", ackT);
   });
@@ -234,11 +227,26 @@ export const handleImageMessage = async (event) => {
     return base64Image;
   });
 
-  const [, base64Image] = await Promise.all([ackPromise, base64Promise]);
+  const aiPromise = base64Promise.then(async (base64Image) => {
+    const aiT = nowMs();
+    const gptData = await estimateFoodFromImage(base64Image);
+    logTiming("image", "openaiVision", aiT, `menu=${gptData?.menuName || "unknown"} kcal=${gptData?.kcal || 0}`);
+    return gptData;
+  });
 
-  const aiT = nowMs();
-  const gptData = await estimateFoodFromImage(base64Image);
-  logTiming("image", "openaiVision", aiT, `menu=${gptData?.menuName || "unknown"} kcal=${gptData?.kcal || 0}`);
+  const [session, gptData] = await Promise.all([sessionPromise, aiPromise, ackPromise])
+    .then(([resolvedSession, resolvedGptData]) => [resolvedSession, resolvedGptData]);
+
+  if (session.step !== "READY") {
+    const pushT = nowMs();
+    await pushTexts(userId, [
+      "แปะขอรู้จักลื้อก่อนน้า
+พิมพ์ชื่อมาก่อนเลยจ้า 😊",
+    ]);
+    logTiming("image", "pushNeedProfile", pushT);
+    logTiming("image", "total", totalT);
+    return;
+  }
 
   const kcal = safeNumber(gptData?.kcal, 0);
   const carb = safeNumber(gptData?.carb, 0);
