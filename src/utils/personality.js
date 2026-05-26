@@ -438,26 +438,22 @@ const moodLine = ({ day, memory }) => {
 
 const nextStepLine = ({ day, memory }) => {
   if (day.isOver || memory.hasHeavyPattern) {
-    return `❤️ มื้อต่อไป
-เลี่ยงทอดสักมื้อ
-เติมผักกับโปรตีนพอ`;
+    return `❤️ มื้อหน้า
+เลี่ยงทอดสักมื้อ เติมผักกับโปรตีนพอ`;
   }
 
   if (memory.hasSweetPattern) {
-    return `❤️ มื้อต่อไป
-พักน้ำหวานก่อนสักรอบ
-แล้วไปทางโปรตีนกับผัก`;
+    return `❤️ มื้อหน้า
+พักน้ำหวาน/ของหวานสักรอบ แล้วเติมโปรตีนพอ`;
   }
 
   if (memory.hasFriedPattern) {
-    return `❤️ มื้อต่อไป
-พักทอดก่อนหนึ่งมื้อ
-ไปทางต้ม/ย่างพอ`;
+    return `❤️ มื้อหน้า
+พักทอดก่อนหนึ่งมื้อ ไปทางต้ม/ย่างพอ`;
   }
 
-  return `❤️ มื้อต่อไป
-คุมของทอด/น้ำหวานนิดนึง
-แล้วเน้นโปรตีนดี ๆ ต่อ`;
+  return `❤️ มื้อหน้า
+คุมของทอด/หวานนิดนึง แล้วเน้นโปรตีนดี ๆ ต่อ`;
 };
 
 export const renderDailyRecapMessages = ({ title, decision }) => {
