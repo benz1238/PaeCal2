@@ -267,6 +267,7 @@ const dailyRecapFlex = ({ title, card }) => ({
             recapRow("🍚 คาร์บ", card?.carbText, { color: card?.carbColor || "#111827" }),
             recapRow("💪 โปรตีน", card?.proteinText, { color: card?.proteinColor || "#047857" }),
             recapRow("💧 ไขมัน", card?.fatText, { color: card?.fatColor || "#111827" }),
+            recapRow("🍬 น้ำตาล", card?.sugarText, { color: card?.sugarColor || "#111827" }),
             recapRow("🍽️ จำนวนมื้อ", card?.mealCountText),
           ],
         },
