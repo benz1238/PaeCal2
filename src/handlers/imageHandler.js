@@ -211,6 +211,18 @@ export const handleImageMessage = async (event) => {
       return normalized;
     });
 
+  const session = await sessionPromise;
+
+  if (session.step !== "READY") {
+    const pushT = nowMs();
+    await pushTexts(userId, [
+      ["แปะขอรู้จักลื้อก่อนน้า", "พิมพ์ชื่อมาก่อนเลยจ้า 😊"].join("\n"),
+    ]);
+    logTiming("image", "pushNeedProfile", pushT);
+    logTiming("image", "total", totalT);
+    return;
+  }
+
   const ackT = nowMs();
   const downloadT = nowMs();
 
@@ -229,22 +241,17 @@ export const handleImageMessage = async (event) => {
   const aiPromise = base64Promise.then(async (base64Image) => {
     const aiT = nowMs();
     const gptData = await estimateFoodFromImage(base64Image);
-    logTiming("image", "openaiVision", aiT, `menu=${gptData?.menuName || "unknown"} kcal=${gptData?.kcal || 0}`);
+    logTiming(
+      "image",
+      "openaiVision",
+      aiT,
+      `menu=${gptData?.menuName || "unknown"} kcal=${gptData?.kcal || 0} subject=${gptData?.imageSubject || ""}`
+    );
     return gptData;
   });
 
-  const [session, gptData] = await Promise.all([sessionPromise, aiPromise, ackPromise])
-    .then(([resolvedSession, resolvedGptData]) => [resolvedSession, resolvedGptData]);
-
-  if (session.step !== "READY") {
-    const pushT = nowMs();
-    await pushTexts(userId, [
-      ["แปะขอรู้จักลื้อก่อนน้า", "พิมพ์ชื่อมาก่อนเลยจ้า 😊"].join("\n"),
-    ]);
-    logTiming("image", "pushNeedProfile", pushT);
-    logTiming("image", "total", totalT);
-    return;
-  }
+  const [gptData] = await Promise.all([aiPromise, ackPromise])
+    .then(([resolvedGptData]) => [resolvedGptData]);
 
   const kcal = safeNumber(gptData?.kcal, 0);
   const carb = safeNumber(gptData?.carb, 0);
@@ -254,10 +261,11 @@ export const handleImageMessage = async (event) => {
 
   const isFoodImage = gptData?.isFood !== false;
   const imageSubject = normalizeText(gptData?.imageSubject || gptData?.subject || gptData?.detectedObject || "");
+  const imageCaption = normalizeText(gptData?.imageCaption || gptData?.caption || gptData?.sceneDescription || "");
 
   if (!isFoodImage || !menuName || kcal <= 0) {
     const pushNoFoodT = nowMs();
-    await pushTexts(userId, [renderNoFoodDetectedReply({ imageSubject })]);
+    await pushTexts(userId, [renderNoFoodDetectedReply({ imageSubject, imageCaption })]);
     logTiming("image", "pushNoFood", pushNoFoodT, `subject=${imageSubject || "unknown"}`);
     logTiming("image", "total", totalT);
     return;
