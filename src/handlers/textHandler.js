@@ -64,7 +64,7 @@ const exactTexts = (list, text) => list.includes(String(text || "").trim());
 
 const normalizeText = (text) => String(text || "").trim().toLowerCase();
 
-const EATING_GUILT_PATTERN = /(วันนี้)?\s*(กินเละ|กินพัง|หลุดหนัก|กินเยอะมาก|กินเยอะไป|กินอ้วนแน่|อ้วนแน่|วันนี้อ้วนแน่|พังแน่|แย่แล้ว.*กิน|กินจนรู้สึกผิด)/i;
+const EATING_GUILT_PATTERN = /(วันนี้)?\s*(กินเละ|กินพัง|หลุดหนัก|กินเยอะมาก|กินเยอะไป|กินเยอะสุด|กินไปเยอะ|กินไปเยอะสุด|กินเยอะเวอร์|กินจุก|จุกมาก|กินหนัก|กินหนักมาก|กินอย่างหนัก|กินไปอย่างหนัก|กินอ้วนแน่|อ้วนแน่|วันนี้อ้วนแน่|พังแน่|แย่แล้ว.*กิน|กินจนรู้สึกผิด)/i;
 
 const normalizeLooseText = (text) => String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
 
@@ -75,7 +75,7 @@ const isEatingGuiltText = (text) => {
 
   if (EATING_GUILT_PATTERN.test(value)) return true;
 
-  if (/(กินไป)?เยอะมาก+|กินอย่างหนัก|กินหนักมาก|กินหนักไป|กินไปอย่างหนัก|จุกมาก|กินจุก|อิ่มจุก|แน่นมาก|หลุดยับ|หลุดแรง|กินเกิน|บวมแน่|น้ำหนักขึ้น|ขึ้น\s*\d+\s*(โล|กก|kg)/i.test(value)) {
+  if (/(กินไป)?เยอะ(มาก+|สุด+|เวอร์|จัด|เกิน|ไป)?|กินอย่างหนัก|กินหนักมาก|กินหนักไป|กินไปอย่างหนัก|จุกมาก|กินจุก|อิ่มจุก|แน่นมาก|หลุดยับ|หลุดแรง|กินเกิน|บวมแน่|น้ำหนักขึ้น|ขึ้น\s*\d+\s*(โล|กก|kg)/i.test(value)) {
     return true;
   }
 
@@ -83,6 +83,29 @@ const isEatingGuiltText = (text) => {
   const hasWorrySignal = /(เยอะ|หนัก|เกิน|อ้วน|พัง|แย่|ขึ้น|บวม|รู้สึกผิด)/i.test(value);
 
   return hasEatingSignal && hasWorrySignal;
+};
+
+const isInvalidFoodEstimate = (foodData, fallbackText = "") => {
+  const kcal = safeNumber(foodData?.kcal, 0);
+  const menuName = normalizeLooseText(foodData?.menuName || fallbackText);
+
+  if (kcal > 0) return false;
+
+  return !menuName || /^(ไม่มีข้อมูล|ไม่ทราบ|unknown|อาหาร|เมนู|กิน|กินไป|กินเยอะ|กินหนัก|จุก|วันนี้จุก|วันนี้กิน)$/i.test(menuName);
+};
+
+const shouldTreatAsEatingConcernAfterParser = ({ text, intent, foodData }) => {
+  const foodText = String(intent?.foodText || text || "").trim();
+  const combined = `${text || ""} ${foodText}`;
+
+  if (isEatingGuiltText(combined)) return true;
+
+  const kcal = safeNumber(foodData?.kcal, 0);
+  const menuName = normalizeLooseText(foodData?.menuName || foodText);
+  const looksLikeConcern = /(กินไปเยอะ|กินเยอะ|กินหนัก|จุก|แน่น|อิ่มจุก|หลุด|พัง|อ้วน|น้ำหนักขึ้น)/i.test(combined);
+  const looksLikeNoFood = kcal <= 0 || /^(ไม่มีข้อมูล|ไม่ทราบ|unknown|กิน|กินไป|กินเยอะ|กินหนัก|จุก|วันนี้จุก)/i.test(menuName);
+
+  return looksLikeConcern && looksLikeNoFood;
 };
 
 const buildEatingGuiltReply = (text = "") => {
@@ -188,17 +211,8 @@ const getLocalIntent = (text) => {
   // Food-only short texts such as "ชานม", "ชาไทยหวานน้อย", "ข้าวมันไก่"
   // should be logged as food directly. Do not send them to the AI intent parser,
   // because short noun-only inputs can be misread as daily_summary/unknown.
-  if (
-    value.length <= 60 &&
-    hasFoodKeyword(value) &&
-    !isFoodAdviceText(value) &&
-    !isFoodKcalQuestionText(value) &&
-    !isFoodCompareText(value) &&
-    !isNextMealAfterFoodText(value) &&
-    !/[?？]/.test(value) &&
-    !hasAnyText(value, ["สรุป", "เหลือกี่", "กินไรดี", "กินอะไรดี", "ตั้งเป้า", "เปลี่ยนเป้า"])
-  ) {
-    return { intent: "log_food_text", confidence: 0.9, action: "log_food", multiplier: 0, foodText: value, kcal: null, source: "local_food_noun" };
+  if (isNounOnlyFoodText(value)) {
+    return { intent: "log_food_text", confidence: 0.95, action: "log_food", multiplier: 0, foodText: value, kcal: null, source: "local_food_noun" };
   }
 
   return null;
@@ -217,15 +231,33 @@ const FOOD_ADVICE_QUESTION_WORDS = [
 const FOOD_ADVICE_KEYWORDS = [
   "ข้าว", "ก๋วยเตี๋ยว", "สุกี้", "เกาเหลา", "ต้ม", "แกง", "ยำ", "สลัด", "ซุป", "โจ๊ก", "ข้าวต้ม",
   "ไก่", "หมู", "ปลา", "กุ้ง", "ไข่", "เต้าหู้", "เนื้อ", "อกไก่", "ทะเล",
-  "ทอด", "ย่าง", "นึ่ง", "ลวก", "ผัด", "มัน", "หวาน", "น้ำหวาน", "ชานม", "กาแฟ", "โกโก้",
-  "ขนม", "เค้ก", "คุกกี้", "เบเกอรี่", "โยเกิร์ต", "นม", "หมูกระทะ", "ชาบู", "พิซซ่า", "เบอร์เกอร์",
+  "ทอด", "ย่าง", "นึ่ง", "ลวก", "ผัด", "มัน", "หวาน", "น้ำหวาน", "หวานเย็น", "น้ำแดง", "น้ำเขียว",
+  "ชานม", "ชาไทย", "ชาเขียว", "มัทฉะ", "กาแฟ", "โกโก้", "นม", "ลาเต้", "คาปูชิโน", "อเมริกาโน่",
+  "โค้ก", "โค๊ก", "โคคา", "โคล่า", "coke", "cola", "pepsi", "เป๊ปซี่", "น้ำอัดลม", "สไปรท์", "แฟนต้า",
+  "ขนม", "เค้ก", "คุกกี้", "เบเกอรี่", "โยเกิร์ต", "หมูกระทะ", "ชาบู", "พิซซ่า", "เบอร์เกอร์",
   "มาม่า", "บะหมี่", "ราเมง", "ซูชิ", "แซลมอน", "ส้มตำ", "ลาบ", "น้ำตก", "กะเพรา", "กระเพรา",
-  "ข้าวมันไก่", "ข้าวหมูแดง", "ข้าวหมูกรอบ", "ข้าวผัด", "ผัดไทย", "ชาไทย", "มัทฉะ", "ไอติม", "บิงซู"
+  "ข้าวมันไก่", "ข้าวหมูแดง", "ข้าวหมูกรอบ", "ข้าวผัด", "ผัดไทย", "ไอติม", "บิงซู"
 ];
 
 const FOOD_STOP_WORD_PATTERN = /(ดีไหม|ดีมั้ย|ดีปะ|ดีป่ะ|ดีป่าว|ดีเปล่า|โอเคไหม|โอเคมั้ย|โอเคปะ|โอเคป่ะ|ได้ไหม|ได้มั้ย|ได้ปะ|ได้ป่ะ|ได้ป่าว|เหมาะไหม|เหมาะมั้ย|ควรไหม|ควรมั้ย|ควรปะ|ควรป่ะ|กินได้ไหม|กินได้มั้ย|กินดีไหม|กินดีมั้ย|กินดีปะ|กินดีป่ะ|อ้วนไหม|อ้วนมั้ย|หนักไหม|หนักมั้ย|พังไหม|พังมั้ย|พังปะ|พังป่ะ|อันไหนดี|อะไรดี|ไหนดี|ดีกว่า|เลือกอะไร|กี่แคล|กี่ kcal|แคลเท่าไหร่|แคลเท่าไร).*/i;
 
 const hasFoodKeyword = (text) => FOOD_ADVICE_KEYWORDS.some((word) => normalizeText(text).includes(word));
+
+const NOUN_ONLY_FOOD_BLOCKLIST = [
+  "สรุป", "สรุปวันนี้", "แคลวันนี้", "เหลือกี่แคล", "กินไปเท่าไหร่", "กินไปเท่าไร",
+  "กินไรดี", "กินอะไรดี", "หิว", "ตั้งเป้า", "เปลี่ยนเป้า", "แก้มื้อล่าสุด", "ลบมื้อล่าสุด"
+];
+
+const isNounOnlyFoodText = (text) => {
+  const value = normalizeText(text);
+
+  if (!value || value.length > 60) return false;
+  if (NOUN_ONLY_FOOD_BLOCKLIST.some((word) => value.includes(word))) return false;
+  if (/[?？]/.test(value)) return false;
+  if (isFoodAdviceText(value) || isFoodKcalQuestionText(value) || isFoodCompareText(value) || isNextMealAfterFoodText(value)) return false;
+
+  return hasFoodKeyword(value);
+};
 
 const EAT_LOG_PREFIX_PATTERN = /^(กิน|เมื่อกี้กิน|วันนี้กิน|มื้อเช้ากิน|มื้อเที่ยงกิน|มื้อเย็นกิน)\s*/i;
 
@@ -813,14 +845,18 @@ const replySmartSummary = async ({ replyToken, userId, title }) => {
   await replyTexts(replyToken, renderDailyRecapMessages({ title, decision }));
 };
 
+const replyEatingConcern = async ({ replyToken, text, reason = "local" }) => {
+  console.log(`[PaeCalTiming] text:eatingGuiltLocal 0ms reason=${reason}`);
+  await replyText(replyToken, buildEatingGuiltReply(text));
+};
+
 export const handleTextMessage = async (event) => {
   const userId = event.source.userId;
   const replyToken = event.replyToken;
   const text = String(event.message.text || "").trim();
 
   if (isEatingGuiltText(text)) {
-    console.log(`[PaeCalTiming] text:eatingGuiltLocal 0ms`);
-    await replyText(replyToken, buildEatingGuiltReply(text));
+    await replyEatingConcern({ replyToken, text, reason: "pre_session" });
     return;
   }
 
@@ -1081,6 +1117,33 @@ export const handleTextMessage = async (event) => {
     return;
   }
 
+  if (isNounOnlyFoodText(text)) {
+    console.log(`[PaeCalTiming] text:foodNounLocal 0ms text=${text}`);
+    const foodText = String(text || "").trim();
+    const foodData = await estimateFoodFromText(foodText);
+    const kcal = safeNumber(foodData.kcal, 0);
+    const carb = safeNumber(foodData.carb, 0);
+    const protein = safeNumber(foodData.protein, 0);
+    const fat = safeNumber(foodData.fat, 0);
+    const menuName = foodData.menuName || foodText;
+
+    if (isInvalidFoodEstimate(foodData, foodText) || shouldTreatAsEatingConcernAfterParser({ text, intent: { foodText }, foodData })) {
+      await replyEatingConcern({ replyToken, text, reason: "noun_estimate_guard" });
+      return;
+    }
+
+    const sheetData = await logFood({ userId, name: session.data?.name || "", kcal, carb, protein, fat, menuName });
+    const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
+    const target = sheetData.calorieTarget || DEFAULT_CALORIE_TARGET;
+    const summary = { ...sheetData, todayCalories: total, totalToday: total, calorieTarget: target };
+    const meal = { menuName, kcal, carb, protein, fat };
+    const decision = decideFoodLog({ meal, summary });
+
+    await syncSessionFromProfile({ userId, session, extraData: { calorieTarget: target, lastMeal: meal } });
+    await replyTexts(replyToken, renderFoodLogMessages({ title, meal, summary, decision }));
+    return;
+  }
+
   if (isPronounKcalQuestionText(text)) {
     const meal = await getLatestMealForFollowUp({ userId, session });
     await replyText(replyToken, buildPronounKcalReply({ title, meal }));
@@ -1099,6 +1162,11 @@ export const handleTextMessage = async (event) => {
     const protein = safeNumber(foodData.protein, 0);
     const fat = safeNumber(foodData.fat, 0);
     const menuName = foodData.menuName || foodText;
+
+    if (isInvalidFoodEstimate(foodData, foodText) || shouldTreatAsEatingConcernAfterParser({ text, intent: localIntent, foodData })) {
+      await replyEatingConcern({ replyToken, text, reason: "likely_food_guard" });
+      return;
+    }
 
     const sheetData = await logFood({ userId, name: session.data?.name || "", kcal, carb, protein, fat, menuName });
     const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;
@@ -1261,6 +1329,11 @@ export const handleTextMessage = async (event) => {
     const protein = safeNumber(foodData.protein, 0);
     const fat = safeNumber(foodData.fat, 0);
     const menuName = foodData.menuName || foodText;
+
+    if (isInvalidFoodEstimate(foodData, foodText) || shouldTreatAsEatingConcernAfterParser({ text, intent: intent, foodData })) {
+      await replyEatingConcern({ replyToken, text, reason: "intent_log_guard" });
+      return;
+    }
 
     const sheetData = await logFood({ userId, name: session.data?.name || "", kcal, carb, protein, fat, menuName });
     const total = sheetData.todayCalories ?? sheetData.totalToday ?? kcal;

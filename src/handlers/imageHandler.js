@@ -21,6 +21,72 @@ const resolveFastTitle = (session) => {
 
 const normalizeText = (value) => String(value || "").trim();
 
+const DRINK_IMAGE_PATTERN = /(โค้ก|โค๊ก|โคคา|โคล่า|coke|cola|pepsi|เป๊ปซี่|น้ำอัดลม|สไปรท์|แฟนต้า|ชานม|ชาไทย|ชาเขียว|มัทฉะ|กาแฟ|โกโก้|นม|น้ำหวาน|หวานเย็น|น้ำแดง|น้ำเขียว|เครื่องดื่ม|แก้วน้ำ|กระป๋อง|ขวด)/i;
+const NON_DRINK_MAIN_SUBJECT_PATTERN = /(แมว|หมา|สุนัข|ไก่|นก|คน|หน้า|selfie|เซลฟี่|เอกสาร|จอคอม|หน้าจอ|รถ|วิว)/i;
+
+const inferDrinkFromImage = ({ imageSubject, imageCaption, gptData }) => {
+  const subject = normalizeText(imageSubject);
+  const caption = normalizeText(imageCaption);
+  const combined = `${subject} ${caption}`.trim();
+
+  if (!combined || !DRINK_IMAGE_PATTERN.test(combined)) return null;
+
+  // ถ้าภาพหลักเป็นสัตว์/คนถือเครื่องดื่ม ให้ถือเป็น meme/non-food ก่อน
+  // เช่น ไก่ถือกาแฟ ไม่ควรบันทึกเป็นมื้อจริงของผู้ใช้
+  if (NON_DRINK_MAIN_SUBJECT_PATTERN.test(subject) && !/(เครื่องดื่ม|แก้วน้ำ|กระป๋อง|ขวด|โค้ก|โค๊ก|โคล่า|coke|cola|กาแฟ|ชานม|โกโก้|น้ำอัดลม)/i.test(subject)) {
+    return null;
+  }
+
+  let menuName = normalizeText(gptData?.menuName);
+  let kcal = safeNumber(gptData?.kcal, 0);
+  let carb = safeNumber(gptData?.carb, 0);
+
+  if (!menuName || menuName === "อาหาร") {
+    if (/(zero|ซีโร่|ไม่มีน้ำตาล|0%)/i.test(combined)) {
+      menuName = "โค้กซีโร่";
+      kcal = kcal || 0;
+      carb = carb || 0;
+    } else if (/(โค้ก|โค๊ก|โคคา|โคล่า|coke|cola)/i.test(combined)) {
+      menuName = "โค้ก";
+      kcal = kcal || 140;
+      carb = carb || 35;
+    } else if (/(pepsi|เป๊ปซี่)/i.test(combined)) {
+      menuName = "เป๊ปซี่";
+      kcal = kcal || 140;
+      carb = carb || 35;
+    } else if (/(น้ำอัดลม|สไปรท์|แฟนต้า)/i.test(combined)) {
+      menuName = "น้ำอัดลม";
+      kcal = kcal || 140;
+      carb = carb || 35;
+    } else if (/(ชานม|ชาไทย|ชาเขียว|มัทฉะ)/i.test(combined)) {
+      menuName = "ชานม/ชา";
+      kcal = kcal || 220;
+      carb = carb || 35;
+    } else if (/(โกโก้|กาแฟ|นม|น้ำหวาน|หวานเย็น)/i.test(combined)) {
+      menuName = "เครื่องดื่มหวาน";
+      kcal = kcal || 180;
+      carb = carb || 30;
+    } else {
+      menuName = "เครื่องดื่ม";
+      kcal = kcal || 120;
+      carb = carb || 25;
+    }
+  }
+
+  return {
+    ...gptData,
+    isFood: true,
+    menuName,
+    kcal,
+    carb,
+    protein: safeNumber(gptData?.protein, 0),
+    fat: safeNumber(gptData?.fat, 0),
+    portionLevel: gptData?.portionLevel || "normal",
+    portionNote: gptData?.portionNote || "เครื่องดื่มก็มีแคลนะ แปะนับให้แล้ว 👀",
+    confidence: gptData?.confidence || "medium",
+  };
+};
+
 const detectFoodCategory = (menuName) => {
   const text = normalizeText(menuName).toLowerCase();
 
@@ -253,15 +319,18 @@ export const handleImageMessage = async (event) => {
   const [gptData] = await Promise.all([aiPromise, ackPromise])
     .then(([resolvedGptData]) => [resolvedGptData]);
 
-  const kcal = safeNumber(gptData?.kcal, 0);
-  const carb = safeNumber(gptData?.carb, 0);
-  const protein = safeNumber(gptData?.protein, 0);
-  const fat = safeNumber(gptData?.fat, 0);
-  const menuName = normalizeText(gptData?.menuName) || "อาหาร";
-
-  const isFoodImage = gptData?.isFood !== false;
   const imageSubject = normalizeText(gptData?.imageSubject || gptData?.subject || gptData?.detectedObject || "");
   const imageCaption = normalizeText(gptData?.imageCaption || gptData?.caption || gptData?.sceneDescription || "");
+  const drinkOverride = inferDrinkFromImage({ imageSubject, imageCaption, gptData });
+  const analyzedData = drinkOverride || gptData;
+
+  const kcal = safeNumber(analyzedData?.kcal, 0);
+  const carb = safeNumber(analyzedData?.carb, 0);
+  const protein = safeNumber(analyzedData?.protein, 0);
+  const fat = safeNumber(analyzedData?.fat, 0);
+  const menuName = normalizeText(analyzedData?.menuName) || "อาหาร";
+
+  const isFoodImage = analyzedData?.isFood !== false;
 
   if (!isFoodImage || !menuName || kcal <= 0) {
     const pushNoFoodT = nowMs();
@@ -275,8 +344,8 @@ export const handleImageMessage = async (event) => {
   const portion = inferPortionInfo({
     menuName,
     kcal,
-    portionLevel: gptData?.portionLevel,
-    portionNote: gptData?.portionNote,
+    portionLevel: analyzedData?.portionLevel,
+    portionNote: analyzedData?.portionNote,
   });
 
   const imageItems = [
@@ -333,7 +402,7 @@ export const handleImageMessage = async (event) => {
     portionLabel: portion.label,
     portionNote: portion.note,
     reaction: portion.reaction,
-    confidence: normalizeText(gptData?.confidence || gptData?.estimateConfidence || ""),
+    confidence: normalizeText(analyzedData?.confidence || analyzedData?.estimateConfidence || ""),
   };
   logTiming("image", "buildSummaryObjects", buildT);
 
