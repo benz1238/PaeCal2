@@ -70,13 +70,6 @@ router.post(
             continue;
           }
 
-          // Flex button helper: opens keyboard on supported LINE clients.
-          // No reply here, otherwise user sees an unnecessary bot bubble.
-          if (postback.action === "open_keyboard" || postback.action === "OPEN_KEYBOARD") {
-            console.log("LINE Postback open_keyboard handled silently");
-            continue;
-          }
-
           if (postback.action === "TYPE_FOOD_PROMPT") {
             await replyTypeFoodPrompt(event.replyToken);
             continue;
@@ -93,6 +86,19 @@ router.post(
               type: "message",
               message: { type: "text", text: "กินอะไรดี" },
             });
+            continue;
+          }
+
+          if (postback.action === "DAILY_SUMMARY") {
+            await handleTextMessage({
+              ...event,
+              type: "message",
+              message: { type: "text", text: "สรุปวันนี้" },
+            });
+            continue;
+          }
+
+          if (postback.action === "open_keyboard") {
             continue;
           }
 
@@ -136,8 +142,11 @@ app.get("/", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
-  console.log("[PaeCalPing] health check", new Date().toISOString());
-  res.status(200).send("ok");
+  res.json({
+    ok: true,
+    service: "pae-cal-line-bot",
+    time: new Date().toISOString(),
+  });
 });
 
 app.listen(process.env.PORT || 10000, () => {
