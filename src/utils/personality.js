@@ -610,7 +610,18 @@ export const renderNoFoodDetectedReply = ({ imageSubject, imageCaption } = {}) =
 };
 
 
-const isDrinkMealName = (name = "") => /(ชานม|ชาไทย|ชาเขียว|โกโก้|กาแฟ|ลาเต้|นม|โค้ก|โคก|เป๊ปซี่|น้ำอัดลม|น้ำหวาน|หวานเย็น|น้ำผลไม้|สมูทตี้|ชา|เครื่องดื่ม|coke|cola|pepsi|coffee|tea|milk|cocoa|latte|smoothie|juice)/i.test(String(name || ""));
+const isDrinkMealName = (name = "") => {
+  const menuName = String(name || "").trim();
+  if (!menuName) return false;
+
+  if (/^(ชา|นม|กาแฟ|โกโก้|โค้ก|โค๊ก|เป๊ปซี่|น้ำอัดลม|น้ำหวาน|เครื่องดื่ม)$/i.test(menuName)) return true;
+
+  return /(ชานม|ชามะนาว|ชาไทย|ชาเขียว|ชาดำ|ชาเย็น|มัทฉะ|โกโก้|กาแฟ|ลาเต้|คาปูชิโน|อเมริกาโน่|นมเย็น|นมสด|โค้ก|โคก|โค๊ก|เป๊ปซี่|น้ำอัดลม|สไปรท์|แฟนต้า|น้ำหวาน|หวานเย็น|น้ำแดง|น้ำเขียว|น้ำผลไม้|สมูทตี้|เครื่องดื่ม|coke|cola|pepsi|coffee|tea|milk|cocoa|latte|smoothie|juice|moccona|มอคโคน่า|nescafe|เนสกาแฟ|birdy|เบอร์ดี้|milo|ไมโล|ovaltine|โอวัลติน)/i.test(menuName);
+};
+
+const nutritionLine = ({ carb = 0, protein = 0, fat = 0 } = {}) => {
+  return `🥦 โภชนาการ: คาร์บ ${Math.round(Number(carb || 0))}g / โปรตีน ${Math.round(Number(protein || 0))}g / ไขมัน ${Math.round(Number(fat || 0))}g`;
+};
 
 const drinkSugarLine = ({ menuName = "", kcal = 0, carb = 0 } = {}) => {
   if (!isDrinkMealName(menuName)) return "";
@@ -638,7 +649,9 @@ export const renderFoodLogMessages = ({ title, meal, summary, decision }) => {
   const signals = decision.signals;
   const progress = buildProgressBar(day.eaten, day.target);
 
-  const sugarLine = drinkSugarLine({ menuName: signals.menuName, kcal: signals.kcal, carb: signals.carb });
+  const isDrink = isDrinkMealName(signals.menuName);
+  const sugarLine = isDrink ? drinkSugarLine({ menuName: signals.menuName, kcal: signals.kcal, carb: signals.carb }) : "";
+  const macroLine = !isDrink ? nutritionLine({ carb: signals.carb, protein: signals.protein, fat: signals.fat }) : "";
 
   const firstMessage = `${reactionLineForFood({ title, decision })}
 
@@ -646,7 +659,8 @@ export const renderFoodLogMessages = ({ title, meal, summary, decision }) => {
 ${signals.menuName}
 
 🔥 ประมาณ ${signals.kcal} kcal${sugarLine ? `
-${sugarLine}` : ""}`;
+${sugarLine}` : ""}${macroLine ? `
+${macroLine}` : ""}`;
 
   const secondMessage = `📊 วันนี้กินไปแล้ว
 ${day.eaten} / ${day.target} kcal
