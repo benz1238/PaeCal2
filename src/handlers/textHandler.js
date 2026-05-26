@@ -6,6 +6,12 @@ import {
   refreshSummaryCacheFromSheetResponse,
   setCachedSummary,
 } from "../utils/summaryCache.js";
+import {
+  getCachedSession,
+  invalidateSessionCache,
+  mergeCachedSession,
+  setCachedSession,
+} from "../utils/sessionCache.js";
 import { estimateFoodFromText, parseUserIntent, reviseFoodEstimateFromCorrection } from "../services/openai.js";
 import {
   calculateTDEE,
@@ -38,13 +44,24 @@ import {
 } from "../utils/personality.js";
 
 const getSession = async (userId) => {
-  const session = await postToSheet({ action: "GET_SESSION", userId });
+  const t = nowMs();
+  const cached = getCachedSession(userId);
 
-  return {
+  if (cached) {
+    logTiming("text", "getSessionMemoryHit", t);
+    return cached;
+  }
+
+  const session = await postToSheet({ action: "GET_SESSION", userId });
+  const normalized = {
     step: session?.step || "READY",
     data: session?.data || {},
     ...session,
   };
+
+  setCachedSession(userId, normalized);
+  logTiming("text", "getSession", t);
+  return normalized;
 };
 
 
@@ -75,10 +92,19 @@ const getMessageRequestId = (event, suffix = "text") => {
 const saveProfile = async (payload) => {
   const result = await postToSheet({ action: "SAVE_PROFILE", ...payload });
   invalidateSummaryCache(payload?.userId);
+  invalidateSessionCache(payload?.userId);
   return result;
 };
 
-const updateSession = async (payload) => postToSheet({ action: "UPDATE_SESSION", ...payload });
+const updateSession = async (payload) => {
+  const result = await postToSheet({ action: "UPDATE_SESSION", ...payload });
+  setCachedSession(payload?.userId, {
+    ...(result || {}),
+    step: result?.step || payload?.step || "READY",
+    data: result?.data || payload?.sessionData || payload?.data || {},
+  });
+  return result;
+};
 
 const logFood = async (payload) => {
   const result = await postToSheet({ action: "LOG_FOOD", ...payload });
@@ -315,21 +341,9 @@ const getGoalAwareLine = ({ goalText = "", foodText = "", context = "general", i
 };
 
 const getPaeGuideMessages = (title) => [
-  `${title} แปะเลย กินอะไรมา? 🍚
-
-ส่งรูปอาหารก็ได้
-หรือพิมพ์บอกแปะสั้น ๆ ก็ได้`,
-  `พิมพ์ประมาณนี้ได้เลย:
-
-- ข้าวมันไก่ 1 จาน
-- ชาไทยหวานน้อย
-- ขนมเลย์ 1 ห่อ
-- มื้อเที่ยงกินสุกี้น้ำกับไข่ต้ม
-
-ถ้าหลายอย่าง พิมพ์แยกบรรทัดมาได้เลย
-แปะจะแยกแคลคร่าว ๆ แล้วรวมของวันนี้ให้เอง 😄`,
-  `ไม่รู้เรียกเมนูว่าอะไร ก็ส่งรูปมาได้
-เดี๋ยวแปะดูให้เอง 👀`,
+  `${title} แปะเลย ลื้อกินอะไรมา? 🍚\n\nส่งรูปอาหารก็ได้ หรือพิมพ์บอกแปะสั้น ๆ ก็ได้`,
+  `เช่น: ข้าวมันไก่ 1 จาน / ชาไทยหวานน้อย / ขนมเลย์ห่อนึง\n\nหลายอย่างพิมพ์เว้น , / และ หรือแยกบรรทัดได้เลย\nแปะจะแยกแคลให้ 😄`,
+  `ไม่รู้เรียกเมนูว่าอะไร ส่งรูปมาได้เลย\nเดี๋ยวแปะดูให้เอง 👀`,
 ];
 
 const PAE_GUIDE_TEXTS = [

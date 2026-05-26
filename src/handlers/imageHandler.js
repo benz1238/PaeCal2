@@ -1,9 +1,10 @@
 import { pushTexts, replyText, getLineImageBase64 } from "../services/line.js";
 import { postToSheet } from "../services/sheet.js";
 import { refreshSummaryCacheFromSheetResponse } from "../utils/summaryCache.js";
+import { getCachedSession, mergeCachedSession, setCachedSession } from "../utils/sessionCache.js";
 import { estimateFoodFromImage } from "../services/openai.js";
 import { DEFAULT_CALORIE_TARGET, safeNumber } from "../utils/helpers.js";
-import { getDisplayTitle, syncSessionFromProfile } from "../utils/profile.js";
+import { getDisplayTitle } from "../utils/profile.js";
 import { decideFoodLog } from "../utils/decision.js";
 import {
   renderFoodLogMessages,
@@ -27,8 +28,20 @@ export const handleImageMessage = async (event) => {
   console.log(`[PaeCalTiming] image:start user=${userId || "unknown"} message=${event.message?.id || "unknown"}`);
 
   const sessionT = nowMs();
-  const session = await postToSheet({ action: "GET_SESSION", userId });
-  logTiming("image", "getSession", sessionT);
+  let session = getCachedSession(userId);
+
+  if (session) {
+    logTiming("image", "getSessionMemoryHit", sessionT);
+  } else {
+    session = await postToSheet({ action: "GET_SESSION", userId });
+    session = {
+      step: session?.step || "READY",
+      data: session?.data || {},
+      ...session,
+    };
+    setCachedSession(userId, session);
+    logTiming("image", "getSession", sessionT);
+  }
 
   if (session.step !== "READY") {
     const replyT = nowMs();
@@ -114,15 +127,11 @@ export const handleImageMessage = async (event) => {
   logTiming("image", "decideFoodLog", decisionT, "memory=skipped");
 
   const syncT = nowMs();
-  await syncSessionFromProfile({
-    userId,
-    session,
-    extraData: {
-      calorieTarget: target,
-      lastMeal: meal,
-    },
+  mergeCachedSession(userId, session, {
+    calorieTarget: target,
+    lastMeal: meal,
   });
-  logTiming("image", "syncSession", syncT);
+  logTiming("image", "syncSessionMemoryOnly", syncT);
 
   const renderT = nowMs();
   const messages = renderFoodLogMessages
