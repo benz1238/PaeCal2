@@ -92,7 +92,7 @@ const paeLaewGuideFlex = () => ({
         },
         {
           type: "text",
-          text: "ส่งรูปอาหารก็ได้ หรือพิมพ์บอกแปะสั้น ๆ ก็ได้",
+          text: "ส่งรูปอาหารก็ได้ หรือพิมพ์สั้น ๆ ก็ได้ เดี๋ยวแปะดูให้ 😄",
           size: "sm",
           wrap: true,
           color: "#374151",
@@ -101,7 +101,7 @@ const paeLaewGuideFlex = () => ({
         {
           type: "box",
           layout: "vertical",
-          spacing: "xs",
+          spacing: "sm",
           margin: "md",
           paddingAll: "md",
           cornerRadius: "lg",
@@ -109,18 +109,48 @@ const paeLaewGuideFlex = () => ({
           contents: [
             {
               type: "text",
-              text: "เช่น: ข้าวมันไก่ 1 จาน / ชาไทยหวานน้อย / ขนมเลย์ห่อนึง",
-              size: "sm",
-              wrap: true,
-              color: "#4B5563",
+              text: "ตัวอย่าง",
+              size: "xs",
+              weight: "bold",
+              color: "#B45309",
             },
             {
               type: "text",
-              text: "หลายอย่างพิมพ์เว้น , / และ หรือแยกบรรทัดได้เลย แปะจะแยกแคลให้ 😄",
+              text: "ข้าวมันไก่ 1 จาน
+ชาไทยหวานน้อย
+ขนมเลย์ห่อนึง",
               size: "sm",
               wrap: true,
               color: "#374151",
-              margin: "sm",
+              margin: "xs",
+            },
+          ],
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          margin: "sm",
+          paddingAll: "md",
+          cornerRadius: "lg",
+          backgroundColor: "#F0FDF4",
+          contents: [
+            {
+              type: "text",
+              text: "ถ้ากินหลายอย่าง",
+              size: "xs",
+              weight: "bold",
+              color: "#166534",
+            },
+            {
+              type: "text",
+              text: "พิมพ์เว้นด้วย , / และ
+หรือแยกบรรทัดได้เลย
+แปะจะแยกแคลให้ 👌",
+              size: "sm",
+              wrap: true,
+              color: "#374151",
+              margin: "xs",
             },
           ],
         },
