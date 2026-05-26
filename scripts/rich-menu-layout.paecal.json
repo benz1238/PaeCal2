@@ -26,8 +26,8 @@
         "height": 930
       },
       "action": {
-        "type": "message",
-        "text": "สรุปวันนี้"
+        "type": "postback",
+        "data": "action=DAILY_SUMMARY"
       }
     },
     {
