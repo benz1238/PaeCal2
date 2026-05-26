@@ -893,6 +893,37 @@ ${total} / ${target} kcal
 (${progress})`;
 };
 
+const SWEET_RECAP_PATTERN = /(ของหวาน|ขนม|เค้ก|คุกกี้|โดนัท|บราวนี่|ไอศกรีม|ไอติม|บิงซู|ฮันนี่โทสต์|โรตี|แพนเค้ก|วาฟเฟิล|ครัวซองต์|ช็อกโกแลต|ชานม|ชาไทย|ชาเขียว|ชามะนาว|โกโก้|นมเย็น|น้ำหวาน|หวานเย็น|น้ำแดง|น้ำเขียว|น้ำอัดลม|โค้ก|โค๊ก|เป๊ปซี่|สไปรท์|แฟนต้า|น้ำผลไม้|สมูทตี้|milo|ไมโล|ovaltine|โอวัลติน|dessert|cake|cookie|donut|brownie|ice\s*cream|coke|cola|pepsi|juice|smoothie)/i;
+
+const getSummaryMeals = (day = {}, summary = {}) => {
+  const candidates = [day.meals, summary.meals, summary.items, summary.foods];
+  for (const list of candidates) {
+    if (Array.isArray(list)) return list;
+  }
+  return [];
+};
+
+const countSweetMeals = (meals = []) => meals.filter((meal) => {
+  const name = String(meal?.menuName || meal?.name || meal?.foodName || "").trim();
+  return SWEET_RECAP_PATTERN.test(name);
+}).length;
+
+const buildSugarRecapText = ({ day = {}, summary = {} }) => {
+  const directSugar = safeNumber(day.sugar ?? summary.totalSugar ?? summary.sugar, 0);
+  if (directSugar > 0) return `${Math.round(directSugar)} g`;
+
+  const meals = getSummaryMeals(day, summary);
+  const sweetCount = countSweetMeals(meals);
+
+  if (sweetCount >= 3) return `${sweetCount} รอบ · มาแน่น`;
+  if (sweetCount === 2) return `2 รอบ · เริ่มตึง`;
+  if (sweetCount === 1) return `1 รอบ · แปะเห็น`;
+
+  const carb = safeNumber(day.carb ?? summary.totalCarb, 0);
+  if (carb >= 250) return `น่าจับตา`;
+  return `ยังไม่เด่น`;
+};
+
 const buildDailyRecapCard = ({ decision, summary = {}, title }) => {
   const day = decision?.day || {};
   const topMeal = decision?.problemMeal || (Array.isArray(day.meals) ? day.meals[0] : null);
@@ -929,6 +960,8 @@ const buildDailyRecapCard = ({ decision, summary = {}, title }) => {
     proteinColor: safeNumber(day.protein ?? summary.totalProtein, 0) >= 70 ? "#047857" : "#D97706",
     fatText: `${Math.round(safeNumber(day.fat ?? summary.totalFat, 0))} g`,
     fatColor: safeNumber(day.fat ?? summary.totalFat, 0) >= 80 ? "#DC2626" : "#111827",
+    sugarText: buildSugarRecapText({ day, summary }),
+    sugarColor: countSweetMeals(getSummaryMeals(day, summary)) >= 2 ? "#DC2626" : "#111827",
     mealCountText: `${Math.round(safeNumber(day.mealCount ?? summary.mealCount, 0))} มื้อ`,
     goalText: String(summary.goal || summary.healthGoal || summary.userGoal || "ยังไม่ได้ตั้งเป้าสุขภาพ").trim() || "ยังไม่ได้ตั้งเป้าสุขภาพ",
     topMealText: topMealName ? `${topMealName}${topMealKcal ? ` · ${Math.round(topMealKcal)} kcal` : ""}` : "ยังไม่มีมื้อเด่น",
