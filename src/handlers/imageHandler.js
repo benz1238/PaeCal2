@@ -29,13 +29,86 @@ const resolveCachedTodayCalories = (session) => {
   );
 };
 
-const DRINK_IMAGE_PATTERN = /(โค้ก|โค๊ก|โคคา|โคล่า|coke|cola|pepsi|เป๊ปซี่|น้ำอัดลม|สไปรท์|แฟนต้า|ชานม|ชาไทย|ชาเขียว|มัทฉะ|กาแฟ|โกโก้|นม|น้ำหวาน|หวานเย็น|น้ำแดง|น้ำเขียว|เครื่องดื่ม|แก้วน้ำ|กระป๋อง|ขวด)/i;
+const DRINK_IMAGE_PATTERN = /(โค้ก|โค๊ก|โคคา|โคล่า|coke|cola|pepsi|เป๊ปซี่|น้ำอัดลม|สไปรท์|แฟนต้า|ชานม|ชาไทย|ชาเขียว|มัทฉะ|กาแฟ|โกโก้|นม|น้ำหวาน|หวานเย็น|น้ำแดง|น้ำเขียว|เครื่องดื่ม|แก้วน้ำ|กระป๋อง|ขวด|moccona|มอคโคน่า|nescafe|เนสกาแฟ|birdy|เบอร์ดี้|milo|ไมโล|ovaltine|โอวัลติน)/i;
 const NON_DRINK_MAIN_SUBJECT_PATTERN = /(แมว|หมา|สุนัข|ไก่|นก|เอกสาร|จอคอม|หน้าจอ|รถ|วิว)/i;
+const PACKAGED_PRODUCT_PATTERN = /(กระปุก|ขวด|กระป๋อง|แก้ว|cup|can|bottle|jar|pack|packet|ซอง|กล่อง)/i;
+const READY_TO_DRINK_PATTERN = /(พร้อมดื่ม|ready\s*to\s*drink|iced|เย็น|แก้ว|cup|ขวด|bottle|กระป๋อง|can|ถือแก้ว|ถือขวด|ถือกระป๋อง)/i;
+
+const detectPackagedDrinkProfile = (combined = "") => {
+  const text = normalizeText(combined).toLowerCase();
+  const isZero = /(zero|ซีโร่|ไม่มีน้ำตาล|0\s*%|sugar\s*free|no\s*sugar)/i.test(text);
+  const isThreeInOne = /(3\s*in\s*1|3\s*[-]?\s*1|ทรีอินวัน|สามอินวัน|กาแฟ\s*ซอง|ซอง|sachet|packet|พร้อมครีม|ครีมเทียม|น้ำตาล)/i.test(text);
+  const isJarOrInstant = /(กระปุก|jar|instant|สำเร็จรูป|freeze\s*dried|ผงกาแฟ|กาแฟผง|selection|gold|red\s*cup)/i.test(text);
+  const isReadyToDrink = /(พร้อมดื่ม|ready\s*to\s*drink|iced|เย็น|แก้ว|cup|ขวด|bottle|กระป๋อง|can|ถือแก้ว|ถือขวด|ถือกระป๋อง)/i.test(text);
+  const isBlackCoffee = /(black|americano|อเมริกาโน่|อเมริกาโน|กาแฟดำ|ไม่ใส่น้ำตาล|ไม่หวาน|no\s*sugar)/i.test(text);
+
+  const coffeeNote = (brand) => isThreeInOne
+    ? `อันนี้ดูเป็น${brand}แบบซอง/ทรีอินวันนะ 👀 แปะนับคร่าว ๆ ต่อ 1 ซองให้ก่อน`
+    : isReadyToDrink
+      ? `อันนี้ดูเป็น${brand}พร้อมดื่มนะ 👀 แปะนับคร่าว ๆ ต่อ 1 กระป๋อง/ขวดให้ก่อน`
+      : `อันนี้ดูเป็น${brand}แบบกาแฟผงนะ 👀 ถ้าชงดำ ๆ แคลไม่แรง แต่ถ้าเติมนม/น้ำตาลค่อยบวกเพิ่ม`;
+
+  const instantCoffeeProfile = (brand) => {
+    if (isThreeInOne) {
+      return { menuName: brand, kcal: 90, carb: 14, protein: 1, fat: 3, note: coffeeNote(brand) };
+    }
+
+    if (isReadyToDrink) {
+      return { menuName: brand, kcal: 120, carb: 18, protein: 2, fat: 3, note: coffeeNote(brand) };
+    }
+
+    if (isBlackCoffee || isJarOrInstant) {
+      return { menuName: brand, kcal: 15, carb: 2, protein: 1, fat: 0, note: coffeeNote(brand) };
+    }
+
+    return { menuName: brand, kcal: 60, carb: 8, protein: 1, fat: 1, note: coffeeNote(brand) };
+  };
+
+  if (/(moccona|มอคโคน่า)/i.test(text)) return instantCoffeeProfile("กาแฟมอคโคน่า");
+  if (/(nescafe|เนสกาแฟ)/i.test(text)) return instantCoffeeProfile("กาแฟเนสกาแฟ");
+
+  if (/(birdy|เบอร์ดี้)/i.test(text)) {
+    if (isZero || isBlackCoffee) {
+      return { menuName: "กาแฟเบอร์ดี้", kcal: 15, carb: 2, protein: 1, fat: 0, note: "อันนี้ดูเป็นกาแฟเบอร์ดี้สูตรเบา/ดำ ๆ นะ 👀" };
+    }
+    return { menuName: "กาแฟเบอร์ดี้", kcal: 110, carb: 18, protein: 2, fat: 3, note: "อันนี้ดูเป็นกาแฟเบอร์ดี้พร้อมดื่มนะ 👀" };
+  }
+
+  if (/(coke|coca|โค้ก|โค๊ก|โคคา|โคล่า)/i.test(text)) {
+    if (isZero) {
+      return { menuName: "โค้กซีโร่", kcal: 0, carb: 0, protein: 0, fat: 0, note: "อันนี้โค้กซีโร่นะ แคลแทบไม่มี แปะให้ผ่านแบบเบา ๆ 👀" };
+    }
+    return { menuName: "โค้ก", kcal: 140, carb: 35, protein: 0, fat: 0, note: "อันนี้โค้กนะ 👀 แปะนับเป็น 1 ขวด/กระป๋องให้ก่อน" };
+  }
+
+  if (/(pepsi|เป๊ปซี่)/i.test(text)) {
+    if (isZero) {
+      return { menuName: "เป๊ปซี่แมกซ์/ไม่มีน้ำตาล", kcal: 0, carb: 0, protein: 0, fat: 0, note: "อันนี้ดูเป็นเป๊ปซี่สูตรไม่มีน้ำตาลนะ 👀" };
+    }
+    return { menuName: "เป๊ปซี่", kcal: 140, carb: 35, protein: 0, fat: 0, note: "อันนี้เป๊ปซี่นะ 👀 แปะนับเป็น 1 ขวด/กระป๋องให้ก่อน" };
+  }
+
+  if (/(milo|ไมโล)/i.test(text)) {
+    const kcal = isReadyToDrink ? 170 : 110;
+    return { menuName: "ไมโล", kcal, carb: isReadyToDrink ? 28 : 18, protein: 5, fat: 3, note: "อันนี้ดูเป็นไมโลนะ 👀 ถ้าชงนม/หวานเพิ่ม แคลจะขยับขึ้นอีก" };
+  }
+
+  if (/(ovaltine|โอวัลติน)/i.test(text)) {
+    const kcal = isReadyToDrink ? 180 : 120;
+    return { menuName: "โอวัลติน", kcal, carb: isReadyToDrink ? 30 : 20, protein: 4, fat: 3, note: "อันนี้ดูเป็นโอวัลตินนะ 👀 ถ้าชงนม/หวานเพิ่ม แคลจะขยับขึ้นอีก" };
+  }
+
+  return null;
+};
 
 const inferDrinkFromImage = ({ imageSubject, imageCaption, gptData }) => {
   const subject = normalizeText(imageSubject);
   const caption = normalizeText(imageCaption);
-  const combined = `${subject} ${caption}`.trim();
+  const brandName = normalizeText(gptData?.brandName);
+  const productType = normalizeText(gptData?.productType);
+  const packagedState = normalizeText(gptData?.packagedState);
+  const modelMenu = normalizeText(gptData?.menuName);
+  const combined = `${subject} ${caption} ${brandName} ${productType} ${packagedState} ${modelMenu}`.trim();
 
   if (!combined || !DRINK_IMAGE_PATTERN.test(combined)) return null;
 
@@ -45,9 +118,17 @@ const inferDrinkFromImage = ({ imageSubject, imageCaption, gptData }) => {
     return null;
   }
 
+  const packagedProfile = detectPackagedDrinkProfile(combined);
+
   let menuName = normalizeText(gptData?.menuName);
   let kcal = safeNumber(gptData?.kcal, 0);
   let carb = safeNumber(gptData?.carb, 0);
+
+  if (packagedProfile && (!menuName || /^(อาหาร|เครื่องดื่ม|เครื่องดื่มหวาน|กาแฟ|โกโก้|ชา|นม|น้ำอัดลม)$/i.test(menuName))) {
+    menuName = packagedProfile.menuName;
+    kcal = kcal || packagedProfile.kcal;
+    carb = carb || packagedProfile.carb;
+  }
 
   if (!menuName || menuName === "อาหาร") {
     if (/(zero|ซีโร่|ไม่มีน้ำตาล|0%)/i.test(combined)) {
@@ -90,7 +171,7 @@ const inferDrinkFromImage = ({ imageSubject, imageCaption, gptData }) => {
     protein: safeNumber(gptData?.protein, 0),
     fat: safeNumber(gptData?.fat, 0),
     portionLevel: gptData?.portionLevel || "normal",
-    portionNote: gptData?.portionNote || "เครื่องดื่มก็มีแคลนะ แปะนับให้แล้ว 👀",
+    portionNote: gptData?.portionNote || packagedProfile?.note || "เครื่องดื่มก็มีแคลนะ แปะนับให้แล้ว 👀",
     confidence: gptData?.confidence || "medium",
   };
 };
@@ -199,7 +280,18 @@ const inferPortionInfo = ({ menuName, kcal, portionLevel, portionNote }) => {
 };
 
 
-const isDrinkMenu = (menuName = "") => /(ชานม|ชาไทย|ชาเขียว|โกโก้|กาแฟ|ลาเต้|นม|โค้ก|โคก|เป๊ปซี่|น้ำอัดลม|น้ำหวาน|หวานเย็น|น้ำผลไม้|สมูทตี้|ชา|เครื่องดื่ม|coke|cola|pepsi|coffee|tea|milk|cocoa|latte|smoothie|juice)/i.test(String(menuName || ""));
+const isDrinkMenu = (menuName = "") => {
+  const name = String(menuName || "").trim();
+  if (!name) return false;
+
+  if (/^(ชา|นม|กาแฟ|โกโก้|โค้ก|โค๊ก|เป๊ปซี่|น้ำอัดลม|น้ำหวาน|เครื่องดื่ม)$/i.test(name)) return true;
+
+  return /(ชานม|ชามะนาว|ชาไทย|ชาเขียว|ชาดำ|ชาเย็น|มัทฉะ|โกโก้|กาแฟ|ลาเต้|คาปูชิโน|อเมริกาโน่|นมเย็น|นมสด|โค้ก|โคก|โค๊ก|เป๊ปซี่|น้ำอัดลม|สไปรท์|แฟนต้า|น้ำหวาน|หวานเย็น|น้ำแดง|น้ำเขียว|น้ำผลไม้|สมูทตี้|เครื่องดื่ม|coke|cola|pepsi|coffee|tea|milk|cocoa|latte|smoothie|juice|moccona|มอคโคน่า|nescafe|เนสกาแฟ|birdy|เบอร์ดี้|milo|ไมโล|ovaltine|โอวัลติน)/i.test(name);
+};
+
+const buildNutritionLine = ({ carb = 0, protein = 0, fat = 0 } = {}) => {
+  return `🥦 โภชนาการ: คาร์บ ${Math.round(safeNumber(carb, 0))}g / โปรตีน ${Math.round(safeNumber(protein, 0))}g / ไขมัน ${Math.round(safeNumber(fat, 0))}g`;
+};
 
 const buildDrinkSugarLine = ({ menuName = "", kcal = 0, carb = 0 } = {}) => {
   if (!isDrinkMenu(menuName)) return "";
@@ -280,8 +372,17 @@ const buildImageInsight = ({ meal, summary, goalText }) => {
 };
 
 const buildImageFoodMessages = ({ meal, summary, title, session }) => {
-  const sugarLine = buildDrinkSugarLine({ menuName: meal.menuName, kcal: meal.kcal, carb: meal.carb });
-  const firstMessage = `${meal.reaction} ${title} แปะดูให้แล้ว\n\n🍽️ เมนู\n${meal.menuName}\n🔥 ~${meal.kcal} kcal${sugarLine ? `\n${sugarLine}` : ""}\n📏 ปริมาณ: ${meal.portionLabel}`;
+  const isDrink = isDrinkMenu(meal.menuName);
+  const sugarLine = isDrink ? buildDrinkSugarLine({ menuName: meal.menuName, kcal: meal.kcal, carb: meal.carb }) : "";
+  const nutritionLine = !isDrink ? buildNutritionLine({ carb: meal.carb, protein: meal.protein, fat: meal.fat }) : "";
+  const firstMessage = `${meal.reaction} ${title} แปะดูให้แล้ว
+
+🍽️ เมนู
+${meal.menuName}
+🔥 ~${meal.kcal} kcal${sugarLine ? `
+${sugarLine}` : ""}${nutritionLine ? `
+${nutritionLine}` : ""}
+📏 ปริมาณ: ${meal.portionLabel}`;
 
   const { macroLine, goalLine } = buildImageInsight({
     meal,
