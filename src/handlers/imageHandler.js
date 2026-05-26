@@ -252,10 +252,13 @@ export const handleImageMessage = async (event) => {
   const fat = safeNumber(gptData?.fat, 0);
   const menuName = normalizeText(gptData?.menuName) || "อาหาร";
 
-  if (!menuName || kcal <= 0) {
+  const isFoodImage = gptData?.isFood !== false;
+  const imageSubject = normalizeText(gptData?.imageSubject || gptData?.subject || gptData?.detectedObject || "");
+
+  if (!isFoodImage || !menuName || kcal <= 0) {
     const pushNoFoodT = nowMs();
-    await pushTexts(userId, [renderNoFoodDetectedReply()]);
-    logTiming("image", "pushNoFood", pushNoFoodT);
+    await pushTexts(userId, [renderNoFoodDetectedReply({ imageSubject })]);
+    logTiming("image", "pushNoFood", pushNoFoodT, `subject=${imageSubject || "unknown"}`);
     logTiming("image", "total", totalT);
     return;
   }

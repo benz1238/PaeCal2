@@ -1,17 +1,5 @@
 import { replyText, replyTexts } from "../services/line.js";
 import { postToSheet } from "../services/sheet.js";
-import {
-  getCachedSummary,
-  invalidateSummaryCache,
-  refreshSummaryCacheFromSheetResponse,
-  setCachedSummary,
-} from "../utils/summaryCache.js";
-import {
-  getCachedSession,
-  invalidateSessionCache,
-  mergeCachedSession,
-  setCachedSession,
-} from "../utils/sessionCache.js";
 import { estimateFoodFromText, parseUserIntent } from "../services/openai.js";
 import {
   calculateTDEE,
@@ -43,33 +31,14 @@ import {
   renderMealSuggestionReply,
 } from "../utils/personality.js";
 
-const nowMs = () => Date.now();
-
-const logTiming = (scope, step, startedAt, extra = "") => {
-  const ms = Date.now() - startedAt;
-  console.log(`[PaeCalTiming] ${scope}:${step} ${ms}ms${extra ? ` ${extra}` : ""}`);
-  return ms;
-};
-
 const getSession = async (userId) => {
-  const t = nowMs();
-  const cached = getCachedSession(userId);
-
-  if (cached) {
-    logTiming("text", "getSessionMemoryHit", t);
-    return cached;
-  }
-
   const session = await postToSheet({ action: "GET_SESSION", userId });
-  const normalized = {
+
+  return {
     step: session?.step || "READY",
     data: session?.data || {},
     ...session,
   };
-
-  setCachedSession(userId, normalized);
-  logTiming("text", "getSession", t);
-  return normalized;
 };
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -83,123 +52,31 @@ const retryOnce = async (fn) => {
   }
 };
 
-const saveProfile = async (payload) => {
-  const result = await postToSheet({ action: "SAVE_PROFILE", ...payload });
-  invalidateSummaryCache(payload?.userId);
-  invalidateSessionCache(payload?.userId);
-  return result;
-};
-
-const updateSession = async (payload) => {
-  const result = await postToSheet({ action: "UPDATE_SESSION", ...payload });
-
-  setCachedSession(payload?.userId, {
-    ...(result || {}),
-    step: result?.step || payload?.step || "READY",
-    data: result?.data || payload?.sessionData || payload?.data || {},
-  });
-
-  return result;
-};
-
-const logFood = async (payload) => {
-  const result = await postToSheet({ action: "LOG_FOOD", ...payload });
-  refreshSummaryCacheFromSheetResponse(payload?.userId, result);
-  return result;
-};
-
-const getDailySummary = async (userId) => {
-  const t = nowMs();
-  const cached = getCachedSummary(userId);
-
-  if (cached) {
-    logTiming("text", "getDailySummaryMemoryHit", t, `meals=${cached?.mealCount ?? "?"}`);
-    return cached;
-  }
-
-  try {
-    const result = await postToSheet({ action: "GET_DAILY_SUMMARY", userId });
-    setCachedSummary(userId, result);
-    return result;
-  } finally {
-    logTiming("text", "getDailySummary", t);
-  }
-};
-
+const saveProfile = async (payload) => postToSheet({ action: "SAVE_PROFILE", ...payload });
+const updateSession = async (payload) => postToSheet({ action: "UPDATE_SESSION", ...payload });
+const logFood = async (payload) => postToSheet({ action: "LOG_FOOD", ...payload });
+const getDailySummary = async (userId) => postToSheet({ action: "GET_DAILY_SUMMARY", userId });
 const getLastMeal = async (userId) => postToSheet({ action: "GET_LAST_MEAL", userId });
-
-const updateLastMeal = async (payload) => retryOnce(async () => {
-  const result = await postToSheet({ action: "UPDATE_LAST_MEAL", ...payload });
-  refreshSummaryCacheFromSheetResponse(payload?.userId, result);
-  return result;
-});
-
-const deleteLastMeal = async (userId) => retryOnce(async () => {
-  const result = await postToSheet({ action: "DELETE_LAST_MEAL", userId });
-  refreshSummaryCacheFromSheetResponse(userId, result);
-  return result;
-});
-
-const syncSessionInBackground = ({ userId, session, extraData = {}, step }) => {
-  const next = mergeCachedSession(userId, session, extraData, step || session?.step || "READY");
-
-  syncSessionFromProfile({
-    userId,
-    session: {
-      ...(session || {}),
-      step: step || session?.step || "READY",
-      data: next?.data || { ...(session?.data || {}), ...extraData },
-    },
-    extraData,
-  }).catch((err) => {
-    console.error("[PaeCalBackgroundSync] session sync failed", err?.response?.data || err);
-  });
-
-  return next;
-};
+const updateLastMeal = async (payload) => retryOnce(() => postToSheet({ action: "UPDATE_LAST_MEAL", ...payload }));
+const deleteLastMeal = async (userId) => retryOnce(() => postToSheet({ action: "DELETE_LAST_MEAL", userId }));
 
 const exactTexts = (list, text) => list.includes(String(text || "").trim());
 
 const normalizeText = (text) => String(text || "").trim().toLowerCase();
 
-const normalizeChatAck = (text) => normalizeText(text)
-  .replace(/[​-‍﻿]/g, "")
-  .replace(/[\sๆ~!！?？.。…。、,，:：;；\-_=+*()[\]{}"'“”‘’`]+/g, "");
+const EATING_GUILT_PATTERN = /(วันนี้)?\s*(กินเละ|กินพัง|หลุดหนัก|กินเยอะมาก|กินเยอะไป|กินอ้วนแน่|อ้วนแน่|วันนี้อ้วนแน่|พังแน่|แย่แล้ว.*กิน|กินจนรู้สึกผิด)/i;
 
-const isSilentAckText = (text) => {
-  const value = normalizeChatAck(text);
+const isEatingGuiltText = (text) => EATING_GUILT_PATTERN.test(String(text || "").trim());
 
-  if (!value) return false;
+const buildEatingGuiltReply = () => {
+  const replies = [
+    "เอ้า ใจเย็นก่อน 😂\nมื้อเดียวไม่ทำให้ใครพังหรอก\nวันนี้แค่หลุดนิดหน่อย เดี๋ยวมื้อต่อไปเบาลงก็พอ 😄🍃",
+    "ไม่ต้องตีตัวเองก่อนน้า 👀\nกินเยอะวันนึงไม่ได้แปลว่าอ้วนทันที\nแปะว่าเอากลับมาได้ มื้อต่อไปคุมเกมเบา ๆ พอ 😄",
+    "โอเค วันนี้อาจจะจัดเต็มไปหน่อย 😂\nแต่ยังไม่ต้องแพนิค\nพักของทอด/หวานรอบถัดไปนิดนึง เดี๋ยวบาลานซ์กลับได้",
+    "แปะขอเบรกคำว่าอ้วนก่อนนะ 😅\nวันนี้กินเยอะได้ แต่ไม่ต้องด่าตัวเอง\nมื้อต่อไปเอาเบา ๆ หน่อย แค่นี้ยังทัน"
+  ];
 
-  return [
-    "เค",
-    "k",
-    "kk",
-    "ok",
-    "okay",
-    "โอเค",
-    "โอเคร",
-    "โอเคจ้า",
-    "โอเคครับ",
-    "โอเคคับ",
-    "โอเคค่ะ",
-    "จ้า",
-    "จ๊ะ",
-    "จ้าา",
-    "ครับ",
-    "คับ",
-    "ค่ะ",
-    "คะ",
-    "ได้",
-    "ได้เลย",
-    "รับทราบ",
-    "รับทราบครับ",
-    "รับทราบค่ะ",
-    "ขอบคุณ",
-    "แต้ง",
-    "thanks",
-    "thankyou",
-  ].includes(value);
+  return replies[Math.floor(Math.random() * replies.length)];
 };
 
 const hasAnyText = (text, words = []) => {
@@ -780,26 +657,30 @@ const isStartGoalUpdateText = (text) => exactTexts([
 ], text);
 
 const getEditHelpText = (title) => {
-  return `${title} แก้มื้อล่าสุดได้เลย 🧾
+  return `${title} อยากแก้มื้อล่าสุดใช่ไหมจ๊ะ 🧾
 
-พิมพ์สั้น ๆ แบบนี้พอ:
-• แก้มื้อล่าสุดเป็น ข้าวหมูกระเทียมไข่ดาว
-• แก้เป็น 650 kcal
-• ลบมื้อล่าสุด
+พิมพ์แบบนี้ได้เลยน้า:
 
-บอกมา เดี๋ยวแปะจัดให้ 😄`;
+- แก้มื้อล่าสุดเป็น ข้าวหมูกระเทียมไข่ดาว
+- ไม่ใช่ข้าวผัด เป็นข้าวหมูกระเทียม
+- แก้เป็น 650 kcal
+- ลบมื้อล่าสุด
+
+แปะจะไม่เดาเองนะ
+ต้องให้${title}บอกก่อนว่าจะแก้อะไรจ้า`;
 };
 
 const getGoalHelpText = (title) => {
-  return `${title} ตั้งเป้าใหม่ได้เลย 🎯
+  return `${title} อยากตั้งเป้าสุขภาพใหม่ใช่ไหมจ๊ะ 🎯
 
-พิมพ์มาแบบคนคุยกันพอ เช่น:
-• อยากลดไขมัน
-• อยากเพิ่มโปรตีน
-• อยากคุมหวาน
-• อยากกินดึกให้น้อยลง
+พิมพ์เป้าหมายที่อยากได้มาได้เลย เช่น:
 
-เดี๋ยวแปะจำให้ 😄`;
+- อยากลดไขมัน
+- อยากเพิ่มกล้าม
+- อยากคุมน้ำหนัก
+- อยากกินสุขภาพดีขึ้น
+
+เดี๋ยวแปะบันทึกให้จ้า`;
 };
 
 const extractKcalFromText = (text) => {
@@ -860,13 +741,13 @@ const replySmartSummary = async ({ replyToken, userId, title }) => {
 };
 
 export const handleTextMessage = async (event) => {
-  const totalT = nowMs();
   const userId = event.source.userId;
   const replyToken = event.replyToken;
   const text = String(event.message.text || "").trim();
 
-  if (isSilentAckText(text)) {
-    logTiming("text", "silentAck", totalT);
+  if (isEatingGuiltText(text)) {
+    console.log(`[PaeCalTiming] text:eatingGuiltLocal 0ms`);
+    await replyText(replyToken, buildEatingGuiltReply());
     return;
   }
 
@@ -876,12 +757,12 @@ export const handleTextMessage = async (event) => {
     await updateSession({ userId, step: "ASK_NAME", sessionData: {} });
     await replyText(
       replyToken,
-      "หนีห่าว 😄 แปะแคลมาแล้ว\n\nลื้อชื่ออะไรจ๊ะ?\nพิมพ์แบบนี้ก็ได้: ฉันชื่อเบ๊นซ์"
+      "หนีห่าว! แปะแคลพร้อมดูแลสุขภาพแล้ว! ลื้อชื่ออะไรจ๊ะ?"
     );
     return;
   }
 
-  const profileForOnboarding = session?.data?.name ? {} : await getProfile(userId);
+  const profileForOnboarding = await getProfile(userId);
   const savedName = session?.data?.name || profileForOnboarding?.name || "";
 
   if (
@@ -1079,12 +960,12 @@ export const handleTextMessage = async (event) => {
   }
 
   if (text === "แปะรูปอาหาร") {
-    await replyText(replyToken, `${title} ส่งรูปอาหารมาเลย 📸\n\nเห็นจานชัด ๆ ก็พอ\nเดี๋ยวแปะดูให้แบบคร่าว ๆ ไม่ดุ 😄`);
+    await replyText(replyToken, `${title} ส่งรูปอาหารมาได้เลย 📸\n\nเอาให้เห็นจานชัด ๆ นะ\nเดี๋ยวแปะดูให้ว่าแคลประมาณเท่าไหร่จ้า`);
     return;
   }
 
   if (text === "ถามแปะ") {
-    await replyText(replyToken, `ถามมาได้เลย ${title} 👀\n\nเรื่องกิน เรื่องแคล เรื่องมื้อนี้หนักไหม\nแปะช่วยดูให้ได้\n\nลองพิมพ์:\n• เย็นนี้กินไรดี\n• วันนี้โปรตีนพอยัง\n• หมูกระทะหนักไปไหม`);
+    await replyText(replyToken, `ถามมาได้เลยนะ ${title} 🍚\n\nแปะถนัดเรื่องกิน แคล และโภชนาการ\nเช่น:\n\n- หิวแล้ว\n- เย็นนี้กินไรดี\n- วันนี้กินโปรตีนพอยัง\n- เมนูนี้หนักไปไหม`);
     return;
   }
 
@@ -1111,7 +992,7 @@ export const handleTextMessage = async (event) => {
       return;
     }
 
-    syncSessionInBackground({ userId, session, extraData: { lastMeal: null } });
+    await syncSessionFromProfile({ userId, session, extraData: { lastMeal: null } });
     await replyText(replyToken, formatDeletedMealReply({ title, deletedMeal: deleted.deletedMeal, summary: deleted }));
     return;
   }
@@ -1153,7 +1034,7 @@ export const handleTextMessage = async (event) => {
     const meal = { menuName, kcal, carb, protein, fat };
     const decision = decideFoodLog({ meal, summary });
 
-    syncSessionInBackground({ userId, session, extraData: { calorieTarget: target, lastMeal: meal } });
+    await syncSessionFromProfile({ userId, session, extraData: { calorieTarget: target, lastMeal: meal } });
     await replyTexts(replyToken, renderFoodLogMessages({ title, meal, summary, decision }));
     return;
   }
@@ -1197,7 +1078,7 @@ export const handleTextMessage = async (event) => {
       return;
     }
 
-    syncSessionInBackground({ userId, session, extraData: { lastMeal: null } });
+    await syncSessionFromProfile({ userId, session, extraData: { lastMeal: null } });
     await replyText(replyToken, formatDeletedMealReply({ title, deletedMeal: deleted.deletedMeal, summary: deleted }));
     return;
   }
@@ -1248,7 +1129,7 @@ export const handleTextMessage = async (event) => {
       return;
     }
 
-    syncSessionInBackground({
+    await syncSessionFromProfile({
       userId,
       session,
       extraData: {
@@ -1295,15 +1176,6 @@ export const handleTextMessage = async (event) => {
     const progress = buildProgressBar(total, target);
     const signText = kcal >= 0 ? "เพิ่ม" : "ลด";
 
-    syncSessionInBackground({
-      userId,
-      session,
-      extraData: {
-        calorieTarget: target,
-        lastMeal: { ...lastMeal, kcal, carb, protein, fat, menuName: `${lastMeal.menuName} ปรับปริมาณ` },
-      },
-    });
-
     await replyText(replyToken, `โอเค ${title} แปะปรับจากเมนูล่าสุดให้แล้วนะ 😄\n\n🍳 ${lastMeal.menuName}\n${kcal >= 0 ? "➕" : "➖"} ${signText}ประมาณ ${Math.abs(kcal)} kcal\n\n📊 วันนี้กินไปแล้ว:\n${total} / ${target} kcal\n(${progress})`);
     return;
   }
@@ -1324,7 +1196,7 @@ export const handleTextMessage = async (event) => {
     const meal = { menuName, kcal, carb, protein, fat };
     const decision = decideFoodLog({ meal, summary });
 
-    syncSessionInBackground({ userId, session, extraData: { calorieTarget: target, lastMeal: meal } });
+    await syncSessionFromProfile({ userId, session, extraData: { calorieTarget: target, lastMeal: meal } });
     await replyTexts(replyToken, renderFoodLogMessages({ title, meal, summary, decision }));
     return;
   }
