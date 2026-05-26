@@ -239,8 +239,7 @@ export const handleImageMessage = async (event) => {
   if (session.step !== "READY") {
     const pushT = nowMs();
     await pushTexts(userId, [
-      "แปะขอรู้จักลื้อก่อนน้า
-พิมพ์ชื่อมาก่อนเลยจ้า 😊",
+      ["แปะขอรู้จักลื้อก่อนน้า", "พิมพ์ชื่อมาก่อนเลยจ้า 😊"].join("\n"),
     ]);
     logTiming("image", "pushNeedProfile", pushT);
     logTiming("image", "total", totalT);
