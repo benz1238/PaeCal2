@@ -394,8 +394,7 @@ const buildImageFoodMessages = ({ meal, summary, title, session }) => {
   const includesSolid = hasSolidFood(meal) || (!includesSugarType);
   const sugarLine = includesSugarType ? buildDrinkSugarLine({ menuName: meal.menuName, kcal: meal.kcal, carb: meal.carb, allowAnyDrink: true }) : "";
   const nutritionLine = includesSolid ? buildNutritionLine({ carb: meal.carb, protein: meal.protein, fat: meal.fat }) : "";
-  const detailLines = [nutritionLine, sugarLine].filter(Boolean).join("
-");
+  const detailLines = [nutritionLine, sugarLine].filter(Boolean).join("\n");
   const firstMessage = `${meal.reaction} ${title} แปะดูให้แล้ว
 
 🍽️ เมนู
