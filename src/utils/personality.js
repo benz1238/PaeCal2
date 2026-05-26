@@ -609,17 +609,44 @@ export const renderNoFoodDetectedReply = ({ imageSubject, imageCaption } = {}) =
   ]);
 };
 
+
+const isDrinkMealName = (name = "") => /(ชานม|ชาไทย|ชาเขียว|โกโก้|กาแฟ|ลาเต้|นม|โค้ก|โคก|เป๊ปซี่|น้ำอัดลม|น้ำหวาน|หวานเย็น|น้ำผลไม้|สมูทตี้|ชา|เครื่องดื่ม|coke|cola|pepsi|coffee|tea|milk|cocoa|latte|smoothie|juice)/i.test(String(name || ""));
+
+const drinkSugarLine = ({ menuName = "", kcal = 0, carb = 0 } = {}) => {
+  if (!isDrinkMealName(menuName)) return "";
+
+  const kcalValue = Number(kcal || 0) || 0;
+  const carbValue = Number(carb || 0) || 0;
+
+  if (/หวานน้อย|ไม่หวาน|0\s*%|zero|ซีโร่|sugar\s*free/i.test(menuName)) {
+    return "🍬 น้ำตาล: น่าจะเบากว่าปกติ แต่อย่าเพิ่งไว้ใจหมดนะ 👀";
+  }
+
+  if (kcalValue >= 250 || carbValue >= 45) {
+    return "🍬 น้ำตาล: น่าจะมาแน่นพอตัวเลยนะ 555+";
+  }
+
+  if (kcalValue >= 120 || carbValue >= 20) {
+    return "🍬 น้ำตาล: มีมาพอให้แปะเห็นอยู่นะ 👀";
+  }
+
+  return "🍬 น้ำตาล: ดูไม่แรงมาก แต่ก็แปะไว้ก่อนนะ";
+};
+
 export const renderFoodLogMessages = ({ title, meal, summary, decision }) => {
   const day = decision.day;
   const signals = decision.signals;
   const progress = buildProgressBar(day.eaten, day.target);
 
+  const sugarLine = drinkSugarLine({ menuName: signals.menuName, kcal: signals.kcal, carb: signals.carb });
+
   const firstMessage = `${reactionLineForFood({ title, decision })}
 
-🍽️ เมนูที่แปะเห็น
+🍽️ เมนู
 ${signals.menuName}
 
-🔥 ประมาณ ${signals.kcal} kcal`;
+🔥 ประมาณ ${signals.kcal} kcal${sugarLine ? `
+${sugarLine}` : ""}`;
 
   const secondMessage = `📊 วันนี้กินไปแล้ว
 ${day.eaten} / ${day.target} kcal
