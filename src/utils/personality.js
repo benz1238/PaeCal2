@@ -54,8 +54,8 @@ const reactionLineForFood = ({ title, decision }) => {
   const mood = decision.mood;
   const bank = {
     over_calorie_heavy: [
-      `โอ้โห ${title} วันนี้จัดเต็มแบบมีหลักฐานนะ 😂`,
-      `เอ้า ${title} วันนี้แคลพุ่งไม่เบาเลย 😅`,
+      `โอ้โห ${title} วันนี้ยอดรวมเริ่มตึงแล้วนะ 😂`,
+      `เอ้า ${title} วันนี้แคลพุ่งไม่เบาเลย 555+`,
     ],
     over_calorie: [
       `มื้อนี้ทำแคลล้ำเส้นแล้วนะ ${title} 😅`,
@@ -379,7 +379,7 @@ ${timeContext.closing}`;
 };
 
 const recapHeadline = ({ day, memory }) => {
-  if (day.isVeryOver || memory.hasHeavyPattern) return "วันนี้คือสายจัดเต็มแบบมีหลักฐานนะ 😂";
+  if (day.isVeryOver || memory.hasHeavyPattern) return "วันนี้ยอดรวมตึงนิดนึงนะ 555+";
   if (day.isOver) return "วันนี้มีหลุดโค้งนิดนึงนะ 👀";
   if (memory.hasFriedPattern) return "วันนี้ของทอดมาแอบถี่นะ แปะเห็น 👀";
   if (memory.hasSweetPattern) return "วันนี้หวานมาหลายจังหวะอยู่นะ 👀";
