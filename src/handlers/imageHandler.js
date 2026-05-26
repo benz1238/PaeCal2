@@ -305,8 +305,14 @@ const hasDrink = (meal = {}) => {
   return isDrinkMenu(text);
 };
 
+const hasSweet = (meal = {}) => {
+  const itemNames = Array.isArray(meal.items) ? meal.items.map((item) => item?.name).filter(Boolean).join(" + ") : "";
+  const text = `${meal.menuName || ""} ${itemNames}`;
+  return SWEET_MENU_PATTERN.test(text);
+};
+
 const buildNutritionLine = ({ carb = 0, protein = 0, fat = 0 } = {}) => {
-  return `🥦 โภชนาการ: C ${Math.round(safeNumber(carb, 0))}g / P ${Math.round(safeNumber(protein, 0))}g / F ${Math.round(safeNumber(fat, 0))}g`;
+  return `🍚 คาร์บ ${Math.round(safeNumber(carb, 0))}g / 💪 โปรตีน ${Math.round(safeNumber(protein, 0))}g / 🥑 ไขมัน ${Math.round(safeNumber(fat, 0))}g`;
 };
 
 const buildDrinkSugarLine = ({ menuName = "", kcal = 0, carb = 0, allowAnyDrink = false } = {}) => {
