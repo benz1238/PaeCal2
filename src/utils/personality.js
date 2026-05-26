@@ -537,11 +537,48 @@ export const renderFallbackReply = () => {
   return pick(fallbackReplies);
 };
 
-export const renderNoFoodDetectedReply = () => {
-  return `แปะมองไม่ทันอะ 😅
+const normalizeSubject = (value) => String(value || "").trim();
 
-ส่งใหม่ใกล้ ๆ ได้มั้ย
-เอาให้เห็นอาหารชัด ๆ หน่อยน้า`;
+export const renderNoFoodDetectedReply = ({ imageSubject } = {}) => {
+  const subject = normalizeSubject(imageSubject);
+
+  if (/แมว|cat/i.test(subject)) {
+    return [
+      "เอ้า อันนี้แมวนี่นา 😂",
+      "น่ารักอยู่ แต่แปะนับแคลให้น้องไม่ได้จ้า",
+      "ส่งรูปอาหารมา เดี๋ยวแปะดูให้ 🍽️",
+    ].join("\n");
+  }
+
+  if (/หมา|สุนัข|dog/i.test(subject)) {
+    return [
+      "อันนี้น้องหมานะ ไม่ใช่มื้อข้าว 😂",
+      "แปะขอดูอาหารแทนหน่อย",
+      "ส่งรูปจานที่กินมา เดี๋ยวแปะดูให้ 🍽️",
+    ].join("\n");
+  }
+
+  if (/คน|หน้า|selfie|เซลฟี่/i.test(subject)) {
+    return [
+      "อันนี้เหมือนรูปคนนะ 😂",
+      "แปะดูแคลจากหน้าไม่ได้จ้า",
+      "ส่งรูปอาหารมา เดี๋ยวแปะช่วยประเมินให้ 🍽️",
+    ].join("\n");
+  }
+
+  if (subject && !/อาหาร|food|meal/i.test(subject)) {
+    return [
+      `อันนี้เหมือนรูป${subject}นะ 😂`,
+      "ยังไม่ใช่อาหารที่แปะนับแคลได้",
+      "ส่งรูปจานที่กินมา เดี๋ยวแปะดูให้ 🍽️",
+    ].join("\n");
+  }
+
+  return [
+    "อันนี้ยังดูไม่เหมือนอาหารนะ 😂",
+    "แปะนับแคลให้ไม่ถนัด",
+    "ส่งรูปจานที่กินมา เดี๋ยวแปะดูให้ 🍽️",
+  ].join("\n");
 };
 
 export const renderFoodLogMessages = ({ title, meal, summary, decision }) => {
