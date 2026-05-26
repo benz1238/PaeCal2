@@ -601,7 +601,7 @@ const hasDrinkInName = (name = "") => isDrinkMealName(name);
 const hasSweetInName = (name = "") => SWEET_MEAL_PATTERN.test(String(name || ""));
 
 const nutritionLine = ({ carb = 0, protein = 0, fat = 0 } = {}) => {
-  return `🥦 โภชนาการ: C ${Math.round(Number(carb || 0))}g / P ${Math.round(Number(protein || 0))}g / F ${Math.round(Number(fat || 0))}g`;
+  return `🍚 คาร์บ ${Math.round(Number(carb || 0))}g / 💪 โปรตีน ${Math.round(Number(protein || 0))}g / 🥑 ไขมัน ${Math.round(Number(fat || 0))}g`;
 };
 
 const drinkSugarLine = ({ menuName = "", kcal = 0, carb = 0, allowAnyDrink = false } = {}) => {
