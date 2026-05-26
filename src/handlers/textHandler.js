@@ -41,6 +41,15 @@ const getSession = async (userId) => {
   };
 };
 
+
+const nowMs = () => Date.now();
+
+const logTiming = (scope, step, startedAt, extra = "") => {
+  const ms = Date.now() - startedAt;
+  console.log(`[PaeCalTiming] ${scope}:${step} ${ms}ms${extra ? ` ${extra}` : ""}`);
+  return ms;
+};
+
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const retryOnce = async (fn) => {
@@ -61,8 +70,23 @@ const saveProfile = async (payload) => postToSheet({ action: "SAVE_PROFILE", ...
 const updateSession = async (payload) => postToSheet({ action: "UPDATE_SESSION", ...payload });
 const logFood = async (payload) => postToSheet({ action: "LOG_FOOD", ...payload });
 const batchLogFood = async (payload) => postToSheet({ action: "BATCH_LOG_FOOD", ...payload });
-const getDailySummary = async (userId) => postToSheet({ action: "GET_DAILY_SUMMARY", userId });
-const getDailySummaryFresh = async (userId) => postToSheet({ action: "GET_DAILY_SUMMARY", userId, forceRebuild: true });
+const getDailySummary = async (userId) => {
+  const t = nowMs();
+  try {
+    return await postToSheet({ action: "GET_DAILY_SUMMARY", userId });
+  } finally {
+    logTiming("text", "getDailySummary", t);
+  }
+};
+
+const getDailySummaryFresh = async (userId) => {
+  const t = nowMs();
+  try {
+    return await postToSheet({ action: "GET_DAILY_SUMMARY", userId, forceRebuild: true });
+  } finally {
+    logTiming("text", "getDailySummaryFresh", t);
+  }
+};
 const getLastMeal = async (userId) => postToSheet({ action: "GET_LAST_MEAL", userId });
 const updateLastMeal = async (payload) => retryOnce(() => postToSheet({ action: "UPDATE_LAST_MEAL", ...payload }));
 const updateMealByRequestId = async (payload) => retryOnce(() => postToSheet({ action: "UPDATE_MEAL_BY_REQUEST_ID", ...payload }));
@@ -1602,12 +1626,14 @@ const splitExplicitMealText = (text) => {
 };
 
 const logExplicitMealSegments = async ({ event, userId, session, title, segments, goalText }) => {
+  const explicitTotalT = nowMs();
   console.log("Explicit meal split detected:", segments.map((s) => `${s.label}:${s.foodText}`).join(" | "));
   await replyText(
     event.replyToken,
     `${title} แปะกำลังแยกมื้อให้แป๊บนะ 👀\nหลายมื้อหน่อย เดี๋ยวรวมให้แบบไม่มั่ว 🍽️`
   );
 
+  const estimateT = nowMs();
   const estimatedMeals = await Promise.all(
     segments.map(async (segment, index) => {
       const foodData = await estimateFoodFromText(segment.foodText);
@@ -1632,6 +1658,9 @@ const logExplicitMealSegments = async ({ event, userId, session, title, segments
     })
   );
 
+  logTiming("textMultiMeal", "estimateAll", estimateT, `segments=${segments.length}`);
+
+  const sheetT = nowMs();
   const sheetData = await batchLogFood({
     userId,
     name: session.data?.name || "",
@@ -1645,6 +1674,8 @@ const logExplicitMealSegments = async ({ event, userId, session, title, segments
       itemsJson: serializeMealItems(meal.items || []),
     })),
   });
+
+  logTiming("textMultiMeal", "batchLogFood", sheetT);
 
   const target = sheetData?.calorieTarget || DEFAULT_CALORIE_TARGET;
   const total = sheetData?.todayCalories ?? sheetData?.totalToday ?? estimatedMeals.reduce((sum, meal) => sum + safeNumber(meal.kcal, 0), 0);
@@ -1665,6 +1696,7 @@ const logExplicitMealSegments = async ({ event, userId, session, title, segments
     extraData: { calorieTarget: target, lastMeal, recentMeals },
   });
 
+  const pushT = nowMs();
   await pushTexts(userId, [
     `${title} แปะแยกมื้อให้แล้วนะ 🍽️\n\n${loggedText}`,
     `📊 วันนี้กินไปแล้ว\n${Math.round(total)} / ${Math.round(target)} kcal\n${total > target ? `เกินประมาณ ${Math.round(total - target)} kcal` : `เหลือประมาณ ${left} kcal`}\n(${progress})`,
@@ -1749,9 +1781,19 @@ const buildDailyRecapPayload = ({ title, summary, goalText = "" }) => {
 };
 
 const replySmartSummary = async ({ replyToken, userId, title, goalText = "" }) => {
+  const totalT = nowMs();
+  const summaryT = nowMs();
   const summary = await getDailySummary(userId);
+  logTiming("summary", "sheetTotal", summaryT, `meals=${summary?.mealCount ?? "?"}`);
+
+  const buildT = nowMs();
   const payload = buildDailyRecapPayload({ title, summary, goalText });
+  logTiming("summary", "buildPayload", buildT);
+
+  const replyT = nowMs();
   await replyDailyRecapCardWithBubbles(replyToken, { title, ...payload });
+  logTiming("summary", "replyLine", replyT);
+  logTiming("summary", "total", totalT);
 };
 
 export const handleTextMessage = async (event) => {
