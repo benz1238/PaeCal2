@@ -116,7 +116,7 @@ const paeLaewGuideFlex = () => ({
             },
             {
               type: "text",
-              text: "ข้าวมันไก่ 1 จาน\nชาไทยหวานน้อย\nขนมเลย์ห่อนึง",
+              text: ["ข้าวมันไก่ 1 จาน", "ชาไทยหวานน้อย", "ขนมเลย์ห่อนึง"].join("\n"),
               size: "sm",
               wrap: true,
               color: "#374151",
@@ -196,7 +196,7 @@ export const replyTypeFoodPrompt = async (replyToken) => {
 export const replySendPhotoGuide = async (replyToken) => {
   await replyText(
     replyToken,
-    "ส่งรูปอาหารเข้ามาในแชตได้เลยนะ 👀\nกดรูป/อัลบั้มใน LINE แล้วส่งมาให้แปะดูได้เลย"
+    ["ส่งรูปอาหารเข้ามาในแชตได้เลยนะ 👀", "กดรูป/อัลบั้มใน LINE แล้วส่งมาให้แปะดูได้เลย"].join("\n")
   );
 };
 
