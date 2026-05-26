@@ -22,6 +22,13 @@ const resolveFastTitle = (session) => {
 
 const normalizeText = (value) => String(value || "").trim();
 
+const resolveCachedTodayCalories = (session) => {
+  return safeNumber(
+    session?.todayCalories ?? session?.totalToday ?? session?.data?.todayCalories ?? session?.data?.totalToday,
+    0
+  );
+};
+
 const DRINK_IMAGE_PATTERN = /(โค้ก|โค๊ก|โคคา|โคล่า|coke|cola|pepsi|เป๊ปซี่|น้ำอัดลม|สไปรท์|แฟนต้า|ชานม|ชาไทย|ชาเขียว|มัทฉะ|กาแฟ|โกโก้|นม|น้ำหวาน|หวานเย็น|น้ำแดง|น้ำเขียว|เครื่องดื่ม|แก้วน้ำ|กระป๋อง|ขวด)/i;
 const NON_DRINK_MAIN_SUBJECT_PATTERN = /(แมว|หมา|สุนัข|ไก่|นก|เอกสาร|จอคอม|หน้าจอ|รถ|วิว)/i;
 
@@ -298,7 +305,7 @@ const buildImageFoodMessages = ({ meal, summary, title, session }) => {
 const IMAGE_BATCH_WINDOW_MS = 900;
 const imageBatchByUser = new Map();
 
-const getSessionForImage = async (userId, totalT) => {
+const getSessionForImage = async (userId) => {
   const sessionT = nowMs();
   const cachedSession = getCachedSession(userId);
 
@@ -425,7 +432,20 @@ const processImageBatch = async ({ userId, events }) => {
   const firstEvent = events[0];
   console.log(`[PaeCalTiming] imageBatch:start user=${userId || "unknown"} count=${events.length}`);
 
-  const session = await getSessionForImage(userId, totalT);
+  const cachedSession = getCachedSession(userId);
+
+  let ackSent = false;
+  if (cachedSession?.step === "READY") {
+    const ackT = nowMs();
+    await replyText(firstEvent.replyToken, "ขอแปะดูแป๊ป 👀")
+      .then(() => {
+        ackSent = true;
+        logTiming("image", "replyAck", ackT);
+      })
+      .catch((err) => console.warn("[PaeCalTiming] image:replyAck failed", err?.message || err));
+  }
+
+  const session = await getSessionForImage(userId);
 
   if (session.step !== "READY") {
     const pushT = nowMs();
@@ -437,21 +457,15 @@ const processImageBatch = async ({ userId, events }) => {
     return;
   }
 
-  const ackT = nowMs();
-  await replyText(firstEvent.replyToken, "ขอแปะดูแป๊ป 👀")
-    .then(() => logTiming("image", "replyAck", ackT))
-    .catch((err) => console.warn("[PaeCalTiming] image:replyAck failed", err?.message || err));
-
-  const summaryBeforeT = nowMs();
-  const summaryBeforePromise = postToSheet({ action: "GET_DAILY_SUMMARY", userId })
-    .then((summaryBefore) => {
-      logTiming("image", "getSummaryBeforeLog", summaryBeforeT);
-      return summaryBefore;
-    })
-    .catch((err) => {
-      console.warn("[PaeCalTiming] image:getSummaryBeforeLog failed", err?.message || err);
-      return null;
-    });
+  if (!ackSent) {
+    const ackT = nowMs();
+    await replyText(firstEvent.replyToken, "ขอแปะดูแป๊ป 👀")
+      .then(() => {
+        ackSent = true;
+        logTiming("image", "replyAck", ackT);
+      })
+      .catch((err) => console.warn("[PaeCalTiming] image:replyAck failed", err?.message || err));
+  }
 
   const analyzeT = nowMs();
   const analyzedResults = await Promise.all(events.map((event) => analyzeImageEvent(event)));
@@ -475,8 +489,6 @@ const processImageBatch = async ({ userId, events }) => {
   const mealDraft = buildMealFromAnalyzedImages(foodResults);
   logTiming("image", "buildPortion", portionT, `portion=${mealDraft.portion?.level || "normal"} imageCount=${foodResults.length}`);
 
-  const summaryBefore = await summaryBeforePromise;
-
   const firstMessageId = firstEvent.message?.id || "image";
   const requestId = `${firstMessageId}:image-batch-${events.length}`;
   const logFoodT = nowMs();
@@ -495,12 +507,11 @@ const processImageBatch = async ({ userId, events }) => {
   logTiming("image", "sheetLogFood", logFoodT, `imageCount=${foodResults.length}`);
 
   const buildT = nowMs();
+  const beforeTotal = resolveCachedTodayCalories(session);
   const sheetTotal = safeNumber(sheetData.todayCalories ?? sheetData.totalToday, 0);
-  const beforeTotal = safeNumber(summaryBefore?.todayCalories ?? summaryBefore?.totalToday, 0);
-  const total = Math.max(sheetTotal, beforeTotal + mealDraft.kcal, mealDraft.kcal);
-  const target = sheetData.calorieTarget || summaryBefore?.calorieTarget || DEFAULT_CALORIE_TARGET;
+  const total = sheetTotal > 0 ? sheetTotal : Math.max(beforeTotal + mealDraft.kcal, mealDraft.kcal);
+  const target = sheetData.calorieTarget || session?.calorieTarget || session?.data?.calorieTarget || DEFAULT_CALORIE_TARGET;
   const summary = {
-    ...summaryBefore,
     ...sheetData,
     todayCalories: total,
     totalToday: total,
@@ -528,6 +539,8 @@ const processImageBatch = async ({ userId, events }) => {
   const syncT = nowMs();
   mergeCachedSession(userId, session, {
     calorieTarget: target,
+    todayCalories: total,
+    totalToday: total,
     lastMeal: meal,
   });
   logTiming("image", "syncSessionMemoryOnly", syncT);

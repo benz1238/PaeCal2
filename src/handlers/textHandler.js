@@ -261,6 +261,32 @@ const getFoodListParts = (text) => String(text || "")
   .map((part) => cleanFoodText(part).trim())
   .filter(Boolean);
 
+const buildFoodListTextForEstimate = (text) => getFoodListParts(text).join("\n");
+
+const isGenericCombinedFoodName = (menuName) => /^(เครื่องดื่มผลไม้|ผลไม้รวม|ผลไม้|เครื่องดื่มหลายอย่าง|เครื่องดื่ม|อาหารหลายอย่าง|หลายอย่าง|ของกินหลายอย่าง|อาหารว่าง)$/i.test(String(menuName || "").trim());
+
+const getPreferredFoodLogMenuName = ({ originalFoodText, estimatedMenuName, estimatedItems }) => {
+  const parts = getFoodListParts(originalFoodText);
+
+  if (parts.length >= 2) {
+    if (Array.isArray(estimatedItems) && estimatedItems.length >= 2) {
+      const names = estimatedItems
+        .map((item) => cleanFoodText(item?.name || "").trim())
+        .filter(Boolean);
+
+      if (names.length >= 2) return names.join(" + ");
+    }
+
+    return parts.join(" + ");
+  }
+
+  if (isGenericCombinedFoodName(estimatedMenuName) && parts.length === 1) {
+    return parts[0];
+  }
+
+  return estimatedMenuName || cleanFoodText(originalFoodText) || String(originalFoodText || "").trim();
+};
+
 const isFoodListText = (text) => {
   const value = String(text || "").trim();
 
@@ -1399,14 +1425,21 @@ export const handleTextMessage = async (event) => {
 
   if (intent.intent === "log_food_text") {
     const foodText = String(intent.foodText || text).trim();
-    const foodData = await estimateFoodFromText(foodText);
+    const normalizedFoodText = intent.source === "local_food_list"
+      ? buildFoodListTextForEstimate(foodText)
+      : foodText;
+    const foodData = await estimateFoodFromText(normalizedFoodText);
     const kcal = safeNumber(foodData.kcal, 0);
     const carb = safeNumber(foodData.carb, 0);
     const protein = safeNumber(foodData.protein, 0);
     const fat = safeNumber(foodData.fat, 0);
-    const menuName = foodData.menuName || foodText;
+    const menuName = getPreferredFoodLogMenuName({
+      originalFoodText: foodText,
+      estimatedMenuName: foodData.menuName,
+      estimatedItems: foodData.items,
+    });
 
-    if (isInvalidFoodEstimate(foodData, foodText) || shouldTreatAsEatingConcernAfterParser({ text, intent: intent, foodData })) {
+    if (isInvalidFoodEstimate(foodData, foodText) || shouldTreatAsEatingConcernAfterParser({ text, intent: intent, foodData: { ...foodData, menuName } })) {
       await replyEatingConcern({ replyToken, text, reason: "intent_log_guard" });
       return;
     }
