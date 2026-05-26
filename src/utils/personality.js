@@ -127,48 +127,22 @@ const foodLogCommentLine = ({ decision }) => {
   const { day, signals, mood } = decision;
   const memoryLine = decision.mention7DayMemory ? get7DayMemoryLine(day.memory7) : "";
 
+  let line = "มื้อต่อไปค่อยบาลานซ์ แปะว่าเอาอยู่ 😄";
+
   if (day.isVeryOver) {
-    return [
-      "วันนี้เกินเป้าแบบชัด ๆ แล้วนะ เฮียเบนซ์ 👀",
-      "ถ้ายังหิวจริง ๆ เอาเบา ๆ พอนะ 😅",
-      "พรุ่งนี้ค่อยดึงกลับ ชิล ๆ 😄",
-      memoryLine,
-    ].filter(Boolean).join("\n");
+    line = "วันนี้ตึงละนะ 👀 มื้อต่อไปเบา ๆ พอ";
+  } else if (day.isOver) {
+    line = "เริ่มเกินแล้วนิดนึง 😅 ไม่ต้องซี มื้อต่อไปเบาลงพอ";
+  } else if (mood === "fried_or_fat") {
+    line = "ของมันมาละ แปะเห็นนะ 555+ มื้อต่อไปเบาหน่อย";
+  } else if (mood === "sweet_heavy") {
+    line = "หวานมาแล้วนะ 👀 วันนี้ไม่เติมหวานต่อก็โอเค";
+  } else if (signals.proteinGood && !signals.isHeavy) {
+    line = "โปรตีนโอเคอยู่ แปะให้ผ่าน 💪";
   }
 
-  if (day.isOver) {
-    return [
-      "วันนี้เริ่มเกินเป้าแล้วนะ เฮียเบนซ์ 👀",
-      "ถ้ายังหิวจริง ๆ เอาเบา ๆ พอนะ 😅",
-      "ไม่ต้องฝืนแก้ทั้งวัน แค่ไม่เติมหนักต่อก็พอ 😄",
-      memoryLine,
-    ].filter(Boolean).join("\n");
-  }
-
-  if (mood === "fried_or_fat") {
-    return [
-      "ของทอดมาละหนึ่ง แปะเห็นนะ 👀",
-      softSuggestionFromFood({ decision }),
-      memoryLine,
-    ].filter(Boolean).join("\n");
-  }
-
-  if (mood === "sweet_heavy") {
-    return [
-      "หวานมาแบบเนียน ๆ เลยนะ",
-      softSuggestionFromFood({ decision }),
-      memoryLine,
-    ].filter(Boolean).join("\n");
-  }
-
-  if (signals.proteinGood && !signals.isHeavy) {
-    return [
-      "โปรตีนมีอยู่ อันนี้แปะให้ผ่าน 💪",
-      memoryLine,
-    ].filter(Boolean).join("\n");
-  }
-
-  return [softSuggestionFromFood({ decision }), memoryLine].filter(Boolean).join("\n");
+  return [line, memoryLine].filter(Boolean).join("
+");
 };
 
 export const renderFoodLogReply = ({ title, meal, summary, decision }) => {
@@ -610,21 +584,29 @@ export const renderNoFoodDetectedReply = ({ imageSubject, imageCaption } = {}) =
 };
 
 
+const DRINK_MEAL_PATTERN = /(ชานม|ชามะนาว|ชาไทย|ชาเขียว|ชาดำ|ชาเย็น|มัทฉะ|โกโก้|กาแฟ|ลาเต้|คาปูชิโน|อเมริกาโน่|นมเย็น|นมสด|โค้ก|โคก|โค๊ก|เป๊ปซี่|น้ำอัดลม|สไปรท์|แฟนต้า|น้ำหวาน|หวานเย็น|น้ำแดง|น้ำเขียว|น้ำผลไม้|สมูทตี้|เครื่องดื่ม|coke|cola|pepsi|coffee|tea|milk|cocoa|latte|smoothie|juice|moccona|มอคโคน่า|nescafe|เนสกาแฟ|birdy|เบอร์ดี้|milo|ไมโล|ovaltine|โอวัลติน)/i;
+const SWEET_MEAL_PATTERN = /(ของหวาน|ขนม|เค้ก|คุกกี้|โดนัท|บราวนี่|ไอศกรีม|บิงซู|ฮันนี่โทสต์|toast|toast|dessert|cookie|cake|donut|brownie|ice\s*cream|pudding|โรตี|แพนเค้ก|waffle|วาฟเฟิล|ครัวซองต์|ช็อกโกแลต)/i;
+const SOLID_MEAL_PATTERN = /(ข้าว|หมู|ไก่|ปลา|กุ้ง|ไข่|เนื้อ|ก๋วยเตี๋ยว|บะหมี่|เส้น|ผัด|ทอด|ย่าง|ต้ม|แกง|ยำ|สลัด|ซุป|ผลไม้|มะม่วง|ส้มโอ|ส้ม|กล้วย|แตงโม|อาหาร|จาน|มื้อ|ขาหมู|กะเพรา|กระเพรา|ส้มตำ|ลาบ|หมูกระทะ|ชาบู|พิซซ่า|เบอร์เกอร์)/i;
+
 const isDrinkMealName = (name = "") => {
   const menuName = String(name || "").trim();
   if (!menuName) return false;
 
   if (/^(ชา|นม|กาแฟ|โกโก้|โค้ก|โค๊ก|เป๊ปซี่|น้ำอัดลม|น้ำหวาน|เครื่องดื่ม)$/i.test(menuName)) return true;
 
-  return /(ชานม|ชามะนาว|ชาไทย|ชาเขียว|ชาดำ|ชาเย็น|มัทฉะ|โกโก้|กาแฟ|ลาเต้|คาปูชิโน|อเมริกาโน่|นมเย็น|นมสด|โค้ก|โคก|โค๊ก|เป๊ปซี่|น้ำอัดลม|สไปรท์|แฟนต้า|น้ำหวาน|หวานเย็น|น้ำแดง|น้ำเขียว|น้ำผลไม้|สมูทตี้|เครื่องดื่ม|coke|cola|pepsi|coffee|tea|milk|cocoa|latte|smoothie|juice|moccona|มอคโคน่า|nescafe|เนสกาแฟ|birdy|เบอร์ดี้|milo|ไมโล|ovaltine|โอวัลติน)/i.test(menuName);
+  return DRINK_MEAL_PATTERN.test(menuName);
 };
+
+const hasSolidFoodInName = (name = "") => SOLID_MEAL_PATTERN.test(String(name || ""));
+const hasDrinkInName = (name = "") => isDrinkMealName(name);
+const hasSweetInName = (name = "") => SWEET_MEAL_PATTERN.test(String(name || ""));
 
 const nutritionLine = ({ carb = 0, protein = 0, fat = 0 } = {}) => {
-  return `🥦 โภชนาการ: คาร์บ ${Math.round(Number(carb || 0))}g / โปรตีน ${Math.round(Number(protein || 0))}g / ไขมัน ${Math.round(Number(fat || 0))}g`;
+  return `🥦 โภชนาการ: C ${Math.round(Number(carb || 0))}g / P ${Math.round(Number(protein || 0))}g / F ${Math.round(Number(fat || 0))}g`;
 };
 
-const drinkSugarLine = ({ menuName = "", kcal = 0, carb = 0 } = {}) => {
-  if (!isDrinkMealName(menuName)) return "";
+const drinkSugarLine = ({ menuName = "", kcal = 0, carb = 0, allowAnyDrink = false } = {}) => {
+  if (!allowAnyDrink && !isDrinkMealName(menuName)) return "";
 
   const kcalValue = Number(kcal || 0) || 0;
   const carbValue = Number(carb || 0) || 0;
@@ -649,25 +631,25 @@ export const renderFoodLogMessages = ({ title, meal, summary, decision }) => {
   const signals = decision.signals;
   const progress = buildProgressBar(day.eaten, day.target);
 
-  const isDrink = isDrinkMealName(signals.menuName);
-  const sugarLine = isDrink ? drinkSugarLine({ menuName: signals.menuName, kcal: signals.kcal, carb: signals.carb }) : "";
-  const macroLine = !isDrink ? nutritionLine({ carb: signals.carb, protein: signals.protein, fat: signals.fat }) : "";
+  const includesDrink = hasDrinkInName(signals.menuName);
+  const includesSweet = hasSweetInName(signals.menuName);
+  const includesSugarType = includesDrink || includesSweet;
+  const includesSolid = hasSolidFoodInName(signals.menuName) || (!includesSugarType);
+  const sugarLine = includesSugarType ? drinkSugarLine({ menuName: signals.menuName, kcal: signals.kcal, carb: signals.carb, allowAnyDrink: true }) : "";
+  const macroLine = includesSolid ? nutritionLine({ carb: signals.carb, protein: signals.protein, fat: signals.fat }) : "";
+  const detailLines = [macroLine, sugarLine].filter(Boolean).join("
+");
 
   const firstMessage = `${reactionLineForFood({ title, decision })}
 
 🍽️ เมนู
 ${signals.menuName}
+🔥 ประมาณ ${signals.kcal} kcal${detailLines ? `
+${detailLines}` : ""}`;
 
-🔥 ประมาณ ${signals.kcal} kcal${sugarLine ? `
-${sugarLine}` : ""}${macroLine ? `
-${macroLine}` : ""}`;
-
-  const secondMessage = `📊 วันนี้กินไปแล้ว
-${day.eaten} / ${day.target} kcal
+  const secondMessage = `📊 วันนี้ ${day.eaten} / ${day.target} kcal
 ${kcalStatusLine({ eaten: day.eaten, target: day.target })}
-(${progress})`;
+${foodLogCommentLine({ decision })}`;
 
-  const thirdMessage = foodLogCommentLine({ decision });
-
-  return [firstMessage, secondMessage, thirdMessage].filter(Boolean);
+  return [firstMessage, secondMessage].filter(Boolean);
 };
