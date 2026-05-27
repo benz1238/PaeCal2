@@ -1,5 +1,6 @@
 import axios from "axios";
 import * as line from "@line/bot-sdk";
+import { buildDailyRecapFlexMessage } from "../utils/dailyRecapFlex.js";
 
 export const client = new line.messagingApi.MessagingApiClient({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
@@ -205,101 +206,19 @@ const normalizeFlexText = (value, fallback = "-") => {
   return text || fallback;
 };
 
-const recapRow = (label, value, options = {}) => ({
-  type: "box",
-  layout: "horizontal",
-  spacing: "sm",
-  contents: [
-    {
-      type: "text",
-      text: label,
-      size: "sm",
-      color: "#6B7280",
-      flex: 4,
-      wrap: true,
-    },
-    {
-      type: "text",
-      text: normalizeFlexText(value),
-      size: "sm",
-      color: options.color || "#111827",
-      weight: options.weight || "regular",
-      align: "end",
-      flex: 6,
-      wrap: true,
-    },
-  ],
-});
-
-const dailyRecapFlex = ({ title, card }) => ({
-  type: "flex",
-  altText: "สรุปวันนี้จากแปะแคล",
-  contents: {
-    type: "bubble",
-    size: "mega",
-    body: {
-      type: "box",
-      layout: "vertical",
-      spacing: "md",
-      contents: [
-        {
-          type: "text",
-          text: `📊 สรุปวันนี้ของ ${normalizeFlexText(title, "ลื้อ")}`,
-          weight: "bold",
-          size: "lg",
-          wrap: true,
-          color: "#1F2937",
-        },
-        {
-          type: "text",
-          text: normalizeFlexText(card?.statusText, "วันนี้แปะรวมให้แล้วจ้า"),
-          size: "sm",
-          wrap: true,
-          color: card?.statusColor || "#374151",
-        },
-        {
-          type: "box",
-          layout: "vertical",
-          spacing: "xs",
-          margin: "md",
-          contents: [
-            recapRow("🔥 กินไป", card?.kcalText, { weight: "bold", color: card?.kcalColor || "#111827" }),
-            recapRow("🍚 คาร์บ", card?.carbText, { color: card?.carbColor || "#111827" }),
-            recapRow("💪 โปรตีน", card?.proteinText, { color: card?.proteinColor || "#047857" }),
-            recapRow("💧 ไขมัน", card?.fatText, { color: card?.fatColor || "#111827" }),
-            recapRow("🍬 น้ำตาล", card?.sugarText, { color: card?.sugarColor || "#111827" }),
-            recapRow("🍽️ จำนวนมื้อ", card?.mealCountText),
-          ],
-        },
-        {
-          type: "separator",
-          margin: "md",
-        },
-        {
-          type: "box",
-          layout: "vertical",
-          spacing: "xs",
-          margin: "md",
-          contents: [
-            recapRow("🎯 เป้า", card?.goalText || "ยังไม่ได้ตั้งเป้าสุขภาพ"),
-            recapRow("👀 มื้อเด่น", card?.topMealText || "ยังไม่มีมื้อเด่น"),
-          ],
-        },
-      ],
-    },
-  },
-});
-
-export const replyDailyRecapCardWithBubbles = async (replyToken, { title, card, bubbles = [] }) => {
+export const replyDailyRecapCardWithBubbles = async (replyToken, { title, card, bubbles = [], summary = {}, decision = null }) => {
   const bubbleMessages = (Array.isArray(bubbles) ? bubbles : [bubbles])
     .map((text) => String(text || "").trim())
     .filter(Boolean)
-    .slice(0, 4)
+    .slice(0, 2)
     .map((text) => ({ type: "text", text }));
+
+  const mascotUrl = process.env.PAECAL_RECAP_MASCOT_URL || "";
+  const flexMessage = buildDailyRecapFlexMessage({ title, summary, decision: decision || {}, mascotUrl });
 
   await client.replyMessage({
     replyToken,
-    messages: [dailyRecapFlex({ title, card }), ...bubbleMessages].slice(0, 5),
+    messages: [flexMessage, ...bubbleMessages].slice(0, 5),
   });
 };
 
@@ -312,16 +231,19 @@ export const pushFlex = async (to, messages) => {
   });
 };
 
-export const pushDailyRecapCardWithBubbles = async (to, { title, card, bubbles = [] }) => {
+export const pushDailyRecapCardWithBubbles = async (to, { title, card, bubbles = [], summary = {}, decision = null }) => {
   const bubbleMessages = (Array.isArray(bubbles) ? bubbles : [bubbles])
     .map((text) => String(text || "").trim())
     .filter(Boolean)
-    .slice(0, 4)
+    .slice(0, 2)
     .map((text) => ({ type: "text", text }));
+
+  const mascotUrl = process.env.PAECAL_RECAP_MASCOT_URL || "";
+  const flexMessage = buildDailyRecapFlexMessage({ title, summary, decision: decision || {}, mascotUrl });
 
   await client.pushMessage({
     to,
-    messages: [dailyRecapFlex({ title, card }), ...bubbleMessages].slice(0, 5),
+    messages: [flexMessage, ...bubbleMessages].slice(0, 5),
   });
 };
 
