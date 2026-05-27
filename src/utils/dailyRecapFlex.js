@@ -1,19 +1,17 @@
 const palette = {
-  cream: '#F7F1EB',
+  cream: '#FFF7ED',
+  card: '#FFFDF8',
+  red: '#E11D1D',
+  redDark: '#A63F27',
+  green: '#14532D',
+  gold: '#F7D98B',
+  blue: '#BDEAF3',
+  blueSoft: '#E8FAFD',
   brown: '#5D332D',
-  mutedBrown: '#7B4E46',
-  gold: '#F2D99A',
-  softGold: '#EBCF82',
-  grayText: '#5B6572',
-  line: '#E5D8CC',
-  blue: '#AEE5F2',
-  blueSoft: '#8CD7EB',
-  green: '#0F766E',
-  red: '#DC2626',
+  text: '#1F2937',
+  muted: '#6B7280',
+  line: '#EADDD0',
   orange: '#D97706',
-  dark: '#1F2937',
-  white: '#FFFFFF',
-  softCard: '#FFFDFC',
 };
 
 const DEFAULT_CALORIE_TARGET = 2050;
@@ -28,53 +26,59 @@ const normalize = (value, fallback = '') => {
   return text || fallback;
 };
 
-const mascotNode = (bgColor, mascotUrl = '', size = 'xxs') => {
+const shorten = (value, max = 42) => {
+  const text = normalize(value, '');
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1)}…`;
+};
+
+const mascotNode = (mascotUrl = '') => {
   const url = normalize(mascotUrl, '');
   if (url) {
     return {
       type: 'image',
       url,
-      size,
+      size: 'xs',
       aspectMode: 'fit',
       aspectRatio: '1:1',
       gravity: 'center',
-      backgroundColor: bgColor,
-      margin: 'none',
+      flex: 2,
     };
   }
 
   return {
     type: 'box',
     layout: 'vertical',
-    backgroundColor: bgColor,
-    cornerRadius: '16px',
-    justifyContent: 'center',
+    flex: 2,
+    backgroundColor: '#FFE8B5',
+    cornerRadius: '14px',
     paddingAll: '6px',
     contents: [
       { type: 'text', text: '🧧', size: 'xl', align: 'center' },
-      { type: 'text', text: 'แปะ', size: 'xs', weight: 'bold', color: palette.brown, align: 'center' },
+      { type: 'text', text: 'แปะ', size: 'xs', weight: 'bold', color: palette.redDark, align: 'center' },
     ],
   };
 };
 
-const statRow = ({ icon, label, value, valueColor = palette.dark }) => ({
+const statRow = ({ icon, label, value, color = palette.text }) => ({
   type: 'box',
-  layout: 'baseline',
-  spacing: '6px',
+  layout: 'horizontal',
+  spacing: '4px',
+  margin: 'xs',
   contents: [
-    { type: 'text', text: `${icon} ${label}`, size: 'sm', color: '#6B7280', flex: 4, wrap: true },
-    { type: 'text', text: value, size: 'md', weight: 'bold', color: valueColor, flex: 5, align: 'end', wrap: true },
+    { type: 'text', text: `${icon} ${label}`, size: 'xs', color: palette.muted, flex: 5, wrap: false },
+    { type: 'text', text: value, size: 'xs', weight: 'bold', color, flex: 6, align: 'end', wrap: true },
   ],
 });
 
-const sectionMini = ({ emoji, title, body }) => ({
+const miniNote = ({ icon, title, body }) => ({
   type: 'box',
   layout: 'vertical',
-  spacing: '4px',
-  margin: 'md',
+  spacing: '1px',
+  margin: 'sm',
   contents: [
-    { type: 'text', text: `${emoji} ${title}`, size: 'md', weight: 'bold', color: palette.dark, wrap: true },
-    { type: 'text', text: body, size: 'sm', color: palette.brown, wrap: true },
+    { type: 'text', text: `${icon} ${title}`, size: 'xs', weight: 'bold', color: palette.text, wrap: true },
+    { type: 'text', text: shorten(body, 48), size: 'xs', color: palette.brown, wrap: true },
   ],
 });
 
@@ -91,36 +95,36 @@ const buildPersonaTitle = ({ day, memory }) => {
 const buildIntroLine = ({ day, memory }) => {
   if (memory.hasSweetPattern && day.isOver) return 'หวานมานำ แต่ยังดึงเกมกลับได้';
   if (memory.hasHeavyPattern || day.isVeryOver) return 'ของมันกับของแน่น มีบทวันนี้';
-  if (memory.hasSweetPattern) return 'วันนี้หวานมาเป็นจังหวะอยู่';
-  if (memory.hasFriedPattern) return 'ของทอดแวะมาหลายรอบนิดนึง';
+  if (memory.hasSweetPattern) return 'หวานมาเป็นจังหวะอยู่';
+  if (memory.hasFriedPattern) return 'ของทอดแวะมาหลายรอบ';
   if (day.goodProteinDay || memory.hasProteinWin) return 'โปรตีนวันนี้มีเรื่องให้ชม';
   return 'ทรงรวมวันนี้ยังพอไปได้';
 };
 
 const buildMoodLine = ({ day, memory }) => {
   if (day.isVeryOver || memory.hasHeavyPattern) return 'หลุดแบบมีหลักฐาน แต่ยังตั้งหลักได้';
-  if (day.isOver) return 'เกินนิด ๆ แต่ยังไม่ถึงขั้นเกมแตก';
+  if (day.isOver) return 'เกินนิด ๆ แต่ยังไม่เกมแตก';
   if (memory.hasSweetPattern) return 'หวานถี่ไปนิด แต่ยังเบรกทัน';
-  if (memory.hasFriedPattern) return 'ของทอดเด่นไปหน่อย แต่อยู่ในวิสัยคุมต่อ';
-  if (day.goodProteinDay || memory.hasProteinWin) return 'ค่อนข้างโอเค มีทรงดูแลตัวเองอยู่';
+  if (memory.hasFriedPattern) return 'ของทอดเด่นไปหน่อย แต่ยังคุมต่อได้';
+  if (day.goodProteinDay || memory.hasProteinWin) return 'โปรตีนมาดี แปะให้ผ่าน';
   return 'ไปได้เรื่อย ๆ ยังไม่หลุดโค้ง';
 };
 
 const buildObservationLine = ({ problemMeal, memory }) => {
-  if (memory.hasSweetPattern) return 'ของหวานวันนี้มาเกินหนึ่งจังหวะ แปะเห็นนะ 👀';
-  if (memory.hasFriedPattern) return 'ของทอด/ของมันมาถี่ แปะเห็นอยู่นะ 👀';
-  if (problemMeal?.menuName) return `${problemMeal.menuName} เป็นตัวเด่นของวันนี้ 👀`;
-  return 'วันนี้ยังไม่มีตัวป่วนแรง ๆ';
+  if (memory.hasSweetPattern) return 'ของหวานมีบท แปะเห็นนะ';
+  if (memory.hasFriedPattern) return 'ของทอด/ของมันมาถี่นิดนึง';
+  if (problemMeal?.menuName) return `${problemMeal.menuName} เด่นวันนี้`;
+  return 'ยังไม่มีตัวป่วนแรง ๆ';
 };
 
 const buildNextLine = ({ day, memory }) => {
-  if (day.isOver || memory.hasHeavyPattern) return 'คุมของทอดกับน้ำหวานนิดนึง แล้วไปต่อได้เลย';
-  if (memory.hasSweetPattern) return 'พักน้ำหวานก่อนสักรอบ แล้วไปทางโปรตีนกับผัก';
-  if (memory.hasFriedPattern) return 'พักทอดก่อนหนึ่งมื้อ แล้วไปทางต้ม/ย่างพอ';
-  return 'ทรงนี้โอเค คุมต่ออีกนิดก็สวยละ';
+  if (day.isOver || memory.hasHeavyPattern) return 'เบาลงนิด เติมผัก/โปรตีนพอ';
+  if (memory.hasSweetPattern) return 'พักน้ำหวาน แล้วไปทางโปรตีน';
+  if (memory.hasFriedPattern) return 'พักทอดสักมื้อ ไปทางต้ม/ย่าง';
+  return 'คุมทอดกับน้ำหวานนิดนึง';
 };
 
-const buildCardStats = ({ day, summary = {}, problemMeal }) => {
+const buildStats = ({ day, summary = {}, problemMeal }) => {
   const eaten = safeNumber(day.eaten ?? summary.todayCalories ?? summary.totalToday, 0);
   const target = safeNumber(day.target ?? summary.calorieTarget, DEFAULT_CALORIE_TARGET);
   const over = Math.max(eaten - target, 0);
@@ -131,16 +135,16 @@ const buildCardStats = ({ day, summary = {}, problemMeal }) => {
   const sugar = safeNumber(day.sugar ?? summary.totalSugar, 0);
   const mealCount = safeNumber(day.mealCount ?? summary.mealCount, 0);
 
-  let statusText = `วันนี้ยังเหลือประมาณ ${Math.round(left)} kcal อยู่ 😄`;
+  let statusText = `เหลือ ${Math.round(left)} kcal อยู่`;
   let statusColor = palette.green;
   if (eaten <= 0) {
-    statusText = 'วันนี้ยังไม่มีมื้อที่แปะบันทึกไว้นะ';
-    statusColor = '#6B7280';
+    statusText = 'วันนี้ยังไม่มีมื้อที่บันทึก';
+    statusColor = palette.muted;
   } else if (over > 0) {
-    statusText = `เกินเป้าไปประมาณ ${Math.round(over)} kcal แล้วนะ 👀`;
+    statusText = `เกินประมาณ ${Math.round(over)} kcal`;
     statusColor = palette.red;
   } else if (left <= 250) {
-    statusText = `เหลือประมาณ ${Math.round(left)} kcal ใกล้เต็มแล้วนะ 😅`;
+    statusText = `เหลือ ${Math.round(left)} kcal ใกล้เต็มแล้ว`;
     statusColor = palette.orange;
   }
 
@@ -157,115 +161,110 @@ const buildCardStats = ({ day, summary = {}, problemMeal }) => {
     mealCount,
     statusText,
     statusColor,
-    goalText: normalize(summary.goal || summary.healthGoal || summary.userGoal, 'ยังไม่ได้ตั้งเป้าสุขภาพ'),
-    topMealText: topMealName === 'ยังไม่มีมื้อเด่น' ? topMealName : `${topMealName}${topMealKcal ? ` · ${Math.round(topMealKcal)} kcal` : ''}`,
+    goalText: shorten(normalize(summary.goal || summary.healthGoal || summary.userGoal, 'ยังไม่ได้ตั้งเป้าสุขภาพ'), 34),
+    topMealText: topMealName === 'ยังไม่มีมื้อเด่น' ? topMealName : shorten(`${topMealName}${topMealKcal ? ` · ${Math.round(topMealKcal)} kcal` : ''}`, 38),
   };
 };
 
-const headerBlock = ({ headerTitle, personaTitle, mascotUrl }) => ({
+const headerBlock = ({ title, personaTitle, mascotUrl }) => ({
   type: 'box',
-  layout: 'vertical',
-  spacing: '6px',
+  layout: 'horizontal',
+  spacing: '8px',
   contents: [
     {
       type: 'box',
-      layout: 'horizontal',
-        contents: [
-        { type: 'text', text: 'TODAY RECAP', size: 'md', weight: 'bold', color: '#A65B54', flex: 4 },
-        { type: 'text', text: `ของ ${headerTitle}`, size: 'md', color: palette.grayText, weight: 'bold', align: 'center', flex: 5, wrap: true },
-        { type: 'box', layout: 'vertical', flex: 3, contents: [mascotNode(palette.cream, mascotUrl, 'sm')] },
+      layout: 'vertical',
+      flex: 7,
+      spacing: '2px',
+      contents: [
+        { type: 'text', text: 'TODAY RECAP', size: 'xs', weight: 'bold', color: palette.redDark, wrap: false },
+        { type: 'text', text: `ของ ${title}`, size: 'xs', color: palette.muted, weight: 'bold', wrap: true },
+        { type: 'text', text: personaTitle, size: 'xl', weight: 'bold', color: palette.brown, wrap: true, margin: 'xs' },
       ],
     },
-    { type: 'text', text: personaTitle, size: '5xl', weight: 'bold', color: palette.brown, wrap: true, margin: 'sm' },
+    mascotNode(mascotUrl),
   ],
 });
 
-const introCard = ({ intro }) => ({
+const foodMoodCard = ({ intro }) => ({
   type: 'box',
   layout: 'vertical',
   backgroundColor: palette.gold,
-  cornerRadius: '28px',
-  paddingAll: '18px',
-  spacing: '8px',
+  cornerRadius: '20px',
+  paddingAll: '12px',
+  spacing: '3px',
   contents: [
-    {
-      type: 'box',
-      layout: 'baseline',
-      spacing: '8px',
-      contents: [
-        { type: 'text', text: 'วันนี้อาหารฟ้องว่า:', size: 'xl', weight: 'bold', color: '#1F1B1A', flex: 5, wrap: true },
-        { type: 'text', text: intro, size: 'lg', color: palette.brown, flex: 5, wrap: true },
-      ],
-    },
+    { type: 'text', text: 'วันนี้อาหารฟ้องว่า:', size: 'md', weight: 'bold', color: palette.text, wrap: true },
+    { type: 'text', text: intro, size: 'sm', color: palette.brown, weight: 'bold', wrap: true },
   ],
 });
 
-const summaryStatsCard = (stats) => ({
+const summaryMiniCard = (stats) => ({
   type: 'box',
   layout: 'vertical',
-  backgroundColor: palette.white,
-  cornerRadius: '20px',
-  paddingAll: '14px',
-  spacing: '8px',
-  borderWidth: '1px',
-  borderColor: '#E8DDD3',
-  flex: 1,
-  contents: [
-    { type: 'text', text: '📊 สรุปวันนี้', size: 'md', weight: 'bold', color: palette.dark },
-    { type: 'text', text: stats.statusText, size: 'sm', weight: 'bold', color: stats.statusColor, wrap: true },
-    { type: 'separator', color: '#EFE4D9', margin: 'xs' },
-    statRow({ icon: '🔥', label: 'กินไป', value: `${Math.round(stats.eaten)} / ${Math.round(stats.target)} kcal`, valueColor: palette.red }),
-    statRow({ icon: '🍚', label: 'คาร์บ', value: `${Math.round(stats.carb)} g` }),
-    statRow({ icon: '💪', label: 'โปรตีน', value: `${Math.round(stats.protein)} g`, valueColor: stats.protein >= 70 ? palette.orange : palette.dark }),
-    statRow({ icon: '💧', label: 'ไขมัน', value: `${Math.round(stats.fat)} g` }),
-    statRow({ icon: '🍬', label: 'น้ำตาล', value: `${Math.round(stats.sugar)} g` }),
-    statRow({ icon: '🍽️', label: 'จำนวนมื้อ', value: `${Math.round(stats.mealCount)} มื้อ` }),
-  ],
-});
-
-const insightCard = ({ observation, mood, nextLine }) => ({
-  type: 'box',
-  layout: 'vertical',
-  backgroundColor: palette.softCard,
-  cornerRadius: '20px',
-  paddingAll: '14px',
+  backgroundColor: palette.card,
+  cornerRadius: '16px',
+  paddingAll: '10px',
   spacing: '4px',
   borderWidth: '1px',
-  borderColor: '#E8DDD3',
+  borderColor: palette.line,
   flex: 1,
   contents: [
-    sectionMini({ emoji: '👀', title: 'แต่...', body: observation }),
-    sectionMini({ emoji: '😅', title: 'Mood รวม', body: mood }),
-    sectionMini({ emoji: '❤️', title: 'มื้อต่อไป', body: nextLine }),
+    { type: 'text', text: '📊 สรุปวันนี้', size: 'sm', weight: 'bold', color: palette.text },
+    { type: 'text', text: stats.statusText, size: 'xs', weight: 'bold', color: stats.statusColor, wrap: true },
+    { type: 'separator', color: palette.line, margin: 'xs' },
+    statRow({ icon: '🔥', label: 'กินไป', value: `${Math.round(stats.eaten)}/${Math.round(stats.target)}`, color: palette.red }),
+    statRow({ icon: '🍚', label: 'คาร์บ', value: `${Math.round(stats.carb)}g` }),
+    statRow({ icon: '💪', label: 'โปรตีน', value: `${Math.round(stats.protein)}g`, color: stats.protein >= 70 ? palette.green : palette.orange }),
+    statRow({ icon: '💧', label: 'ไขมัน', value: `${Math.round(stats.fat)}g` }),
+    statRow({ icon: '🍬', label: 'น้ำตาล', value: `${Math.round(stats.sugar)}g` }),
+    statRow({ icon: '🍽️', label: 'มื้อ', value: `${Math.round(stats.mealCount)}` }),
   ],
 });
 
-const goalTopMealCard = ({ goalText, topMealText }) => ({
+const insightMiniCard = ({ observation, mood, nextLine }) => ({
+  type: 'box',
+  layout: 'vertical',
+  backgroundColor: palette.card,
+  cornerRadius: '16px',
+  paddingAll: '10px',
+  spacing: '2px',
+  borderWidth: '1px',
+  borderColor: palette.line,
+  flex: 1,
+  contents: [
+    miniNote({ icon: '👀', title: 'แต่...', body: observation }),
+    miniNote({ icon: '😅', title: 'Mood', body: mood }),
+    miniNote({ icon: '❤️', title: 'ต่อไป', body: nextLine }),
+  ],
+});
+
+const goalCard = ({ goalText, topMealText }) => ({
   type: 'box',
   layout: 'horizontal',
   backgroundColor: palette.blue,
-  cornerRadius: '28px',
-  paddingAll: '18px',
-  spacing: '16px',
+  cornerRadius: '20px',
+  paddingAll: '12px',
+  spacing: '10px',
   contents: [
     {
       type: 'box',
       layout: 'vertical',
       flex: 1,
-      spacing: '8px',
+      spacing: '2px',
       contents: [
-        { type: 'text', text: '🎯 เป้า', size: 'xl', weight: 'bold', color: palette.dark },
-        { type: 'text', text: goalText, size: 'lg', color: palette.brown, wrap: true },
+        { type: 'text', text: '🎯 เป้า', size: 'md', weight: 'bold', color: palette.text, wrap: true },
+        { type: 'text', text: goalText, size: 'sm', color: palette.brown, wrap: true },
       ],
     },
     {
       type: 'box',
       layout: 'vertical',
       flex: 1,
-      spacing: '8px',
+      spacing: '2px',
       contents: [
-        { type: 'text', text: '👀 มื้อเด่น', size: 'xl', weight: 'bold', color: palette.dark },
-        { type: 'text', text: topMealText, size: 'lg', color: palette.brown, wrap: true },
+        { type: 'text', text: '👀 มื้อเด่น', size: 'md', weight: 'bold', color: palette.text, wrap: true },
+        { type: 'text', text: topMealText, size: 'sm', color: palette.brown, wrap: true },
       ],
     },
   ],
@@ -281,32 +280,31 @@ export const buildDailyRecapFlexMessage = ({ title, summary = {}, decision = {},
   const mood = buildMoodLine({ day, memory });
   const observation = buildObservationLine({ problemMeal, memory });
   const nextLine = buildNextLine({ day, memory });
-  const stats = buildCardStats({ day, summary, problemMeal });
+  const stats = buildStats({ day, summary, problemMeal });
 
   return {
     type: 'flex',
     altText: `สรุปวันนี้ของ ${headerTitle}`,
     contents: {
       type: 'bubble',
-      size: 'giga',
+      size: 'mega',
       body: {
         type: 'box',
         layout: 'vertical',
-        spacing: '14px',
+        spacing: '10px',
         backgroundColor: palette.cream,
-        paddingAll: '18px',
+        paddingAll: '14px',
         contents: [
-          headerBlock({ headerTitle, personaTitle, mascotUrl }),
-          introCard({ intro }),
+          headerBlock({ title: headerTitle, personaTitle, mascotUrl }),
+          foodMoodCard({ intro }),
           {
             type: 'box',
             layout: 'horizontal',
-            spacing: '12px',
-            contents: [summaryStatsCard(stats), insightCard({ observation, mood, nextLine })],
+            spacing: '8px',
+            contents: [summaryMiniCard(stats), insightMiniCard({ observation, mood, nextLine })],
           },
-          goalTopMealCard({ goalText: stats.goalText, topMealText: stats.topMealText }),
-          { type: 'separator', margin: 'sm', color: palette.line },
-          { type: 'text', text: '🌿 แปะไว้ให้เตือนใจ 🌿', size: 'xl', weight: 'bold', color: '#4A5968', align: 'center' },
+          goalCard({ goalText: stats.goalText, topMealText: stats.topMealText }),
+          { type: 'text', text: '🌿 แปะไว้ให้เตือนใจ 🌿', size: 'sm', weight: 'bold', color: palette.green, align: 'center' },
         ],
       },
     },
