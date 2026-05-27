@@ -65,6 +65,7 @@ const exactTexts = (list, text) => list.includes(String(text || "").trim());
 const normalizeText = (text) => String(text || "").trim().toLowerCase();
 
 const EATING_GUILT_PATTERN = /(วันนี้)?\s*(กินเละ|กินพัง|หลุดหนัก|กินเยอะมาก|กินเยอะไป|กินเยอะสุด|กินไปเยอะ|กินไปเยอะสุด|กินเยอะเวอร์|กินจุก|จุกมาก|กินหนัก|กินหนักมาก|กินอย่างหนัก|กินไปอย่างหนัก|กินอ้วนแน่|อ้วนแน่|วันนี้อ้วนแน่|พังแน่|แย่แล้ว.*กิน|กินจนรู้สึกผิด)/i;
+const HEALTH_GOAL_TEXT_PATTERN = /(ตั้งเป้า|เปลี่ยนเป้า|เป้าหมาย|เป้าสุขภาพ|อยากลดน้ำหนัก|ลดน้ำหนัก|ลดความอ้วน|อยากผอม|คุมน้ำหนัก|คุมหุ่น|ลดไขมัน|เพิ่มกล้าม|กินสุขภาพดี|สุขภาพดีขึ้น)/i;
 
 const normalizeLooseText = (text) => String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
 
@@ -72,6 +73,8 @@ const isEatingGuiltText = (text) => {
   const value = normalizeLooseText(text);
 
   if (!value) return false;
+
+  if (HEALTH_GOAL_TEXT_PATTERN.test(value)) return false;
 
   if (EATING_GUILT_PATTERN.test(value)) return true;
 
@@ -200,7 +203,7 @@ const getLocalIntent = (text) => {
     return { intent: "adjust_last_meal", confidence: 0.9, action: "adjust_amount", multiplier, foodText: "", kcal: null, source: "local" };
   }
 
-  if (hasAnyText(value, ["ตั้งเป้า", "เปลี่ยนเป้า", "ลดไขมัน", "เพิ่มกล้าม", "คุมแคล", "คุมน้ำหนัก", "กินสุขภาพดี"])) {
+  if (HEALTH_GOAL_TEXT_PATTERN.test(value) || hasAnyText(value, ["ตั้งเป้า", "เปลี่ยนเป้า", "ลดไขมัน", "เพิ่มกล้าม", "คุมแคล", "คุมน้ำหนัก", "กินสุขภาพดี"])) {
     return { intent: "health_goal", confidence: 0.9, action: "update_goal", multiplier: 0, foodText: "", kcal: null, source: "local" };
   }
 
@@ -813,6 +816,10 @@ const isStartGoalUpdateText = (text) => exactTexts([
   "เปลี่ยนเป้าหมาย",
   "เปลี่ยนเป้าสุขภาพ",
   "แก้เป้าหมาย",
+  "ลดน้ำหนัก",
+  "อยากลดน้ำหนัก",
+  "ลดความอ้วน",
+  "อยากผอม",
 ], text);
 
 const getEditHelpText = (title) => {
