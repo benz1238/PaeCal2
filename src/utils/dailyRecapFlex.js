@@ -49,7 +49,6 @@ const mascotNode = (bgColor, mascotUrl = '', size = 'xxs') => {
     backgroundColor: bgColor,
     cornerRadius: '16px',
     justifyContent: 'center',
-    alignItems: 'center',
     paddingAll: '6px',
     contents: [
       { type: 'text', text: '🧧', size: 'xl', align: 'center' },
@@ -171,11 +170,10 @@ const headerBlock = ({ headerTitle, personaTitle, mascotUrl }) => ({
     {
       type: 'box',
       layout: 'horizontal',
-      alignItems: 'center',
-      contents: [
+        contents: [
         { type: 'text', text: 'TODAY RECAP', size: 'md', weight: 'bold', color: '#A65B54', flex: 4 },
         { type: 'text', text: `ของ ${headerTitle}`, size: 'md', color: palette.grayText, weight: 'bold', align: 'center', flex: 5, wrap: true },
-        { type: 'box', layout: 'vertical', flex: 3, alignItems: 'end', contents: [mascotNode(palette.cream, mascotUrl, 'sm')] },
+        { type: 'box', layout: 'vertical', flex: 3, contents: [mascotNode(palette.cream, mascotUrl, 'sm')] },
       ],
     },
     { type: 'text', text: personaTitle, size: '5xl', weight: 'bold', color: palette.brown, wrap: true, margin: 'sm' },
