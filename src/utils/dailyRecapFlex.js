@@ -55,7 +55,7 @@ const mascotNode = (mascotUrl = '') => {
     cornerRadius: '16px',
     paddingAll: '6px',
     contents: [
-      { type: 'text', text: '🧧', size: 'xl', align: 'center' },
+      { type: 'text', text: '🍽️', size: 'xl', align: 'center' },
       { type: 'text', text: 'แปะ', size: 'xxs', align: 'center', weight: 'bold', color: palette.redDark },
     ],
   };
@@ -321,7 +321,7 @@ export const buildDailyRecapFlexMessage = ({ title, summary = {}, decision = {},
           },
           goalTopMealCard({ goalText: stats.goalText, topMealText: stats.topMealText }),
           { type: 'separator', margin: 'xs', color: palette.border },
-          { type: 'text', text: '🧧 แปะจดไว้ให้แล้ว', size: 'md', weight: 'bold', color: palette.greenDark, align: 'center', maxLines: 1 },
+          { type: 'text', text: '📸 แคปไว้ก่อน เดี๋ยวพรุ่งนี้แปะถามใหม่', size: 'sm', weight: 'bold', color: palette.redDark, align: 'center', wrap: true, maxLines: 2 },
         ],
       },
     },
