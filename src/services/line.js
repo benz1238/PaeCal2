@@ -51,7 +51,7 @@ const buildProgressTextBubble = (progressText = "") => {
 
 const buildInsightTextBubble = (insightText = "") => {
   const text = String(insightText || "").trim();
-  if (!text) return "ไอหยา แปะอ่านทรงให้แล้ว\nมื้อต่อไปค่อยบาลานซ์ต่อได้ 😄";
+  if (!text) return "ไอหยา! แปะอ่านทรงให้แล้ว\nมื้อต่อไปค่อยบาลานซ์ต่อได้ 😄";
 
   const normalized = text
     .replace(/^💡\s*/, "")
@@ -59,7 +59,7 @@ const buildInsightTextBubble = (insightText = "") => {
     .trim();
 
   if (/ของทอด|มัน|ไขมัน|หวาน|น้ำตาล|คาร์บ|เกิน|เต็ม/.test(normalized)) {
-    return `ไอหยา ${normalized}`;
+    return `ไอหยา! ${normalized}`;
   }
 
   if (/โปรตีน|โอเค|คุมได้|เบา/.test(normalized)) {
@@ -226,7 +226,7 @@ const paeLaewGuideFlex = () => ({
       backgroundColor: "#FFF7ED",
       contents: [
         { type: "text", text: "📸 ส่งรูปให้แปะอ่าน", weight: "bold", size: "xl", wrap: true, color: "#1F2937" },
-        { type: "text", text: "ถ่ายอาหารให้เห็นชัด ๆ แล้วส่งมาได้เลย เดี๋ยวแปะดูให้ว่าเมนูนี้ประมาณไหน 👀", size: "sm", wrap: true, color: "#374151", margin: "sm" },
+        { type: "text", text: "ถ่ายอาหารให้ชัด ๆ\nแล้วส่งมาได้เลย\nเดี๋ยวแปะดูให้ว่าเมนูนี้ประมาณไหน 👀", size: "sm", wrap: true, color: "#374151", margin: "sm" },
         {
           type: "box",
           layout: "vertical",
@@ -250,7 +250,7 @@ const paeLaewGuideFlex = () => ({
           backgroundColor: "#F0FDF4",
           contents: [
             { type: "text", text: "ทริคให้แปะอ่านแม่นขึ้น", size: "xs", weight: "bold", color: "#166534" },
-            { type: "text", text: "ถ้ามีหลายอย่างในจาน พิมพ์เพิ่มได้ เช่น “ข้าวมันไก่ + ชาไทยหวานน้อย”", size: "sm", wrap: true, color: "#374151", margin: "xs" },
+            { type: "text", text: "มีหลายอย่างในจานใช่มะ\nพิมพ์เพิ่มได้เลย เช่น\n“ข้าวมันไก่ + ชาไทยหวานน้อย”", size: "sm", wrap: true, color: "#374151", margin: "xs" },
           ],
         },
       ],
