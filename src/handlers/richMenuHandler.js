@@ -145,8 +145,24 @@ const replyDeleteLastMealFast = async ({ replyToken, userId }) => {
   const deleted = await dbAction("DELETE_LAST_MEAL:richMenu", () => deleteLastMeal(userId));
   invalidateRichMenuSummaryCache(userId);
   const notFound = deleted.status === "not_found";
-  await replyFlex(replyToken, buildDeleteMealFlexMessage({ deleted, notFound }));
-  logTiming("richMenu:deleteLastMealFast", start, notFound ? "status=not_found" : "status=deleted");
+
+  let summary = {};
+  if (!notFound) {
+    summary = await dbAction("GET_DAILY_SUMMARY:afterDelete", () => getDailySummary(userId));
+    setCachedRichMenuSummary(userId, summary || {});
+  }
+
+  const deletedForCard = {
+    ...(summary || {}),
+    ...deleted,
+    todayCalories: summary.todayCalories ?? summary.totalToday ?? 0,
+    totalToday: summary.totalToday ?? summary.todayCalories ?? 0,
+    calorieTarget: summary.calorieTarget || deleted.calorieTarget || 2050,
+    deletedMeal: deleted.deletedMeal,
+  };
+
+  await replyFlex(replyToken, buildDeleteMealFlexMessage({ deleted: deletedForCard, notFound }));
+  logTiming("richMenu:deleteLastMealFast", start, notFound ? "status=not_found" : `status=deleted total=${deletedForCard.todayCalories || 0}`);
 };
 
 export const handleRichMenuPostback = async ({ event, postback, eventStart }) => {
