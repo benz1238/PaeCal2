@@ -17,7 +17,6 @@ const requiredExports = [
   [openai, "estimateFoodFromText", "./services/openai.js"],
   [openai, "estimateFoodFromImage", "./services/openai.js"],
   [openai, "generateNutritionAdvice", "./services/openai.js"],
-  [openai, "generateSmartDailySummary", "./services/openai.js"],
 
   [sheet, "postToSheet", "./services/sheet.js"],
 
