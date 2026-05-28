@@ -4,6 +4,7 @@ import * as line from "@line/bot-sdk";
 
 import { handleImageMessage } from "./handlers/imageHandler.js";
 import { handleMealChoiceText } from "./handlers/mealChoiceHandler.js";
+import { handleFastFoodText } from "./handlers/fastFoodTextHandler.js";
 import {
   handleRichMenuPostback,
   logTiming,
@@ -50,9 +51,15 @@ router.post("/webhook", line.middleware({ channelSecret: process.env.LINE_CHANNE
       if (event.type !== "message") continue;
 
       if (event.message?.type === "text") {
-        const handledFast = await handleMealChoiceText(event);
-        if (handledFast) {
+        const handledMealChoice = await handleMealChoiceText(event);
+        if (handledMealChoice) {
           logTiming("event:textFast", eventStart);
+          continue;
+        }
+
+        const handledFastFood = await handleFastFoodText(event);
+        if (handledFastFood) {
+          logTiming("event:textFastFood", eventStart);
           continue;
         }
 
