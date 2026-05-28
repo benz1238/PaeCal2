@@ -7,21 +7,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
 
-const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-
-if (!token) {
-  console.error("Missing LINE_CHANNEL_ACCESS_TOKEN.");
-  console.error("Run: LINE_CHANNEL_ACCESS_TOKEN=xxx node scripts/setup-richmenus.js");
-  process.exit(1);
-}
-
-const lineApi = axios.create({
-  baseURL: "https://api.line.me/v2/bot",
-  headers: {
-    Authorization: `Bearer ${token}`,
-  },
-});
-
 const RICH_MENU_SIZE = { width: 2500, height: 1686 };
 const ALIAS = {
   vibe: "paecal-vibe-menu",
@@ -38,6 +23,13 @@ const switchMenu = (label, richMenuAliasId, data) => ({
   label,
   richMenuAliasId,
   data,
+});
+
+const buildLineApi = (token) => axios.create({
+  baseURL: "https://api.line.me/v2/bot",
+  headers: {
+    Authorization: `Bearer ${token}`,
+  },
 });
 
 const buildVibeRichMenu = () => ({
@@ -120,12 +112,12 @@ const ensureFile = (filePath) => {
   }
 };
 
-const createRichMenu = async (payload) => {
+const createRichMenu = async (lineApi, payload) => {
   const res = await lineApi.post("/richmenu", payload);
   return res.data.richMenuId;
 };
 
-const uploadRichMenuImage = async (richMenuId, imagePath) => {
+const uploadRichMenuImage = async (lineApi, richMenuId, imagePath) => {
   const image = fs.readFileSync(imagePath);
 
   await lineApi.post(`/richmenu/${richMenuId}/content`, image, {
@@ -137,7 +129,7 @@ const uploadRichMenuImage = async (richMenuId, imagePath) => {
   });
 };
 
-const getAlias = async (aliasId) => {
+const getAlias = async (lineApi, aliasId) => {
   try {
     const res = await lineApi.get(`/richmenu/alias/${aliasId}`);
     return res.data;
@@ -147,8 +139,8 @@ const getAlias = async (aliasId) => {
   }
 };
 
-const upsertAlias = async (aliasId, richMenuId) => {
-  const existing = await getAlias(aliasId);
+const upsertAlias = async (lineApi, aliasId, richMenuId) => {
+  const existing = await getAlias(lineApi, aliasId);
 
   if (existing) {
     await lineApi.post(`/richmenu/alias/${aliasId}`, { richMenuId });
@@ -162,37 +154,56 @@ const upsertAlias = async (aliasId, richMenuId) => {
   return "created";
 };
 
-const setDefaultRichMenu = async (richMenuId) => {
+const setDefaultRichMenu = async (lineApi, richMenuId) => {
   await lineApi.post(`/user/all/richmenu/${richMenuId}`);
 };
 
-const main = async () => {
+export const setupRichMenus = async ({ token = process.env.LINE_CHANNEL_ACCESS_TOKEN, logger = console } = {}) => {
+  if (!token) {
+    throw new Error("Missing LINE_CHANNEL_ACCESS_TOKEN.");
+  }
+
   ensureFile(VIBE_IMAGE_PATH);
   ensureFile(CAL_IMAGE_PATH);
 
-  console.log("Creating rich menu: แปะอ่านทรง...");
-  const vibeRichMenuId = await createRichMenu(buildVibeRichMenu());
-  await uploadRichMenuImage(vibeRichMenuId, VIBE_IMAGE_PATH);
-  console.log(`Created vibe rich menu: ${vibeRichMenuId}`);
+  const lineApi = buildLineApi(token);
 
-  console.log("Creating rich menu: แปะแคล...");
-  const calRichMenuId = await createRichMenu(buildCalRichMenu());
-  await uploadRichMenuImage(calRichMenuId, CAL_IMAGE_PATH);
-  console.log(`Created cal rich menu: ${calRichMenuId}`);
+  logger.log("Creating rich menu: แปะอ่านทรง...");
+  const vibeRichMenuId = await createRichMenu(lineApi, buildVibeRichMenu());
+  await uploadRichMenuImage(lineApi, vibeRichMenuId, VIBE_IMAGE_PATH);
+  logger.log(`Created vibe rich menu: ${vibeRichMenuId}`);
 
-  const vibeAliasStatus = await upsertAlias(ALIAS.vibe, vibeRichMenuId);
-  const calAliasStatus = await upsertAlias(ALIAS.cal, calRichMenuId);
-  console.log(`${vibeAliasStatus} alias: ${ALIAS.vibe}`);
-  console.log(`${calAliasStatus} alias: ${ALIAS.cal}`);
+  logger.log("Creating rich menu: แปะแคล...");
+  const calRichMenuId = await createRichMenu(lineApi, buildCalRichMenu());
+  await uploadRichMenuImage(lineApi, calRichMenuId, CAL_IMAGE_PATH);
+  logger.log(`Created cal rich menu: ${calRichMenuId}`);
 
-  await setDefaultRichMenu(vibeRichMenuId);
-  console.log("Set default rich menu to: แปะอ่านทรง");
+  const vibeAliasStatus = await upsertAlias(lineApi, ALIAS.vibe, vibeRichMenuId);
+  const calAliasStatus = await upsertAlias(lineApi, ALIAS.cal, calRichMenuId);
+  logger.log(`${vibeAliasStatus} alias: ${ALIAS.vibe}`);
+  logger.log(`${calAliasStatus} alias: ${ALIAS.cal}`);
 
-  console.log("Done. Open LINE and test the rich menu buttons.");
+  await setDefaultRichMenu(lineApi, vibeRichMenuId);
+  logger.log("Set default rich menu to: แปะอ่านทรง");
+
+  return {
+    vibeRichMenuId,
+    calRichMenuId,
+    aliases: ALIAS,
+    defaultRichMenuId: vibeRichMenuId,
+  };
 };
 
-main().catch((err) => {
-  console.error("Failed to setup rich menus:");
-  console.error(err.response?.data || err.message || err);
-  process.exit(1);
-});
+const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === __filename;
+
+if (isDirectRun) {
+  setupRichMenus()
+    .then(() => {
+      console.log("Done. Open LINE and test the rich menu buttons.");
+    })
+    .catch((err) => {
+      console.error("Failed to setup rich menus:");
+      console.error(err.response?.data || err.message || err);
+      process.exit(1);
+    });
+}
