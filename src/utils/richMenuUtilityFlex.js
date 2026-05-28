@@ -49,7 +49,7 @@ export const buildEditMealFlexMessage = () => baseBubble({
   subtitle: "ไม่เป็นไร พิมพ์แก้มา เดี๋ยวแปะจัดให้ใหม่",
   boxTitle: "พิมพ์แบบนี้ได้เลย",
   boxText: "• แก้มื้อล่าสุดเป็น ข้าวหมูกระเทียมไข่ดาว\n• แก้เป็น 650 kcal\n• ลบมื้อล่าสุด",
-  footer: "แปะไม่ดื้อ แก้ได้จ้า 😅",
+  footer: "แปะไม่ดื้อ แก้ได้ 😅",
 });
 
 export const buildDeleteMealFlexMessage = ({ deleted = {}, notFound = false } = {}) => {
@@ -59,7 +59,7 @@ export const buildDeleteMealFlexMessage = ({ deleted = {}, notFound = false } = 
   return baseBubble({
     altText: notFound ? "ยังไม่มีมื้อให้ลบ" : "ลบมื้อล่าสุดแล้ว",
     eyebrow: notFound ? "👀 แปะหาแล้วนะ" : "🗑️ ลบให้แล้ว",
-    title: notFound ? "ยังไม่มีมื้อให้ลบจ้า" : "โอเค มื้อนั้นหายไปแล้ว",
+    title: notFound ? "ยังไม่มีมื้อให้ลบนะ" : "โอเค มื้อนั้นหายไปแล้ว",
     subtitle: notFound
       ? "ระบบยังไม่เจอมื้อล่าสุดของวันนี้ ส่งรูปหรือพิมพ์อาหารมาก่อนนะ"
       : `ลบ: ${deleted.deletedMeal?.menuName || "มื้อล่าสุด"}`,
