@@ -1,6 +1,7 @@
 import { replyTexts, replyText } from "../services/line.js";
 import { getSession, updateSession, logFood, logFoodTermCandidate } from "../services/db.js";
 import { estimateFoodFromText } from "../services/openai.js";
+import { findFoodPreset } from "../services/brandFoodPresets.js";
 import { safeNumber, DEFAULT_CALORIE_TARGET } from "../utils/helpers.js";
 import { invalidateRichMenuSummaryCache } from "../utils/richMenuSummaryCache.js";
 
@@ -128,7 +129,9 @@ const buildGoalFoodGuardReply = (foodText) => [
 
 const buildLoggedReply = ({ meal, total, target, estimateMode }) => {
   const left = Math.max(target - total, 0);
-  const estimateNote = estimateMode === "local" ? "แปะนับแบบเร็วคร่าว ๆ ให้นะ 👀" : "แปะประเมินให้แล้ว 😋";
+  const estimateNote = estimateMode === "local" || estimateMode === "brand_preset" || estimateMode === "drink_sweetness_preset"
+    ? "แปะนับแบบเร็วคร่าว ๆ ให้นะ 👀"
+    : "แปะประเมินให้แล้ว 😋";
   return [
     [
       `โอเค แปะจดให้แล้ว 😋`,
@@ -175,6 +178,13 @@ const estimateFoodLocally = (text = "") => {
 };
 
 const estimateFood = async (text) => {
+  const presetStart = nowMs();
+  const preset = await findFoodPreset(text);
+  if (preset) {
+    logTiming("fastFoodText:estimatePreset", presetStart, `mode=${preset.estimateMode || "preset"} text=${text} menu=${preset.menuName || ""}`);
+    return preset;
+  }
+
   const local = estimateFoodLocally(text);
   if (local) return local;
   const aiStart = nowMs();
@@ -217,7 +227,7 @@ export const handleFastFoodText = async (event) => {
   const portion = resolveTextPortion({ kcal: meal.kcal });
   const requestId = `${event.message?.id || Date.now()}:fast-text-food`;
   invalidateRichMenuSummaryCache(userId);
-  const result = await logFood({ userId, name: session.data?.name || "", menuName: meal.menuName, kcal: meal.kcal, carb: meal.carb, protein: meal.protein, fat: meal.fat, sugar: meal.sugar, requestId, source: foodData?.estimateMode === "local" ? "text_fast_local" : "text_fast_openai", portionLevel: portion.level, portionLabel: portion.label, portionNote: portion.note, confidence: foodData?.confidence || "medium" });
+  const result = await logFood({ userId, name: session.data?.name || "", menuName: meal.menuName, kcal: meal.kcal, carb: meal.carb, protein: meal.protein, fat: meal.fat, sugar: meal.sugar, requestId, source: foodData?.estimateMode === "local" ? "text_fast_local" : foodData?.estimateMode === "brand_preset" || foodData?.estimateMode === "drink_sweetness_preset" ? "text_fast_preset" : "text_fast_openai", portionLevel: portion.level, portionLabel: portion.label, portionNote: portion.note, confidence: foodData?.confidence || "medium" });
   invalidateRichMenuSummaryCache(userId);
   const total = safeNumber(result.todayCalories ?? result.totalToday, meal.kcal);
   const target = safeNumber(result.calorieTarget, DEFAULT_CALORIE_TARGET);
