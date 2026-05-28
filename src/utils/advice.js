@@ -29,7 +29,7 @@ export const getSmartMealAdvice = ({ title, kcal, carb, protein, fat, total, cal
   const percent = target > 0 ? totalKcal / target : 0;
 
   if (percent >= 1.2) {
-    return `วันนี้ล้ำเส้นไปไกลแล้วนะ ${title} 😅\n\nถ้ายังหิวจริง ๆ\nเอาเบา ๆ พออยู่ท้องพอจ้า ❤️`;
+    return `วันนี้ล้ำเส้นไปไกลแล้วนะ ${title} 😅\n\nถ้ายังหิวจริง ๆ\nเอาเบา ๆ พออยู่ท้องก็พอ ❤️`;
   }
 
   if (percent >= 1) {
@@ -37,7 +37,7 @@ export const getSmartMealAdvice = ({ title, kcal, carb, protein, fat, total, cal
   }
 
   if (mealFat >= 35) {
-    return `มื้อนี้ไขมันค่อนข้างแน่นนะ ${title} 👀\n\nมื้อหน้าลองลดทอด/มันนิดนึง\nแปะว่าเอาอยู่จ้า`;
+    return `มื้อนี้ไขมันค่อนข้างแน่นนะ ${title} 👀\n\nมื้อหน้าลองลดทอด/มันนิดนึง\nแปะว่าเอาอยู่`;
   }
 
   if (mealCarb >= 85) {
@@ -45,14 +45,14 @@ export const getSmartMealAdvice = ({ title, kcal, carb, protein, fat, total, cal
   }
 
   if (mealProtein < 20 && mealKcal >= 400) {
-    return `มื้อนี้โปรตีนยังน้อยไปนิดนะ ${title} 💪\n\nมื้อหน้าหาไข่ต้ม ไก่ ปลา หรือเต้าหู้เติมหน่อย\nอยู่ท้องขึ้นเยอะเลยจ้า`;
+    return `มื้อนี้โปรตีนยังน้อยไปนิดนะ ${title} 💪\n\nมื้อหน้าหาไข่ต้ม ไก่ ปลา หรือเต้าหู้เติมหน่อย\nอยู่ท้องขึ้นเยอะ แปะว่าโอเค`;
   }
 
   if (percent >= 0.8) {
     return `วันนี้ใกล้เต็มเป้าแล้วนะ ${title} 🟠\n\nมื้อถัดไปเอาเบา ๆ\nแต่ไม่ต้องอดนะ เดี๋ยวแปะช่วยบาลานซ์ให้`;
   }
 
-  return `มื้อนี้โอเคอยู่นะ ${title} 🍽️\n\nกินให้อร่อยได้เลย\nเดี๋ยวแปะช่วยบาลานซ์ต่อให้จ้า ❤️`;
+  return `มื้อนี้โอเคอยู่นะ ${title} 🍽️\n\nกินให้อร่อยได้เลย\nเดี๋ยวแปะช่วยบาลานซ์ต่อให้ ❤️`;
 };
 
 export const getFoodLogText = ({ menuName, kcal, carb, protein, fat, total, calorieTarget }) => {
@@ -74,7 +74,7 @@ export const getSummaryText = ({ title, summary }) => {
 
   const statusLine = percent >= 1 ? `🔴 เกินเป้าไปประมาณ ${over} kcal` : `🟢 เหลือประมาณ ${left} kcal`;
 
-  return `📊 สรุปวันนี้ของ${title}\n\nกินไปแล้ว ${total} / ${target} kcal\n${statusLine}\n(${progress})\n\nวันนี้แปะดูแล้ว:\n- 🍚 คาร์บรวม ${summary.totalCarb || 0} g\n- 💪 โปรตีนรวม ${summary.totalProtein || 0} g\n- 💧 ไขมันรวม ${summary.totalFat || 0} g\n\n${percent >= 1 ? "พรุ่งนี้ลดทอด ลดหวาน แล้วเติมผักกับโปรตีนก่อน\nเดี๋ยวก็กลับเข้าร่องได้จ้า ❤️" : "มื้อถัดไปคุมของทอด/น้ำหวานนิดนึง\nแล้วเน้นโปรตีนดี ๆ ต่อ แปะว่าเริ่มสวยละ ❤️"}`;
+  return `📊 สรุปวันนี้ของ${title}\n\nกินไปแล้ว ${total} / ${target} kcal\n${statusLine}\n(${progress})\n\nวันนี้แปะดูแล้ว:\n- 🍚 คาร์บรวม ${summary.totalCarb || 0} g\n- 💪 โปรตีนรวม ${summary.totalProtein || 0} g\n- 💧 ไขมันรวม ${summary.totalFat || 0} g\n\n${percent >= 1 ? "พรุ่งนี้ลดทอด ลดหวาน แล้วเติมผักกับโปรตีนก่อน\nเดี๋ยวก็กลับเข้าร่องได้ แปะว่าโอเค ❤️" : "มื้อถัดไปคุมของทอด/น้ำหวานนิดนึง\nแล้วเน้นโปรตีนดี ๆ ต่อ แปะว่าเริ่มสวยละ ❤️"}`;
 };
 
 export const getMealSuggestionText = ({ title, summary }) => {
@@ -88,7 +88,7 @@ export const getMealSuggestionText = ({ title, summary }) => {
   }
 
   if (left <= 300) {
-    return `${title} วันนี้เหลือแคลไม่เยอะแล้วน้า 🟠\n\nเหลือประมาณ ${left} kcal\n\nถ้าหิวจริง ๆ เอาเบา ๆ พอ:\n\n- ไข่ต้ม 🥚\n- เต้าหู้\n- ซุปใส\n- โยเกิร์ตไม่หวาน\n\nไม่ต้องอดนะ แค่ไม่ลากยาวพอจ้า`;
+    return `${title} วันนี้เหลือแคลไม่เยอะแล้วนะ 🟠\n\nเหลือประมาณ ${left} kcal\n\nถ้าหิวจริง ๆ เอาเบา ๆ พอ:\n\n- ไข่ต้ม 🥚\n- เต้าหู้\n- ซุปใส\n- โยเกิร์ตไม่หวาน\n\nไม่ต้องอดนะ แค่ไม่ลากยาวพอ`;
   }
 
   if (left <= 600) {
