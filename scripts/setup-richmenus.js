@@ -32,6 +32,13 @@ const buildLineApi = (token) => axios.create({
   },
 });
 
+const buildLineDataApi = (token) => axios.create({
+  baseURL: "https://api-data.line.me/v2/bot",
+  headers: {
+    Authorization: `Bearer ${token}`,
+  },
+});
+
 const buildVibeRichMenu = () => ({
   size: RICH_MENU_SIZE,
   selected: true,
@@ -117,10 +124,10 @@ const createRichMenu = async (lineApi, payload) => {
   return res.data.richMenuId;
 };
 
-const uploadRichMenuImage = async (lineApi, richMenuId, imagePath) => {
+const uploadRichMenuImage = async (lineDataApi, richMenuId, imagePath) => {
   const image = fs.readFileSync(imagePath);
 
-  await lineApi.post(`/richmenu/${richMenuId}/content`, image, {
+  await lineDataApi.post(`/richmenu/${richMenuId}/content`, image, {
     headers: {
       "Content-Type": "image/png",
       "Content-Length": image.length,
@@ -167,15 +174,16 @@ export const setupRichMenus = async ({ token = process.env.LINE_CHANNEL_ACCESS_T
   ensureFile(CAL_IMAGE_PATH);
 
   const lineApi = buildLineApi(token);
+  const lineDataApi = buildLineDataApi(token);
 
   logger.log("Creating rich menu: แปะอ่านทรง...");
   const vibeRichMenuId = await createRichMenu(lineApi, buildVibeRichMenu());
-  await uploadRichMenuImage(lineApi, vibeRichMenuId, VIBE_IMAGE_PATH);
+  await uploadRichMenuImage(lineDataApi, vibeRichMenuId, VIBE_IMAGE_PATH);
   logger.log(`Created vibe rich menu: ${vibeRichMenuId}`);
 
   logger.log("Creating rich menu: แปะแคล...");
   const calRichMenuId = await createRichMenu(lineApi, buildCalRichMenu());
-  await uploadRichMenuImage(lineApi, calRichMenuId, CAL_IMAGE_PATH);
+  await uploadRichMenuImage(lineDataApi, calRichMenuId, CAL_IMAGE_PATH);
   logger.log(`Created cal rich menu: ${calRichMenuId}`);
 
   const vibeAliasStatus = await upsertAlias(lineApi, ALIAS.vibe, vibeRichMenuId);
