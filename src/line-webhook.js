@@ -14,6 +14,18 @@ import {
 const app = express();
 const router = Router();
 
+const RICH_MENU_TEXT_ACTIONS = {
+  MEAL_SUGGESTION: "กินอะไรดี",
+  DAILY_SUMMARY: "สรุปวันนี้",
+  DAILY_FOOD_WRAPPED: "สรุปวันนี้",
+  FOOD_AURA: "สรุปวันนี้",
+  TODAY_CALORIES: "แคลวันนี้",
+  TODAY_NUTRITION: "สรุปวันนี้",
+  SET_GOAL: "ตั้งเป้าสุขภาพ",
+  EDIT_LAST_MEAL: "แก้มื้อล่าสุด",
+  DELETE_LAST_MEAL: "ลบมื้อล่าสุด",
+};
+
 const parsePostbackData = (data) => {
   const raw = String(data || "").trim();
 
@@ -33,6 +45,14 @@ const parsePostbackData = (data) => {
   }
 };
 
+const routeTextAction = async (event, text) => {
+  await handleTextMessage({
+    ...event,
+    type: "message",
+    message: { type: "text", text },
+  });
+};
+
 router.post(
   "/webhook",
   line.middleware({
@@ -48,11 +68,7 @@ router.post(
         if (!event.source?.userId) continue;
 
         if (event.type === "follow") {
-          await handleTextMessage({
-            ...event,
-            type: "message",
-            message: { type: "text", text: "__FOLLOW__" },
-          });
+          await routeTextAction(event, "__FOLLOW__");
           continue;
         }
 
@@ -80,21 +96,25 @@ router.post(
             continue;
           }
 
-          if (postback.action === "MEAL_SUGGESTION") {
-            await handleTextMessage({
-              ...event,
-              type: "message",
-              message: { type: "text", text: "กินอะไรดี" },
-            });
+          if (postback.action === "SWITCH_TO_VIBE_MENU") {
+            await replyText(
+              event.replyToken,
+              "ตอนนี้อยู่ฝั่งแปะอ่านทรงแล้วนะ 👀\nส่งรูปอาหารมา เดี๋ยวแปะอ่านให้"
+            );
             continue;
           }
 
-          if (postback.action === "DAILY_SUMMARY") {
-            await handleTextMessage({
-              ...event,
-              type: "message",
-              message: { type: "text", text: "สรุปวันนี้" },
-            });
+          if (postback.action === "SWITCH_TO_CAL_MENU") {
+            await replyText(
+              event.replyToken,
+              "เปิดโหมดแปะแคลให้แล้วจ้า 🔥\nอยากดูแคลวันนี้ กดดูได้เลย"
+            );
+            continue;
+          }
+
+          const mappedText = RICH_MENU_TEXT_ACTIONS[postback.action];
+          if (mappedText) {
+            await routeTextAction(event, mappedText);
             continue;
           }
 
@@ -124,7 +144,7 @@ router.post(
           if (event.replyToken) {
             await replyText(
               event.replyToken,
-              "แปะขออภัย ระบบสะดุดนิดนึง ลองส่งใหม่อีกทีนะจ๊ะ 🙏"
+              "แปะสะดุดนิดนึง ลองส่งใหม่อีกทีนะ 😅"
             );
           }
         } catch (replyErr) {
