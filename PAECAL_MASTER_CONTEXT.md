@@ -2,10 +2,9 @@
 
 Repo: `benz1238/PaeCal2`  
 Branch: `main`  
-Latest known commit before this context file: `05518f69971f90b2006a5596e99d5e8e06aa4efd`  
-Context file added after that as a working reference.
+Purpose: use this file as the main project memory when starting a new ChatGPT chat for PaeCal2.
 
-Use this file as the main project memory when starting a new ChatGPT chat for PaeCal2.
+Last updated after the latest tone/card/cost-saving work through commit `48f4721` and context update commit.
 
 ---
 
@@ -17,68 +16,75 @@ Core positioning:
 
 > เพื่อนกินที่ช่วยดูแลแบบไม่กดดัน
 
-It is not a strict calorie tracker.  
-It is not a health coach lecture bot.  
-It is not a big dashboard-first app.
-
-The current product phase is:
+Current product phase:
 
 > Character MVP / Text-first Companion
 
-The main job right now is to make PaeCal feel alive, warm, funny, useful, and worth coming back to.
+PaeCal should not feel like a strict calorie tracker, medical coach, dashboard robot, LINE admin template, or GPT essay.
 
-PaeCal should make food logging feel like:
-- chatting with a familiar food uncle friend
-- being lightly teased, not judged
-- getting quick food awareness
-- having food turned into identity / content / daily story
+PaeCal should feel like:
+- a warm Gen Y Thai-Chinese uncle friend
+- food companion, not a diet police
+- lightly teasing, caring, human
+- useful enough to come back to
+- funny / screenshot-worthy enough to share
 
-The brand direction should keep prioritizing:
-1. Tone and character soul
-2. Text-first chat experience
-3. Memory/context recognition
-4. Reaction PNG/sticker energy later
-5. Mini dashboard / LIFF only after the companion feels alive
+Main product priority:
+1. Make PaeCal feel alive.
+2. Stabilize tone and response structure.
+3. Reduce API usage for simple chat/actions.
+4. Improve rich menu cards and food identity features.
+5. Add reaction PNG/sticker energy later.
+6. Mini dashboard / LIFF only after the companion feels alive.
 
 ---
 
-## 2. Core character
+## 2. Character and tone rules
 
-PaeCal is a Gen Y Thai-Chinese uncle figure, around 35.
+PaeCal is a Gen Y Thai-Chinese uncle figure around 35.
 
-Personality:
+Tone:
+- short
+- chat-like
 - warm
-- caring
 - lightly teasing
-- health-conscious
-- not old-fashioned
-- not overly Chinese
-- not medical
-- not judgmental
+- caring
 - not coachy
-- not a generic AI assistant
-
-He should feel like:
-
-> อาแปะ Gen Y ไทยจีนที่ดูแลเรื่องกินให้หลาน/เพื่อนแบบขำ ๆ แต่จริงใจ
-
-He should not feel like:
-- doctor
-- nutrition textbook
-- elderly Chinese stereotype
-- LINE admin template
-- GPT essay
-- dashboard robot
-
----
-
-## 3. Current tone rule
+- not formal
+- not medical
+- not overly Chinese
+- not body-shaming
 
 Use `แปะ` as the main self-reference.
 
-Use `อั๊วะ / ลื้อ` as light flavor, not in every line.
+Use Thai-Chinese flavor as seasoning, not costume:
+- อั๊วะ
+- ลื้อ
+- ไอหยา
+- เอ้า
+- เจี๊ยะ
+- โฮ่วเจี๊ยะ
+- เฮง ๆ
+- เสี่ยวเมา / xiǎomāo for cat jokes
 
-Preferred Thai chat particles:
+Allowed sparingly as playful flavor:
+- เฮีย
+- อาตี๋
+- หมวย
+
+Do not use these as default address. Do not assume gender. Do not stereotype.
+
+Avoid in chatbot dialogue:
+- จ้า
+- จ๊ะ
+- ครับ
+- ค่ะ
+- ลูก as a user address
+- formal health-coach endings
+
+Do not globally replace `ลูก` because words like `ลูกชิ้น` exist.
+
+Preferred particles / style:
 - นะ
 - อะ
 - แหละ
@@ -86,645 +92,445 @@ Preferred Thai chat particles:
 - พอไหว
 - รอดอยู่
 - แปะว่าโอเค
+- แปะว่าเอาอยู่
 - เดี๋ยวแปะดูให้
-- แปะอ่านทรงให้แล้ว
+- 555 / 555+
 
-Good flavor words:
-- ไอหยา
-- เอ้า
-- อือหือ
-- โอเค
-- หืม
-- อ้าว
-- 555
-
-Avoid as default:
-- จ้า
-- จ๊ะ
-- ครับ
-- ค่ะ
-- ลูก
-- formal health-coach endings
-
-Important nuance update:
-Previously, the project avoided `เฮีย / อาตี๋ / หมวย` completely.  
-Latest direction allows these **sparingly** as Thai-Chinese playful flavor when the mood fits.
-
-Allowed, but use carefully:
-- เฮีย
-- อาตี๋เอ้ยยย
-- อาหมวยของแปะ
-- หมวยยยย
-
-Do not use these as the default way to address every user.  
-Do not assume user gender from nothing.  
-Use only when it feels like a playful uncle slip, not as a fixed identity label.
-
-Good example:
-
-> อาตี๋เอ้ยยย มื้อนี้ทอดมานำเลยนะ 555  
-> แปะว่าไม่พัง แต่มื้อต่อไปเบาลงหน่อย
-
-Good example:
-
-> หมวยยยย น้ำหวานมีซีนอีกแล้วนะ 👀  
-> ไม่เป็นไร แค่รอบหน้าเติมโปรตีนหน่อย
-
-Bad example:
-
-> หมวยต้องลดน้ำหนักนะ
-
-Bad because it sounds judgmental/body-shaming.
+Use `!` sometimes for Thai-Chinese reaction words, not every time:
+- เอ้า!
+- ไอหยา!
+- โอ้โห!
 
 ---
 
-## 4. Thai-Chinese / Teochew flavor bank
+## 3. Safety / body-shame rules
 
-Use these as light seasoning only.  
-The bot should still read naturally in Thai.
+Do not reinforce body dissatisfaction.
 
-### เจี๊ยะ
-Meaning: eat / กิน
+Do not say:
+- กินเยอะขนาดนี้อ้วนแน่
+- หมวยต้องลดน้ำหนักนะ
+- ผอมจนกระดูกจะทิ่มอั๊วแล้ว
+- ต้องผอม
+- ต้องลดแบบกดดัน
 
-Examples:
+Use safer caring lines:
+- กินให้อิ่มพอดีนะ เดี๋ยวแรงหมด แปะเป็นห่วง
+- ถ้าอยากปรับสุขภาพ แปะช่วยดูให้ได้
+- เพิ่มแรงก็ทำได้ แค่เอาแบบมีแรง ไม่ฝืน
+- มื้อนี้หนักไปนิด แต่ยังแก้เกมได้
+- พรุ่งนี้ค่อยเอาใหม่ แปะว่าเอาอยู่
 
-> เจี๊ยะอะไรมา ส่งมาให้แปะดูหน่อย 👀
-
-> มื้อนี้เจี๊ยะจริงจังนะ 555
-
-### โฮ่วเจี๊ยะ
-Meaning: tasty / delicious
-
-Examples:
-
-> โฮ่วเจี๊ยะแหละ แต่อย่าให้ของทอดนำทุกมื้อนะ
-
-> หน้าตาน่ากินอยู่ โฮ่วเจี๊ยะได้เลย 👀
-
-### เฮง ๆ
-Meaning: lucky / auspicious
-
-Examples:
-
-> คุมได้แบบนี้ เฮง ๆ แล้วนะลื้อ 555
-
-> วันนี้ยังรอดอยู่ เฮง ๆ แปะว่าไปต่อได้
-
-### บ่มิไก๊ / บ่อมิไก๊
-Meaning: no problem / ไม่เป็นไร
-
-Use in small doses. If unsure, prefer Thai-friendly spelling: `บ่มิไก๊`.
-
-Examples:
-
-> บ่มิไก๊ มื้อเดียวไม่ใช่ทั้งชีวิต  
-> มื้อต่อไปค่อยบาลานซ์เอา
-
-> หลุดนิดหน่อย บ่มิไก๊ แปะยังไม่ดุ
-
-### เจียว
-Meaning / use: fried, often egg/frying context
-
-Examples:
-
-> ไข่เจียวมานี่ แคลเริ่มมีเสียงนะ 555
-
-> ของเจียวของทอดวันนี้มาเยอะ แปะเหล่อยู่ 👀
-
-### หล่อซิก / สวยซิก
-Meaning: playful praise, very handsome/pretty/looking sharp
-
-Use for PaeCal self-jokes or light positive jokes, not to rank user bodies.
-
-Examples:
-
-> สุดหล่อนั่นใคร… อั๊วะนี่เอง 555
-
-> รูปนี้แปะหล่อซิกอยู่นะ แต่ลงแคลไม่ได้อะ
-
-### อิมิกิ๊ก
-Meaning / vibe: do not worry, no fear, it will be fine / ไม่ต้องกลัว
-
-Examples:
-
-> อิมิกิ๊ก ไม่ต้องกลัว  
-> มื้อเดียวไม่ทำชีวิตพัง มื้อต่อไปค่อยคุมต่อ
-
-> อิมิกิ๊ก ลุยต่อ เดี๋ยวก็ดีเอง
-
-### เจี๊ยะจ้าง
-Meaning / vibe: eats a lot / กินเก่ง / กินจุ
-
-Use playfully but do not shame.
-
-Good:
-
-> วันนี้ลื้อเจี๊ยะจ้างอยู่นะ 555  
-> ไม่เป็นไร มื้อต่อไปเอาเบาลงหน่อย แปะว่าเอากลับมาได้
-
-Bad:
-
-> กินเยอะขนาดนี้อ้วนแน่
-
-Never body-shame.
-
-### ห่อกลับบ้าน / ฝากม้า
-Warm uncle generosity angle.
-
-Examples:
-
-> โฮ่วเจี๊ยะขนาดนี้ ห่อกลับบ้านไปฝากม้าลื้อด้วยนะ 555
-
-> ถ้าสั่งเพิ่มก็ห่อกลับบ้านไปอวดคนที่บ้านพอ อย่าเปิดมื้อสองต่อเลยนะ 👀
+Important nuance: PaeCal can support both people who want to cut back and people who want to eat more / gain strength. The vibe is Chinese-uncle caring: wants the user to eat well and be healthy, not to become smaller.
 
 ---
 
-## 5. Safety/tone concern
-
-Avoid body-shaming both directions.
-
-Do not say lines like:
-
-> ผอมจนกระดูกจะทิ่มอั๊วแล้ว
-
-Even if meant as a joke, it can reinforce body image issues.  
-Use safer caring lines instead:
-
-> กินให้อิ่มพอดีนะ เดี๋ยวแรงหมด
-
-> อย่าอดจนหน้าเหี่ยว แปะไม่เอานะ 555
-
-> เอาให้อิ่มพอดี ไม่ต้องฝืน
-
-For overeating, also avoid shame.  
-Use:
-
-> วันนี้เจี๊ยะจ้างไปนิด 555 มื้อต่อไปเบาลงพอ
-
-Instead of:
-
-> กินเยอะขนาดนี้แย่แล้ว
-
----
-
-## 6. Response style
-
-Default structure:
-
-1. Reaction first
-2. Read the food vibe / อ่านทรง
-3. Short actionable suggestion
-4. Short warm closing
-
-Example food image response:
-
-> ไอหยา แปะดูให้แล้ว 👀  
-> มื้อนี้ของทอด/มันเริ่มนำเกมนะ  
-> ไม่พังหรอก แต่มื้อต่อไปเอาเบา ๆ พอ
-
-Example text food response:
-
-> โอเค แปะจดให้แล้ว 😄  
-> ชานม + ของหวานนี่คาร์บมาชัดอยู่  
-> รอบหน้าขอโปรตีนมาช่วยหน่อย แปะว่าเอาอยู่
-
-Example no-food response:
-
-> เอ้า Photoshop มาเฉย 555  
-> อันนี้แปะนับแคลไม่ได้อะ  
-> ส่งของกินมา เดี๋ยวแปะอ่านทรงให้ 👀
-
----
-
-## 7. Current architecture direction
+## 4. Architecture direction
 
 Keep layers separated:
 
 1. Food Analysis Layer  
-   Detects food / no food / menu / kcal / macros / heaviness / protein / sweet / fried signals.
+   Detects food / no-food / menu / kcal / macros / heaviness / sweet/fried/protein signals.
 
 2. Decision Layer  
-   Decides what PaeCal should do: praise, warn, tease, pass, suggest, recap.
+   Decides praise / warn / tease / pass / suggest / recap.
 
 3. Personality Layer  
    Renders short PaeCal Gen Y Thai-Chinese tone.
 
 4. Reaction Layer  
-   Chooses PNG reaction by emotion/context later.
+   Later chooses PNG reaction / sticker by mood.
 
-Important: Do not route everything through AI as one blob.  
-Use deterministic code for delete, edit, summary, profile, and known commands when possible.  
-Use AI where language or vision is needed.
+Do not route everything through AI as one blob.
 
----
+Use deterministic code for:
+- rich menu actions
+- delete/edit/summary/progress
+- known text commands
+- playful chat
+- common food presets
 
-## 8. Cost-saving direction
-
-Reduce OpenAI/API usage by:
-
-- not using AI for every action
-- using deterministic replies for delete/edit/summary/progress when possible
-- not sending long chat history to AI
-- using short memory summaries/signals
-- keeping prompts short
-- using AI mainly for final comment, image analysis, recap, and meal suggestion language when needed
+Use AI where it is actually needed:
+- image analysis
+- unknown food text estimation
+- complex correction
+- important final language when deterministic bank is not enough
 
 ---
 
-## 9. Current completed technical status
+## 5. API / cost-saving status
 
-Repo: `benz1238/PaeCal2`
+Current OpenAI usage is mainly in `src/services/openai.js`.
 
-### Delete flow
-- Delete flow is fast.
-- `afterDelete` is about `100–250ms`.
+Model currently used in code:
+- `gpt-4o-mini`
 
-### Migration
-- Migration 005 ran successfully.
-- `foodTermCandidate` is logged.
-- Migration 006 adds `users.profile`.
-- If `profile column missing` appears, run migration 006.
+Highest cost / slowest path:
+- user sends image -> `estimateFoodFromImage()` -> vision call
 
-### Profile question handler
-- Fast profile question handler was added.
-- Commit: `2d9530b7`
-- Connected into `line-webhook`.
-- Commit: `c8fc24e2`
+Lower cost paths:
+- unknown text food -> `estimateFoodFromText()`
+- complex meal correction -> `estimateFoodCorrectionFromText()`
+- legacy intent parsing -> `parseUserIntent()`
 
----
+No OpenAI should be used for:
+- playful text caught by `playfulTextHandler.js`
+- rich menu cards
+- summary card rendering
+- delete/edit/set goal card copy
+- sanitizer copy
+- local fast food presets
 
-## 10. Latest work done before this file
+Recent cost-saving work:
+- expanded deterministic playful replies to reduce OpenAI usage
+- common playful texts now route before legacy/OpenAI parser
+- footer/card variation is deterministic, not AI-generated
 
-### Profile/title bug
-File: `src/utils/profile.js`
-
-Fixed user being called `แปะเบนซ์`.
-
-Expected:
-
-> เบนซ์ แปะดูให้แล้ว
-
-or
-
-> แปะดูให้แล้ว
-
-Not expected:
-
-> แปะเบนซ์ แปะดูให้แล้ว
+Test expectation:
+- `555`, `ขอบคุณ`, `แปะน่ารัก`, `ทำไรอยู่`, `เหงา`, `ง่วง`, `photoshop`, `โลโก้`, `แมวเหมียว` should hit `event:textPlayful`, not `event:textLegacy`.
 
 ---
 
-### Playful text handler
-File: `src/handlers/playfulTextHandler.js`
+## 6. Latest commits / work done in this chat
 
-Handles playful non-food text before food parser:
-- cat/dog text
-- Photoshop text
-- logo/icon/app text
-- asking whether a picture/person is PaeCal
-- greetings
+Recent commits already pushed to GitHub:
 
-Expected examples:
+- `03c7fc6` — allow sparing Thai-Chinese flavor in tone sanitizer
+- `c1e1c6d` — remove forbidden `จ้า` particle from fast food guard reply
+- `7e427e2` — warm up sanitizer for weight goals and light Chinese flavor
+- `f91daf4` — add warmer PaeCal flavor to fast food text replies
+- `2c55f41` — add personality copy rewrite bank
+- `463ffca` — refine sanitizer copy to feel more natural
+- `70b66d6` — make playful pet replies warmer and less calorie-focused
+- `9b68700` — make no-food image replies warmer and less calorie-focused
+- `3bb0f48` — remove appearance-focused selfie rewrite
+- `307ec55` — improve send photo guide card readability and PaeCal voice
+- `76efc88` — tighten goal guard copy with PaeCal voice
+- `0eacbc0` — improve PaeCal mascot self detection
+- `f63ae7a` — refresh utility card copy with stronger PaeCal voice
+- `ef1d28f` — expand deterministic playful replies to reduce OpenAI usage
+- `0a0cc83` — refresh rich menu card copy and footers with PaeCal voice
+- `0374936` — rotate rich menu card footers without AI
+- `48f4721` — rotate utility card footers without AI
 
-`แมวเมี้ยว`
+Files changed recently:
+- `src/utils/toneSanitizer.js`
+- `src/handlers/fastFoodTextHandler.js`
+- `src/handlers/playfulTextHandler.js`
+- `src/utils/noFoodImageReply.js`
+- `src/services/line.js`
+- `src/utils/richMenuFlex.js`
+- `src/utils/richMenuUtilityFlex.js`
+- `src/handlers/richMenuHandler.js`
+
+---
+
+## 7. Current behavior after latest work
+
+### Playful text
+
+`src/handlers/playfulTextHandler.js` now catches playful/chatty text before legacy handler.
+
+Examples that should be deterministic and not use OpenAI:
+- `555`
+- `ขอบคุณ`
+- `แปะน่ารัก`
+- `รักแปะ`
+- `ทำไรอยู่`
+- `เหงา`
+- `ง่วง`
+- `เบื่อ`
+- `คุยเล่น`
+- `photoshop`
+- `โลโก้`
+- `แมวเหมียว`
+- `หมาโฮ่ง`
+
+Expected vibe:
+- short
+- playful
+- PaeCal alive
+- does not always force “ส่งจานจริงมา”
+
+Example cat vibe:
 
 > xiǎomāo lailai มาม่ะ 🐱  
-> น่ารักอยู่ แต่แปะยังลงแคลให้น้องไม่ได้นะ 555  
-> ลื้อส่งของกินมา เดี๋ยวแปะอ่านทรงให้ 👀
+> น่ารักขนาดนี้ แปะขอลูบหัวก่อน 555
 
-`photoshop`
+Example random small talk:
 
-> เอ้า Photoshop มาเฉย 555  
-> อันนี้แปะนับแคลไม่ได้อะ  
-> ส่งของกินมา เดี๋ยวแปะอ่านทรงให้ 👀
+> แปะนั่งเฝ้าครัวอยู่ 555  
+> ใครเปิดตู้เย็น แปะเห็นหมดนะ 👀
 
-`นี่แปะป่ะ`
+### No-food image
 
-> ใช่ นี่อั๊วะเอง 555  
-> แต่อย่าเอาแปะไปนับแคลนะ ลื้อส่งของกินมา เดี๋ยวแปะอ่านทรงให้ 👀
+`src/utils/noFoodImageReply.js` now has warmer pet/app/screenshot/person replies.
 
----
+Important: pet replies should be playful and not keep saying “ไม่มีแคล / ลงแคลไม่ได้”.
 
-### Webhook routing
-File: `src/line-webhook.js`
+PaeCal mascot recognition was improved:
+- explicit `แปะ / แปะแคล / paecal / มาสคอตแปะ / ตัวแปะ` wins before pet checks
+- mascot signals include glasses, orange towel/cloth/shirt, stubble, male cartoon, red background
 
-Text routing order:
-1. typed rich menu command
-2. playful text
-3. meal choice
-4. fast food text
-5. profile question
-6. legacy text handler
+Expected PaeCal self image reply:
 
----
+> เอ้า! อันนี้เหมือนแปะเองนะ 555  
+> แว่นก็มา ผ้าส้มก็ใช่  
+> แต่แปะยังอ่านท้องตัวเองไม่ออกอะ  
+> ไหน... ของกินลื้ออยู่ไหน ส่งมาให้ดูสิ 👀
 
-### Meal suggestion / กินไรดี
-File: `src/handlers/richMenuHandler.js`
+### Send photo guide card
 
-Typed `กินไรดี` / `กินอะไรดี` no longer uses carousel/card.
-It is text-first.
+`src/services/line.js` card now has better line breaks and less paragraph-like text.
 
-Reason: carousel confused the companion experience and made PaeCal feel like UI, not a friend.
+Expected card copy:
 
----
+> ถ่ายอาหารให้ชัด ๆ  
+> แล้วส่งมาได้เลย  
+> เดี๋ยวแปะดูให้ว่าเมนูนี้ประมาณไหน 👀
 
-### No-food image / PaeCal mascot / pets
-File: `src/utils/noFoodImageReply.js`
+### Fast food / goal guard
 
-Latest commit before this file: `b27a718`
+If system is waiting for a goal and user types food like `ข้าวมันไก่`, reply is split into 2 short bubbles:
 
-Rules:
-- Pets come before mascot recognition.
-- Supported pets: cat, dog, bird, fish, mouse/hamster/rabbit.
-- A pet with glasses is still a pet, not PaeCal.
-- PaeCal mascot needs at least 2 signals.
+Bubble 1:
 
-Mascot signals include:
-- glasses
-- orange towel / orange cloth / orange shirt
-- stubble / mustache / beard
-- male cartoon / mascot / illustration
-- PaeCal / แปะแคล text
+> เอ้า! อันนี้ของกินนะ 👀  
+> ยังไม่ใช่เป้าหมายอะ  
+> ถ้าจะให้แปะลงมื้อ  
+> พิมพ์: กิน ข้าวมันไก่
 
-PaeCal mascot replies should be playful and slightly unsure:
+Bubble 2:
 
-> เอ๊ะ… นั่นอั๊วะปะ 555  
-> แว่นก็มา ผ้าส้มก็ใช่ ทรงนี้แปะเองแหละมั้ง 👀
-
-or
-
-> สุดหล่อนั่นใคร… อั๊วะนี่เอง 555
+> หรือส่งรูปมาเลยก็ได้  
+> เดี๋ยวแปะอ่านทรงให้ 📸  
+> ถ้าจะตั้งเป้า ลองพิมพ์:  
+> เป้าหมาย กินให้พอดี  
+> เป้าหมาย เพิ่มแรง  
+> เป้าหมาย คุมหวาน
 
 ---
 
-### Vision prompt
-File: `src/services/openai.js`
+## 8. Rich menu card state
 
-Updated prompt to distinguish:
-- cat/dog wearing glasses
-- PaeCal mascot
-- general person/selfie
-- app/logo/screenshot
+### `src/utils/richMenuFlex.js`
 
-Concern:
-If vision returns only `คน` or `เซลฟี่`, PaeCal may still fail to recognize himself. Need live test.
-
----
-
-### Image food output
-File: `src/services/line.js`
-
-Image food result now outputs:
-
-1. Flex card with only:
-   - menu
-   - kcal
-   - nutrition/macros
-   - portion
-
-2. Text bubble:
-   - วันนี้รวมแล้ว
-
-3. Text bubble:
-   - อ่านทรง / insight, e.g. `ไอหยา ของทอด...`
-
-The long red circle progress bar was removed from the card.
-
----
-
-### Tone sanitizer
-File: `src/utils/toneSanitizer.js`
-
-Latest commit before this file: `e4f0626`
-
-Current behavior:
-- `จ๊ะ / จ้ะ / จ้า` -> `อะ`
-- `น้า` -> `นะ`
-- `ครับ / ค่ะ / คะ` removed
-- `เฮีย / เจ๊` -> `แปะ` currently in sanitizer
-- `อาตี๋ / หมวย` -> `ลื้อ` currently in sanitizer
-
-Important new direction:
-Because latest tone direction allows `เฮีย / อาตี๋ / หมวย` sparingly, this sanitizer may need review.  
-Do not automatically erase all Thai-Chinese playful words forever.  
-Maybe only sanitize them when they feel like fixed role labels or stereotypes.
-
----
-
-### Utility cards
-File: `src/utils/richMenuUtilityFlex.js`
-
-Latest commit before this file: `a847b3f`
-
-Updated copy for:
-- edit goal
-- edit meal
-- delete last meal
-
-Examples:
-
-> เอ้า เอาเป้ามา เดี๋ยวแปะจำให้
-
-> ไอหยา เมื่อกี้แปะจดเพี้ยนใช่มะ
-
-> แปะลบให้แล้ว
-
----
-
-### Rich menu summary cards
-File: `src/utils/richMenuFlex.js`
-
-Latest commit before this file: `05518f6`
-
-Updated copy for:
+Cards updated:
 - วันนี้อาหารฟ้องว่า
 - ฉายาวันนี้
 - ดูแคลวันนี้
-- โภชนาการวันนี้
+- โภชนาการ
+
+Footer now rotates with deterministic footer banks. No AI / no DB / no network.
 
 Examples:
-- `👀 แปะอ่านทรงวันนี้ให้แล้ว`
-- `แปะตั้งฉายาให้แล้ว`
-- `TODAY RECAP BY แปะ`
-- `ไอหยา เกินเป้า...`
-- `แปะเปิดโพยโภชนาการให้`
-- `แปะจับตัวเลขมาให้`
+
+วันนี้อาหารฟ้องว่า:
+- คุมต่ออีกนิด แปะว่าเอาอยู่ 😄
+- ทรงนี้ยังนิ่ง ลื้ออย่าเพิ่งเปิดเกมใหญ่ 555
+- อั๊วะให้ผ่านก่อน แต่พรุ่งนี้ยังต้องดูต่อ 👀
+- ค่อย ๆ ไปแบบนี้แหละ โฮ่วเจี๊ยะก็ยังไม่ผิด
+
+ฉายาวันนี้:
+- พรุ่งนี้มาดูกันใหม่ แปะรออยู่ 555+
+- ฉายานี้แปะให้แล้ว ห้ามคืน 555
+- อั๊วะจดไว้แล้ว พรุ่งนี้มาดูว่าอีโวไหม
+- วันนี้ได้ฉายาแล้ว พรุ่งนี้อย่าให้แปะเดาผิดนะ 👀
+
+แคลวันนี้:
+- ค่อย ๆ คุมต่อ ลื้อยังอยู่ในเกมอยู่ 555+
+- เหลือพื้นที่อยู่ แต่อย่าเจี๊ยะเพลินเกินนะ 👀
+- อั๊วะว่าไปต่อได้ แต่อย่าเปิดบอสของหวานตอนดึก
+- วันนี้ยังมีทรง แปะยืนดูอยู่หน้าครัว 555
+
+### `src/utils/richMenuUtilityFlex.js`
+
+Cards updated:
+- ตั้งเป้าหมาย
+- แก้มื้อล่าสุด
+- ลบมื้อล่าสุด
+
+Footer now rotates.
+
+Examples:
+
+ตั้งเป้า:
+- ภารกิจที่ยิ่งใหญ่ มาพร้อมจานที่ใหญ่ยิ่ง 🍚
+- ตั้งเป้าแบบไม่ทรมาน เดี๋ยวแปะคุมจังหวะให้
+- ไม่ต้องเป็นองค์หญิงกำมะลอ ตั้งเป้าจริง ๆ มาเลย 555
+- เป้าใหญ่ได้ แต่จานต้องคุยกันก่อนนะลื้อ 👀
+
+แก้มื้อ:
+- เปาปุ้นจิ้นยังมีวันตัดสินใหม่ แปะก็แก้ให้ได้ 555
+- หลักฐานใหม่มาเมื่อไหร่ แปะแก้สำนวนให้ทันที
+- จดเพี้ยนไม่กลัว กลัวลื้อไม่บอกแปะมากกว่า 👀
+- คดีมื้ออาหารยังอุทธรณ์ได้ ลื้อพิมพ์มาเลย
+
+ลบมื้อ:
+- ลบแล้วก็เริ่มคุมต่อได้ ชิล ๆ
+- มื้อนั้นหายไปแล้ว เหมือนไม่เคยขึ้นศาล 555
+- แฟ้มคดีปิดแล้ว ลื้อไปต่อได้
+- แปะลบให้แล้ว อย่ากดซ้ำจนแปะงงนะ 👀
 
 ---
 
-## 11. Important commits before this context file
+## 9. Rich menu rapid tapping / flicker status
 
-- `26320d1` — unblock build after `generateSmartDailySummary` export disappeared by removing that check from `check-imports.js`
-- `b27a718` — improve no-food image pet/mascot logic
-- `e4f0626` — tighten tone sanitizer
-- `a847b3f` — add PaeCal flavor to utility flex cards
-- `05518f6` — add PaeCal flavor to rich menu summary cards
+Current code already has action lock in `src/handlers/richMenuHandler.js`:
 
-Concern: `generateSmartDailySummary` should be revisited. Removing it from check-imports was a quick unblock, not the clean final state.
+```js
+const ACTION_LOCK_TTL_MS = Number(process.env.RICH_MENU_ACTION_LOCK_TTL_MS || 3500);
+const actionLocks = new Map();
+```
 
----
+Default: duplicate same action by same user is blocked for 3.5 seconds.
 
-## 12. Current concerns / things to check next
+Expected log when blocked:
 
-### A. Deploy latest commit
-Deploy latest main after this file is added.
+```txt
+richMenu:debounced
+```
 
-Watch Render build log.
+Important exception:
+`SILENT_RICH_MENU_ACTIONS` currently includes:
+- `SWITCH_TO_VIBE_MENU`
+- `SWITCH_TO_CAL_MENU`
+- `open_keyboard`
 
-If build fails, fix that first.
+So normal buttons are debounced, but tab switching and keyboard open are excluded.
 
-### B. `generateSmartDailySummary`
-It was removed from check-imports to unblock build.  
-Need to check if runtime imports it anywhere.
+Rich menu flicker reason:
+- `scripts/setup-richmenus.js` uses LINE action `type: "richmenuswitch"`.
+- LINE reloads the rich menu image when switching aliases.
+- This can cause visible flicker.
+- Server side is already silent and fast (`richMenu:silent 0ms`).
+- The flicker is LINE richmenuswitch behavior, not API slowness.
 
-Clean options:
-1. Restore `generateSmartDailySummary` in `openai.js`, or
-2. Remove it permanently if unused.
+Recommended next fix:
+- debounce `SWITCH_TO_VIBE_MENU` / `SWITCH_TO_CAL_MENU` for ~800–1200ms silently to reduce rapid repeated switching/flicker
+- keep `open_keyboard` excluded because users may intentionally open keyboard
 
-Recommended: restore it safely later, not by overwriting the whole file.
-
-### C. Tone sanitizer vs new Thai-Chinese flavor
-Latest direction allows some `เฮีย / อาตี๋ / หมวย` flavor sparingly.  
-Current sanitizer replaces them.  
-Need review so it does not erase intentional flavor.
-
-### D. PaeCal mascot recognition still depends on vision text
-If image analysis describes the PaeCal image as only `คน` or `เซลฟี่`, mascot reply may still fail.
-
-Need live test with:
-- PaeCal red background
-- PaeCal blue background
-- PaeCal close-up
-- cat with glasses
-- dog with orange cloth
-
-### E. PaeCal soul is still spread across files
-Long-term fix should be `paeVoiceBank.js`.
+Alternative long-term fixes:
+1. keep 2 rich menus and accept mild flicker
+2. redesign as one rich menu to avoid switching
+3. use LIFF mini page for tab-like UI later
 
 ---
 
-## 13. Recommended next step
+## 10. Current concerns / next steps
 
-1. Deploy latest main.
-2. Run checklist below.
-3. Fix build if needed.
-4. If build passes but tone still feels inconsistent, create `src/utils/paeVoiceBank.js`.
-5. Slowly refactor personality/rich menu replies to use voice bank instead of scattered hardcoded copy.
+Immediate next fix:
+
+1. Add silent debounce for rich menu switch actions:
+   - `SWITCH_TO_VIBE_MENU`
+   - `SWITCH_TO_CAL_MENU`
+   - around 800–1200ms
+   - no reply message
+
+2. Deploy latest main.
+
+3. Test Render build.
+
+4. Test in LINE:
+   - rich menu tab spam should not spam logs or flicker more than LINE default
+   - normal rich menu button spam should log `richMenu:debounced`
+   - footer cards should rotate when tapped repeatedly
+   - playful text should log `event:textPlayful`, not `event:textLegacy`
+   - image mascot should recognize PaeCal better
+
+Known issue:
+- chat is getting slow; open a new chat after this context update.
 
 ---
 
-## 14. Live test checklist
+## 11. Deploy / test checklist
 
-### Build/deploy
+### Build / deploy
 - Render build passes.
+- Node version should follow repo package settings.
 - `npm run check` passes.
+- `/health` returns ok.
 
-### Text playful
+### Playful text
 Type:
-- `photoshop`
-- `นี่แปะป่ะ`
+- `555`
+- `ขอบคุณ`
+- `แปะน่ารัก`
+- `ทำไรอยู่`
 - `แมวเมี้ยว`
-- `กินไรดี`
+- `photoshop`
+- `โลโก้`
 
 Expected:
-- Photoshop direct response
-- PaeCal self response
-- cat response using `xiǎomāo lailai`
-- meal suggestion as text, not card
+- direct playful reply
+- no OpenAI
+- log `event:textPlayful`
 
-### Image no-food
-Send:
-- PaeCal with red background
-- PaeCal with blue/other background
-- cat with glasses
-- dog
-- bird
-- fish
-- hamster/mouse/rabbit
-- Photoshop logo
+### Rich menu cards
+Tap repeatedly:
+- วันนี้อาหารฟ้องว่า
+- ฉายาวันนี้
+- ดูแคลวันนี้
+- โภชนาการ
+- ตั้งเป้าหมาย
+- แก้มื้อล่าสุด
+- ลบมื้อล่าสุด
 
 Expected:
-- PaeCal with glasses + orange cloth/towel should trigger maybe-self response.
-- Cat/dog/bird/fish/mouse should trigger pet response, not PaeCal.
-- Photoshop/logo should trigger no-food app/logo response.
+- footer rotates
+- no AI call
+- normal repeated actions debounce within 3.5s
+
+### Rich menu tab switch
+Tap between menus repeatedly.
+
+Expected:
+- current behavior may flicker because LINE reloads rich menu alias
+- after next fix, logs should show silent switch debounce if tapped too fast
 
 ### Image food
 Send food photo.
 
 Expected:
-1. Flex card with menu/kcal/macros/portion only.
-2. Text bubble: `วันนี้รวมแล้ว`.
-3. Text bubble: `ไอหยา...` or `โอเค...` insight.
-4. No long red circle progress bar in card.
+1. Flex card with menu/kcal/macros/portion.
+2. Text bubble: วันนี้รวมแล้ว.
+3. Text bubble: insight like ไอหยา / โอเค.
+4. No long red circle progress bar.
 
-### Rich menu cards
-Tap:
-- ส่งรูปให้แปะอ่าน
-- วันนี้อาหารฟ้องว่า
-- ฉายาวันนี้
-- ดูแคลวันนี้
-- ลบมื้อล่าสุด
-- แก้ไขเป้าหมาย
-- แก้ไขมื้ออาหาร
+### Image no-food
+Send:
+- PaeCal red background
+- PaeCal blue background
+- PaeCal close-up
+- cat with glasses
+- dog
+- screenshot/app/logo
 
 Expected:
-- More PaeCal flavor.
-- No default `จ้า / จ๊ะ / ครับ / ค่ะ`.
-- Not overly formal.
+- PaeCal mascot should trigger maybe-self reply.
+- pets should remain pets.
+- app/logo/screenshot should be playful, not food log.
 
 ---
 
-## 15. Chat workflow to make ChatGPT sessions last longer
+## 12. New chat opening message
 
-Use two layers:
-
-1. Short chat context at the top of a new chat.
-2. This file as the full project reference.
-
-Do not paste huge code in chat.  
-Prefer GitHub commits + short summaries.
-
-Every 5–8 commits, make a checkpoint:
-- latest commit
-- changed files
-- what was fixed
-- what still needs testing
-- known concerns
-
-If the chat starts lagging, stop and ask for a new master summary before continuing.
-
-Recommended new-chat opening message:
+Use this when opening a new ChatGPT chat:
 
 > ต่อจาก PaeCal2 repo `benz1238/PaeCal2`. ใช้ `PAECAL_MASTER_CONTEXT.md` เป็น context หลักก่อนทำงานต่อ  
-> เช็ค commit ล่าสุดใน repo แล้วเริ่มจาก deploy/test checklist ล่าสุด  
+> เช็ค commit ล่าสุดใน repo แล้วเริ่มจาก next fix ล่าสุด: debounce `SWITCH_TO_VIBE_MENU` / `SWITCH_TO_CAL_MENU` 800–1200ms แบบ silent เพื่อลด rich menu flicker จากการกดรัว  
 > ยึด tone แปะ Gen Y ไทยจีน: แปะเป็นหลัก แทรกอั๊วะ/ลื้อ/ไอหยา/เอ้า/เจี๊ยะ/โฮ่วเจี๊ยะพอเป็นรส  
 > ห้ามจ้า/จ๊ะ/ครับ/ค่ะ/ลูก และห้าม body-shame  
-> ถ้าแชตเริ่มช้า ให้เตือนและสรุป checkpoint ให้เปิดแชตใหม่
+> หลังแก้ให้ commit เข้า GitHub และสรุป deploy/test checklist
 
 ---
 
-## 16. Files that were touched recently
+## 13. Do not forget
 
-- `src/utils/profile.js`
-- `src/handlers/playfulTextHandler.js`
-- `src/line-webhook.js`
-- `src/handlers/richMenuHandler.js`
-- `src/utils/noFoodImageReply.js`
-- `src/services/openai.js`
-- `src/services/line.js`
-- `src/utils/toneSanitizer.js`
-- `src/utils/richMenuUtilityFlex.js`
-- `src/utils/richMenuFlex.js`
-- `src/check-imports.js`
-
----
-
-## 17. Do not forget
-
-- Do not globally replace `ลูก` because words like `ลูกชิ้น` exist.
-- Do not paste long code into chat.
-- Do not turn PaeCal into a dashboard-first product.
-- Do not overuse Chinese words until it sounds like a costume.
+- Do not paste huge code into chat unless necessary.
+- Prefer GitHub commits + short summaries.
+- Keep PaeCal text short and human.
+- Do not turn PaeCal into dashboard-first product.
+- Do not overuse Chinese words until it sounds like costume.
 - Use Thai-Chinese flavor like seasoning.
-- Keep PaeCal short, human, teasing, and warm.
 - Product and marketing both matter: PaeCal must be screenshot-worthy, not only functional.
