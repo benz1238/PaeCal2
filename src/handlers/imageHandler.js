@@ -1,6 +1,5 @@
 import { pushTexts, replyText, getLineImageBase64 } from "../services/line.js";
-import { postToSheet } from "../services/sheet.js";
-import { logFood } from "../services/db.js";
+import { getSession, logFood } from "../services/db.js";
 import { refreshSummaryCacheFromSheetResponse } from "../utils/summaryCache.js";
 import { getCachedSession, mergeCachedSession, setCachedSession } from "../utils/sessionCache.js";
 import { invalidateRichMenuSummaryCache } from "../utils/richMenuSummaryCache.js";
@@ -24,12 +23,10 @@ const resolveFastTitle = (session) => {
 
 const normalizeText = (value) => String(value || "").trim();
 
-const resolveCachedTodayCalories = (session) => {
-  return safeNumber(
-    session?.todayCalories ?? session?.totalToday ?? session?.data?.todayCalories ?? session?.data?.totalToday,
-    0
-  );
-};
+const resolveCachedTodayCalories = (session) => safeNumber(
+  session?.todayCalories ?? session?.totalToday ?? session?.data?.todayCalories ?? session?.data?.totalToday,
+  0
+);
 
 const DRINK_IMAGE_PATTERN = /(โค้ก|โค๊ก|โคคา|โคล่า|coke|cola|pepsi|เป๊ปซี่|น้ำอัดลม|สไปรท์|แฟนต้า|ชานม|ชาไทย|ชาเขียว|มัทฉะ|กาแฟ|โกโก้|นม|น้ำหวาน|หวานเย็น|น้ำแดง|น้ำเขียว|เครื่องดื่ม|แก้วน้ำ|กระป๋อง|ขวด|moccona|มอคโคน่า|nescafe|เนสกาแฟ|birdy|เบอร์ดี้|milo|ไมโล|ovaltine|โอวัลติน)/i;
 const NON_DRINK_MAIN_SUBJECT_PATTERN = /(แมว|หมา|สุนัข|ไก่|นก|เอกสาร|จอคอม|หน้าจอ|รถ|วิว)/i;
@@ -42,20 +39,17 @@ const detectPackagedDrinkProfile = (combined = "") => {
   const isJarOrInstant = /(กระปุก|jar|instant|สำเร็จรูป|freeze\s*dried|ผงกาแฟ|กาแฟผง|selection|gold|red\s*cup)/i.test(text);
   const isReadyToDrink = READY_TO_DRINK_PATTERN.test(text);
   const isBlackCoffee = /(black|americano|อเมริกาโน่|อเมริกาโน|กาแฟดำ|ไม่ใส่น้ำตาล|ไม่หวาน|no\s*sugar)/i.test(text);
-
   const coffeeNote = (brand) => isThreeInOne
     ? `อันนี้ดูเป็น${brand}แบบซอง/ทรีอินวันนะ 👀 แปะนับคร่าว ๆ ต่อ 1 ซองให้ก่อน`
     : isReadyToDrink
       ? `อันนี้ดูเป็น${brand}พร้อมดื่มนะ 👀 แปะนับคร่าว ๆ ต่อ 1 กระป๋อง/ขวดให้ก่อน`
       : `อันนี้ดูเป็น${brand}แบบกาแฟผงนะ 👀 ถ้าชงดำ ๆ แคลไม่แรง แต่ถ้าเติมนม/น้ำตาลค่อยบวกเพิ่ม`;
-
   const instantCoffeeProfile = (brand) => {
     if (isThreeInOne) return { menuName: brand, kcal: 90, carb: 14, protein: 1, fat: 3, note: coffeeNote(brand) };
     if (isReadyToDrink) return { menuName: brand, kcal: 120, carb: 18, protein: 2, fat: 3, note: coffeeNote(brand) };
     if (isBlackCoffee || isJarOrInstant) return { menuName: brand, kcal: 15, carb: 2, protein: 1, fat: 0, note: coffeeNote(brand) };
     return { menuName: brand, kcal: 60, carb: 8, protein: 1, fat: 1, note: coffeeNote(brand) };
   };
-
   if (/(moccona|มอคโคน่า)/i.test(text)) return instantCoffeeProfile("กาแฟมอคโคน่า");
   if (/(nescafe|เนสกาแฟ)/i.test(text)) return instantCoffeeProfile("กาแฟเนสกาแฟ");
   if (/(birdy|เบอร์ดี้)/i.test(text)) {
@@ -70,40 +64,26 @@ const detectPackagedDrinkProfile = (combined = "") => {
     if (isZero) return { menuName: "เป๊ปซี่แมกซ์/ไม่มีน้ำตาล", kcal: 0, carb: 0, protein: 0, fat: 0, note: "อันนี้ดูเป็นเป๊ปซี่สูตรไม่มีน้ำตาลนะ 👀" };
     return { menuName: "เป๊ปซี่", kcal: 140, carb: 35, protein: 0, fat: 0, note: "อันนี้เป๊ปซี่นะ 👀 แปะนับเป็น 1 ขวด/กระป๋องให้ก่อน" };
   }
-  if (/(milo|ไมโล)/i.test(text)) {
-    const kcal = isReadyToDrink ? 170 : 110;
-    return { menuName: "ไมโล", kcal, carb: isReadyToDrink ? 28 : 18, protein: 5, fat: 3, note: "อันนี้ดูเป็นไมโลนะ 👀 ถ้าชงนม/หวานเพิ่ม แคลจะขยับขึ้นอีก" };
-  }
-  if (/(ovaltine|โอวัลติน)/i.test(text)) {
-    const kcal = isReadyToDrink ? 180 : 120;
-    return { menuName: "โอวัลติน", kcal, carb: isReadyToDrink ? 30 : 20, protein: 4, fat: 3, note: "อันนี้ดูเป็นโอวัลตินนะ 👀 ถ้าชงนม/หวานเพิ่ม แคลจะขยับขึ้นอีก" };
-  }
+  if (/(milo|ไมโล)/i.test(text)) return { menuName: "ไมโล", kcal: isReadyToDrink ? 170 : 110, carb: isReadyToDrink ? 28 : 18, protein: 5, fat: 3, note: "อันนี้ดูเป็นไมโลนะ 👀 ถ้าชงนม/หวานเพิ่ม แคลจะขยับขึ้นอีก" };
+  if (/(ovaltine|โอวัลติน)/i.test(text)) return { menuName: "โอวัลติน", kcal: isReadyToDrink ? 180 : 120, carb: isReadyToDrink ? 30 : 20, protein: 4, fat: 3, note: "อันนี้ดูเป็นโอวัลตินนะ 👀 ถ้าชงนม/หวานเพิ่ม แคลจะขยับขึ้นอีก" };
   return null;
 };
 
 const inferDrinkFromImage = ({ imageSubject, imageCaption, gptData }) => {
   const subject = normalizeText(imageSubject);
   const caption = normalizeText(imageCaption);
-  const brandName = normalizeText(gptData?.brandName);
-  const productType = normalizeText(gptData?.productType);
-  const packagedState = normalizeText(gptData?.packagedState);
-  const modelMenu = normalizeText(gptData?.menuName);
-  const combined = `${subject} ${caption} ${brandName} ${productType} ${packagedState} ${modelMenu}`.trim();
-
+  const combined = `${subject} ${caption} ${normalizeText(gptData?.brandName)} ${normalizeText(gptData?.productType)} ${normalizeText(gptData?.packagedState)} ${normalizeText(gptData?.menuName)}`.trim();
   if (!combined || !DRINK_IMAGE_PATTERN.test(combined)) return null;
   if (NON_DRINK_MAIN_SUBJECT_PATTERN.test(subject) && !/(เครื่องดื่ม|แก้วน้ำ|กระป๋อง|ขวด|โค้ก|โค๊ก|โคล่า|coke|cola|กาแฟ|ชานม|โกโก้|น้ำอัดลม)/i.test(subject)) return null;
-
   const packagedProfile = detectPackagedDrinkProfile(combined);
   let menuName = normalizeText(gptData?.menuName);
   let kcal = safeNumber(gptData?.kcal, 0);
   let carb = safeNumber(gptData?.carb, 0);
-
   if (packagedProfile && (!menuName || /^(อาหาร|เครื่องดื่ม|เครื่องดื่มหวาน|กาแฟ|โกโก้|ชา|นม|น้ำอัดลม)$/i.test(menuName))) {
     menuName = packagedProfile.menuName;
     kcal = kcal || packagedProfile.kcal;
     carb = carb || packagedProfile.carb;
   }
-
   if (!menuName || menuName === "อาหาร") {
     if (/(zero|ซีโร่|ไม่มีน้ำตาล|0%)/i.test(combined)) { menuName = "โค้กซีโร่"; kcal = kcal || 0; carb = carb || 0; }
     else if (/(โค้ก|โค๊ก|โคคา|โคล่า|coke|cola)/i.test(combined)) { menuName = "โค้ก"; kcal = kcal || 140; carb = carb || 35; }
@@ -112,19 +92,8 @@ const inferDrinkFromImage = ({ imageSubject, imageCaption, gptData }) => {
     else if (/(ชานม|ชาไทย|ชาเขียว|มัทฉะ)/i.test(combined)) { menuName = "ชานม/ชา"; kcal = kcal || 220; carb = carb || 35; }
     else if (/(โกโก้|กาแฟ|นม|น้ำหวาน|หวานเย็น)/i.test(combined)) { menuName = "เครื่องดื่มหวาน"; kcal = kcal || 180; carb = carb || 28; }
   }
-
   if (!menuName || (!DRINK_IMAGE_PATTERN.test(menuName) && !packagedProfile)) return null;
-
-  return {
-    ...gptData,
-    menuName,
-    kcal,
-    carb,
-    protein: safeNumber(gptData?.protein ?? packagedProfile?.protein, 0),
-    fat: safeNumber(gptData?.fat ?? packagedProfile?.fat, 0),
-    note: packagedProfile?.note || gptData?.note,
-    isFood: true,
-  };
+  return { ...gptData, menuName, kcal, carb, protein: safeNumber(gptData?.protein ?? packagedProfile?.protein, 0), fat: safeNumber(gptData?.fat ?? packagedProfile?.fat, 0), note: packagedProfile?.note || gptData?.note, isFood: true };
 };
 
 const resolvePortion = ({ kcal = 0, portionLevel = "normal", note = "" } = {}) => {
@@ -138,29 +107,12 @@ const resolvePortion = ({ kcal = 0, portionLevel = "normal", note = "" } = {}) =
 const DRINK_MENU_PATTERN = /(ชานม|ชามะนาว|ชาไทย|ชาเขียว|ชาดำ|ชาเย็น|มัทฉะ|โกโก้|กาแฟ|ลาเต้|คาปูชิโน|อเมริกาโน่|นมเย็น|นมสด|โค้ก|โคก|โค๊ก|เป๊ปซี่|น้ำอัดลม|สไปรท์|แฟนต้า|น้ำหวาน|หวานเย็น|น้ำแดง|น้ำเขียว|น้ำผลไม้|สมูทตี้|เครื่องดื่ม|coke|cola|pepsi|coffee|tea|milk|cocoa|latte|smoothie|juice|moccona|มอคโคน่า|nescafe|เนสกาแฟ|birdy|เบอร์ดี้|milo|ไมโล|ovaltine|โอวัลติน)/i;
 const SWEET_MENU_PATTERN = /(ของหวาน|ขนม|เค้ก|คุกกี้|โดนัท|บราวนี่|ไอศกรีม|บิงซู|ฮันนี่โทสต์|dessert|cookie|cake|donut|brownie|ice\s*cream|pudding|โรตี|แพนเค้ก|waffle|วาฟเฟิล|ครัวซองต์|ช็อกโกแลต)/i;
 const SOLID_FOOD_PATTERN = /(ข้าว|หมู|ไก่|ปลา|กุ้ง|ไข่|เนื้อ|ก๋วยเตี๋ยว|บะหมี่|เส้น|ผัด|ทอด|ย่าง|ต้ม|แกง|ยำ|สลัด|ซุป|ผลไม้|มะม่วง|ส้มโอ|ส้ม|กล้วย|แตงโม|อาหาร|จาน|มื้อ|ขาหมู|กะเพรา|กระเพรา|ส้มตำ|ลาบ|หมูกระทะ|ชาบู|พิซซ่า|เบอร์เกอร์)/i;
-
-const isDrinkMenu = (menuName = "") => {
-  const name = String(menuName || "").trim();
-  if (!name) return false;
-  if (/^(ชา|นม|กาแฟ|โกโก้|โค้ก|โค๊ก|เป๊ปซี่|น้ำอัดลม|น้ำหวาน|เครื่องดื่ม)$/i.test(name)) return true;
-  return DRINK_MENU_PATTERN.test(name);
-};
-
-const hasSolidFood = (meal = {}) => {
-  const itemNames = Array.isArray(meal.items) ? meal.items.map((item) => item?.name).filter(Boolean).join(" + ") : "";
-  return SOLID_FOOD_PATTERN.test(`${meal.menuName || ""} ${itemNames}`);
-};
-const hasDrink = (meal = {}) => {
-  const itemNames = Array.isArray(meal.items) ? meal.items.map((item) => item?.name).filter(Boolean).join(" + ") : "";
-  return isDrinkMenu(`${meal.menuName || ""} ${itemNames}`);
-};
-const hasSweet = (meal = {}) => {
-  const itemNames = Array.isArray(meal.items) ? meal.items.map((item) => item?.name).filter(Boolean).join(" + ") : "";
-  return SWEET_MENU_PATTERN.test(`${meal.menuName || ""} ${itemNames}`);
-};
-
+const isDrinkMenu = (menuName = "") => DRINK_MENU_PATTERN.test(String(menuName || ""));
+const joinItemNames = (meal = {}) => Array.isArray(meal.items) ? meal.items.map((item) => item?.name).filter(Boolean).join(" + ") : "";
+const hasSolidFood = (meal = {}) => SOLID_FOOD_PATTERN.test(`${meal.menuName || ""} ${joinItemNames(meal)}`) || !isDrinkMenu(`${meal.menuName || ""} ${joinItemNames(meal)}`);
+const hasDrink = (meal = {}) => isDrinkMenu(`${meal.menuName || ""} ${joinItemNames(meal)}`);
+const hasSweet = (meal = {}) => SWEET_MENU_PATTERN.test(`${meal.menuName || ""} ${joinItemNames(meal)}`);
 const buildNutritionLine = ({ carb = 0, protein = 0, fat = 0 } = {}) => `🍚 คาร์บ ${Math.round(safeNumber(carb, 0))}g / 💪 โปรตีน ${Math.round(safeNumber(protein, 0))}g / 🥑 ไขมัน ${Math.round(safeNumber(fat, 0))}g`;
-
 const buildDrinkSugarLine = ({ menuName = "", kcal = 0, carb = 0, allowAnyDrink = false } = {}) => {
   if (!allowAnyDrink && !isDrinkMenu(menuName)) return "";
   const kcalValue = safeNumber(kcal, 0);
@@ -176,9 +128,7 @@ const buildImageDailyProgressMessage = ({ summary = {} }) => {
   const target = safeNumber(summary.calorieTarget, DEFAULT_CALORIE_TARGET);
   const over = Math.max(total - target, 0);
   const left = Math.max(target - total, 0);
-  const progress = buildProgressBar(total, target);
-  const status = over > 0 ? `🔴 เกินเป้าไปประมาณ ${Math.round(over)} kcal` : `🟢 เหลือประมาณ ${Math.round(left)} kcal`;
-  return `📊 วันนี้กินไปแล้ว\n${Math.round(total)} / ${Math.round(target)} kcal\n${status}\n(${progress})`;
+  return `📊 วันนี้กินไปแล้ว\n${Math.round(total)} / ${Math.round(target)} kcal\n${over > 0 ? `🔴 เกินเป้าไปประมาณ ${Math.round(over)} kcal` : `🟢 เหลือประมาณ ${Math.round(left)} kcal`}\n(${buildProgressBar(total, target)})`;
 };
 
 const buildImageInsight = ({ meal, summary, goalText }) => {
@@ -194,24 +144,15 @@ const buildImageInsight = ({ meal, summary, goalText }) => {
   else if (carb >= 80) macroLine = "คาร์บมาแน่นพอควรเลย 🍚";
   else if (safeNumber(meal?.kcal, 0) <= 320) macroLine = "มื้อนี้ค่อนข้างเบาเลย 😄";
   let goalLine = "มื้อต่อไปค่อยบาลานซ์ต่อได้ 😄🍃";
-  if (/ลด|คุม|ไขมัน|พุง/.test(goal)) {
-    goalLine = meal?.portionLevel === "heavy" || fat >= 25 || totalToday >= target ? "เป้าลดไขมันยังไปต่อได้ แค่มื้อต่อไปเบาลงหน่อย 😄🍃" : "เป้าลดไขมันยังคุมได้อยู่ 😄🍃";
-  } else if (/กล้าม|bulk|เพิ่มน้ำหนัก|โปรตีน/.test(goal)) {
-    goalLine = protein >= 20 ? "โปรตีนเริ่มโอเคกับเป้านะ 💪" : "ถ้าอยากอิ่มนาน/เสริมกล้าม เพิ่มโปรตีนอีกนิดจะสวย 💪";
-  } else if (totalToday >= target) {
-    goalLine = "วันนี้ใกล้เต็มแล้ว มื้อต่อไปเบา ๆ พอ 😮‍💨🍃";
-  }
+  if (/ลด|คุม|ไขมัน|พุง/.test(goal)) goalLine = meal?.portionLevel === "heavy" || fat >= 25 || totalToday >= target ? "เป้าลดไขมันยังไปต่อได้ แค่มื้อต่อไปเบาลงหน่อย 😄🍃" : "เป้าลดไขมันยังคุมได้อยู่ 😄🍃";
+  else if (/กล้าม|bulk|เพิ่มน้ำหนัก|โปรตีน/.test(goal)) goalLine = protein >= 20 ? "โปรตีนเริ่มโอเคกับเป้านะ 💪" : "ถ้าอยากอิ่มนาน/เสริมกล้าม เพิ่มโปรตีนอีกนิดจะสวย 💪";
+  else if (totalToday >= target) goalLine = "วันนี้ใกล้เต็มแล้ว มื้อต่อไปเบา ๆ พอ 😮‍💨🍃";
   return { macroLine, goalLine };
 };
 
 const buildImageFoodMessages = ({ meal, summary, title, session }) => {
-  const includesDrink = hasDrink(meal);
-  const includesSweet = hasSweet(meal);
-  const includesSugarType = includesDrink || includesSweet;
-  const includesSolid = hasSolidFood(meal) || (!includesSugarType);
-  const sugarLine = includesSugarType ? buildDrinkSugarLine({ menuName: meal.menuName, kcal: meal.kcal, carb: meal.carb, allowAnyDrink: true }) : "";
-  const nutritionLine = includesSolid ? buildNutritionLine({ carb: meal.carb, protein: meal.protein, fat: meal.fat }) : "";
-  const detailLines = [nutritionLine, sugarLine].filter(Boolean).join("\n");
+  const includesSugarType = hasDrink(meal) || hasSweet(meal);
+  const detailLines = [hasSolidFood(meal) ? buildNutritionLine({ carb: meal.carb, protein: meal.protein, fat: meal.fat }) : "", includesSugarType ? buildDrinkSugarLine({ menuName: meal.menuName, kcal: meal.kcal, carb: meal.carb, allowAnyDrink: true }) : ""].filter(Boolean).join("\n");
   const firstMessage = `${meal.reaction} ${title} แปะดูให้แล้ว\n\n🍽️ เมนู\n${meal.menuName}\n🔥 ~${meal.kcal} kcal${detailLines ? `\n${detailLines}` : ""}\n📏 ปริมาณ: ${meal.portionLabel}`;
   const { macroLine, goalLine } = buildImageInsight({ meal, summary, goalText: session?.data?.goal || "" });
   const secondLines = [`💡 ${macroLine}`, goalLine];
@@ -229,10 +170,10 @@ const getSessionForImage = async (userId) => {
     logTiming("image", "getSessionMemoryHit", sessionT);
     return cachedSession;
   }
-  const session = await postToSheet({ action: "GET_SESSION", userId });
+  const session = await getSession(userId);
   const normalized = { step: session?.step || "READY", data: session?.data || {}, ...session };
   setCachedSession(userId, normalized);
-  logTiming("image", "getSession", sessionT);
+  logTiming("image", "getSession", sessionT, `source=${normalized.source || "unknown"}`);
   return normalized;
 };
 
@@ -245,8 +186,7 @@ const analyzeImageEvent = async (event) => {
   logTiming("image", "openaiVision", aiT, `message=${event.message.id} menu=${gptData?.menuName || "unknown"} kcal=${gptData?.kcal || 0} subject=${gptData?.imageSubject || ""}`);
   const imageSubject = normalizeText(gptData?.imageSubject || gptData?.subject || gptData?.detectedObject || "");
   const imageCaption = normalizeText(gptData?.imageCaption || gptData?.caption || gptData?.sceneDescription || "");
-  const drinkOverride = inferDrinkFromImage({ imageSubject, imageCaption, gptData });
-  const analyzedData = drinkOverride || gptData;
+  const analyzedData = inferDrinkFromImage({ imageSubject, imageCaption, gptData }) || gptData;
   const kcal = safeNumber(analyzedData?.kcal, 0);
   const carb = safeNumber(analyzedData?.carb, 0);
   const protein = safeNumber(analyzedData?.protein, 0);
@@ -290,7 +230,7 @@ const processImageBatch = async ({ userId, events }) => {
   const analyzedResults = await Promise.all(events.map((event) => analyzeImageEvent(event)));
   logTiming("imageBatch", "analyzeAll", analyzeT, `count=${analyzedResults.length}`);
   const foodResults = analyzedResults.filter((item) => item.isFood);
-  if (foodResults.length === 0) {
+  if (!foodResults.length) {
     const firstNoFood = analyzedResults[0] || {};
     const pushNoFoodT = nowMs();
     await pushTexts(userId, [renderNoFoodDetectedReply({ imageSubject: firstNoFood.imageSubject, imageCaption: firstNoFood.imageCaption })]);
@@ -301,29 +241,10 @@ const processImageBatch = async ({ userId, events }) => {
   const portionT = nowMs();
   const mealDraft = buildMealFromAnalyzedImages(foodResults);
   logTiming("image", "buildPortion", portionT, `portion=${mealDraft.portion?.level || "normal"} imageCount=${foodResults.length}`);
-  const firstMessageId = firstEvent.message?.id || "image";
-  const requestId = `${firstMessageId}:image-batch-${events.length}`;
+  const requestId = `${firstEvent.message?.id || "image"}:image-batch-${events.length}`;
   const logFoodT = nowMs();
   invalidateRichMenuSummaryCache(userId);
-  const sheetData = await logFood({
-    action: "LOG_FOOD",
-    userId,
-    name: session.data?.name || "",
-    kcal: mealDraft.kcal,
-    carb: mealDraft.carb,
-    protein: mealDraft.protein,
-    fat: mealDraft.fat,
-    menuName: mealDraft.menuName,
-    requestId,
-    itemsJson: JSON.stringify(mealDraft.imageItems),
-    source: "image",
-    portionLevel: mealDraft.portion?.level || "normal",
-    portionLabel: mealDraft.portion?.label || "พอดี",
-    portionNote: mealDraft.portion?.note || "แปะประเมินจากรูปคร่าว ๆ นะ",
-    confidence: mealDraft.confidence,
-    imageSubject: mealDraft.imageSubject,
-    imageCaption: mealDraft.imageCaption,
-  });
+  const sheetData = await logFood({ userId, name: session.data?.name || "", kcal: mealDraft.kcal, carb: mealDraft.carb, protein: mealDraft.protein, fat: mealDraft.fat, menuName: mealDraft.menuName, requestId, itemsJson: JSON.stringify(mealDraft.imageItems), source: "image", portionLevel: mealDraft.portion?.level || "normal", portionLabel: mealDraft.portion?.label || "พอดี", portionNote: mealDraft.portion?.note || "แปะประเมินจากรูปคร่าว ๆ นะ", confidence: mealDraft.confidence, imageSubject: mealDraft.imageSubject, imageCaption: mealDraft.imageCaption });
   invalidateRichMenuSummaryCache(userId);
   logTiming("image", "logFood", logFoodT, `imageCount=${foodResults.length} source=${sheetData.source || "unknown"} supabaseWrite=${sheetData.supabaseWrite || ""} portion=${mealDraft.portion?.level || "normal"}`);
   const buildT = nowMs();
