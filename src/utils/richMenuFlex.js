@@ -72,10 +72,14 @@ const resolveTopMeal = (summary = {}) => {
   return [...meals].sort((a, b) => b.kcal - a.kcal)[0] || { name: "", kcal: 0 };
 };
 
+const cleanUserName = (value = "") => String(value || "").trim()
+  .replace(/^(แปะ|อาแปะ|เฮีย|เจ๊|ซ้อ|อาตี๋|ตี๋|หมวย)+/i, "")
+  .trim();
+
 const resolveUserName = (summary = {}) => {
-  const name = String(
+  const name = cleanUserName(
     summary.name || summary.displayName || summary.display_name || summary.title || summary.nickname || ""
-  ).trim();
+  );
   return name || "ลื้อ";
 };
 
@@ -118,7 +122,7 @@ const getDailyTitle = (signals, summary = {}) => selectDailyTitle(signals, {
 });
 
 const pickAura = (signals) => {
-  if (signals.isEmpty) return { title: "Aura ยังไม่ขึ้น", color: palette.muted, emoji: "👀", mascot: "🧐" };
+  if (signals.isEmpty) return { title: "ออร่ายังไม่ขึ้น", color: palette.muted, emoji: "👀", mascot: "🧐" };
   if (signals.isOver && signals.highFat) return { title: "ออร่ากรอบมัน", color: palette.red, emoji: "🍗", mascot: "😤" };
   if (signals.isOver) return { title: "ออร่าแน่นพุง", color: palette.red, emoji: "🔥", mascot: "😳" };
   if (signals.sweetSignal) return { title: "ออร่าหวานนำ", color: palette.orange, emoji: "🧋", mascot: "👀" };
@@ -128,21 +132,21 @@ const pickAura = (signals) => {
 };
 
 const diagnoseMainCulprit = (signals) => {
-  if (signals.isEmpty) return { label: "ยังไม่มีตัวการ", emoji: "👀", detail: "ส่งรูปมาก่อน เดี๋ยวแปะจับผู้ต้องสงสัยให้" };
-  if (signals.isOver && signals.highFat) return { label: "ไขมันขึ้นนำเกม", emoji: "🍟", detail: "แคลเกิน + ไขมันมาแรง มื้อต่อไปตัดของทอดก่อน" };
-  if (signals.isOver) return { label: "แคลเกินเป้า", emoji: "🔥", detail: "วันนี้ใจใหญ่ไปนิด มื้อต่อไปเบา ๆ พอ" };
-  if (signals.sweetSignal) return { label: "น้ำตาลมีซีน", emoji: "🍬", detail: "หวานไม่ได้ผิด แต่วันนี้มีบทเยอะอยู่" };
-  if (signals.highFat) return { label: "ไขมันออกหน้า", emoji: "🍗", detail: "ของมันมาแบบไม่หลบ แปะเห็นนะ" };
-  if (signals.highCarb) return { label: "คาร์บนำทาง", emoji: "🍚", detail: "แป้งมาเยอะกว่าชาวบ้านเขา มื้อต่อไปเพิ่มโปรตีนหน่อย" };
+  if (signals.isEmpty) return { label: "ยังไม่มีหลักฐาน", emoji: "👀", detail: "ส่งรูปอาหารมาก่อน เดี๋ยวแปะจับทรงให้" };
+  if (signals.isOver && signals.highFat) return { label: "ของทอด/มันขึ้นนำ", emoji: "🍟", detail: "ไอหยา แคลเกิน + ไขมันมาแรง มื้อต่อไปตัดของทอดก่อนนะ" };
+  if (signals.isOver) return { label: "แคลเกินเป้า", emoji: "🔥", detail: "วันนี้ใจใหญ่ไปนิด แต่มื้อถัดไปเบา ๆ ก็ยังเอากลับมาได้" };
+  if (signals.sweetSignal) return { label: "หวานมีซีน", emoji: "🍬", detail: "น้ำหวาน/ของหวานมีบทอยู่นะ แปะเห็น 👀" };
+  if (signals.highFat) return { label: "ไขมันออกหน้า", emoji: "🍗", detail: "ของมันมาแบบไม่หลบ แปะเหล่อยู่" };
+  if (signals.highCarb) return { label: "คาร์บนำทาง", emoji: "🍚", detail: "แป้งมาเยอะกว่าชาวบ้านเขา มื้อต่อไปเติมโปรตีนหน่อย" };
   if (signals.lowProtein) return { label: "โปรตีนหาย", emoji: "💪", detail: "ทรงรวมโอเค แต่โปรตีนยังบางไปนิด" };
   return { label: "ยังคุมเกมได้", emoji: "✅", detail: "ไม่มีตัวการแรง ๆ วันนี้แปะยังไม่ดุ" };
 };
 
 const titleVibe = (signals, titleCard) => {
-  if (signals.isEmpty) return "แปะจะรอตั้งฉายาให้หลังมื้อแรกนะ 👀";
+  if (signals.isEmpty) return "เอ้า วันนี้ยังไม่มีหลักฐาน เดี๋ยวแปะรอตั้งฉายาให้หลังมื้อแรก 👀";
   if (titleCard?.vibe) return titleCard.vibe;
-  if (signals.isOver) return "แปะอ่านแล้วแน่นแทน";
-  return "ทรงนี้ยังมีลุ้นอยู่";
+  if (signals.isOver) return "ไอหยา แปะอ่านแล้วแน่นแทน";
+  return "ทรงนี้ยังมีลุ้นอยู่ แปะว่าไปต่อได้";
 };
 
 const text = (props) => ({ type: "text", ...props });
@@ -223,11 +227,11 @@ export const buildFoodAuraFlexMessage = ({ summary = {} } = {}) => {
         backgroundColor: palette.cream,
         paddingAll: "18px",
         contents: [
-          text({ text: `🏷️ ฉายาวันนี้ · ${getRarityLabel(titleCard.rarity)}`, size: "sm", weight: "bold", color: titleCard.color || palette.orange, wrap: true }),
+          text({ text: `🏷️ แปะตั้งฉายาให้แล้ว · ${getRarityLabel(titleCard.rarity)}`, size: "sm", weight: "bold", color: titleCard.color || palette.orange, wrap: true }),
           text({ text: `${titleCard.emoji} ${titleCard.name}`, size: "xxl", weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs" }),
           characterPanel({ titleCard, signals }),
           text({ text: titleVibe(signals, titleCard), size: "md", color: palette.brown, weight: "bold", wrap: true, margin: "md" }),
-          footerLine(signals.isEmpty ? "ส่งมื้อแรกมาก่อน เดี๋ยวฉายามา 📸" : "แปะจะรอดูว่าพรุ่งนี้จะอีโวร่างรึยัง ;)"),
+          footerLine(signals.isEmpty ? "ส่งมื้อแรกมาก่อน เดี๋ยวแปะตั้งฉายาให้เอง 👀" : "พรุ่งนี้มาดูกันว่าจะอีโวร่างไหม แปะรออยู่ 555"),
         ],
       },
     },
@@ -236,7 +240,6 @@ export const buildFoodAuraFlexMessage = ({ summary = {} } = {}) => {
 
 export const buildFoodWrappedFlexMessage = ({ summary = {} } = {}) => {
   const signals = getSummarySignals(summary);
-  const titleCard = getDailyTitle(signals, summary);
   const culprit = diagnoseMainCulprit(signals);
   const topMealText = signals.topMeal
     ? `${truncate(signals.topMeal, 28)}${signals.topMealKcal > 0 ? ` · ~${Math.round(signals.topMealKcal)} kcal` : ""}`
@@ -254,15 +257,15 @@ export const buildFoodWrappedFlexMessage = ({ summary = {} } = {}) => {
         backgroundColor: palette.cream,
         paddingAll: "18px",
         contents: [
-          text({ text: "💡 วันนี้อาหารฟ้องว่า", size: "sm", weight: "bold", color: palette.orange }),
+          text({ text: "👀 แปะอ่านทรงวันนี้ให้แล้ว", size: "sm", weight: "bold", color: palette.orange }),
           text({ text: `${culprit.emoji} ${culprit.label}`, size: "xxl", weight: "bold", color: signals.isOver ? palette.red : palette.brown, wrap: true, margin: "xs" }),
           evidenceBox([
-            `⭐ มื้อเด่น: ${topMealText}`,
-            `🔥 รวมวันนี้: ${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal`,
-            `${culprit.emoji} ตัวการหลัก: ${culprit.label}`,
+            `มื้อเด่น: ${topMealText}`,
+            `รวมวันนี้: ${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal`,
+            `ตัวการหลัก: ${culprit.label}`,
           ], "🔍 หลักฐานบนโต๊ะ"),
-          evidenceBox([culprit.detail], "🧡 แปะสรุปให้"),
-          footerLine(signals.isOver ? "มื้อต่อไปเบา ๆ หน่อย แปะว่าเอากลับมาได้ 😅" : "ยังไม่หลุด คุมต่ออีกนิดได้อยู่ 😄"),
+          evidenceBox([culprit.detail], "🧡 แปะอ่านว่า"),
+          footerLine(signals.isOver ? "ไอหยา วันนี้มีหลุด แต่ยังไม่พัง มื้อต่อไปเบา ๆ พอ 😅" : "ยังไม่หลุดนะ คุมต่ออีกนิดได้อยู่ 😄"),
         ],
       },
     },
@@ -280,10 +283,10 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
     ? `${truncate(signals.topMeal, 34)}${signals.topMealKcal > 0 ? ` · ~${Math.round(signals.topMealKcal)} kcal` : ""}`
     : "ยังไม่มีมื้อเด่น";
   const statusText = signals.isEmpty
-    ? "ยังไม่มีข้อมูลวันนี้ 👀"
+    ? "เอ้า วันนี้ยังไม่มีข้อมูลเลย 👀"
     : signals.isOver
-      ? `เกินเป้า ${Math.round(over)} kcal แล้วนะ 🫣`
-      : `เหลือ ${Math.round(left)} kcal อยู่ 😄`;
+      ? `ไอหยา เกินเป้า ${Math.round(over)} kcal แล้วนะ`
+      : `โอเค เหลือ ${Math.round(left)} kcal อยู่`;
   const mascotEmoji = signals.isEmpty ? "🧐" : signals.isOver ? "😤" : signals.isNear ? "👀" : "😄";
 
   return {
@@ -307,8 +310,8 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
                 layout: "vertical",
                 flex: 5,
                 contents: [
-                  text({ text: "TODAY RECAP", size: "sm", weight: "bold", color: "#A32922" }),
-                  text({ text: `ของ${userName} · ${getRarityLabel(titleCard.rarity)}`, size: "sm", weight: "bold", color: titleCard.color || palette.muted, margin: "xs", wrap: true }),
+                  text({ text: "TODAY RECAP BY แปะ", size: "sm", weight: "bold", color: "#A32922" }),
+                  text({ text: `${userName} · ${getRarityLabel(titleCard.rarity)}`, size: "sm", weight: "bold", color: titleCard.color || palette.muted, margin: "xs", wrap: true }),
                   text({ text: titleCard.name, size: "xxl", weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs" }),
                 ],
               },
@@ -320,7 +323,7 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
                 justifyContent: "center",
                 contents: [
                   text({ text: mascotEmoji, size: "xxl", align: "center" }),
-                  text({ text: signals.isOver ? "แปะเหล่แล้ว" : "แปะโอเค", size: "xxs", color: palette.brown, weight: "bold", align: "center", wrap: true }),
+                  text({ text: signals.isOver ? "แปะเหล่แล้ว" : "แปะว่าโอเค", size: "xxs", color: palette.brown, weight: "bold", align: "center", wrap: true }),
                 ],
               },
             ],
@@ -339,7 +342,7 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
               metricRow("🔥 กินไป", `${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal`, signals.isOver ? palette.red : palette.text),
               metricRow("🍚 คาร์บ", `${Math.round(signals.carb)} g`),
               metricRow("💪 โปรตีน", `${Math.round(signals.protein)} g`, signals.lowProtein ? palette.orange : palette.green),
-              metricRow("💧 ไขมัน", `${Math.round(signals.fat)} g`, signals.highFat ? palette.orange : palette.text),
+              metricRow("🥑 ไขมัน", `${Math.round(signals.fat)} g`, signals.highFat ? palette.orange : palette.text),
               metricRow("🍬 น้ำตาล", `${Math.round(signals.sugar)} g`, signals.sweetSignal ? palette.orange : palette.text),
               metricRow("🍽️ จำนวนมื้อ", `${Math.round(signals.mealCount)} มื้อ`),
             ],
@@ -356,7 +359,7 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
             bg: palette.sky,
             color: palette.brown,
           }),
-          footerLine(signals.isEmpty ? "📸 ส่งรูปอาหารมาก่อน เดี๋ยวแปะนับให้" : `✨ ${aura.title} · ต่อไปคุมต่ออีกนิด ทรงนี้ใช้ได้`, signals.isOver ? palette.red : palette.blue),
+          footerLine(signals.isEmpty ? "ส่งรูปอาหารมาก่อน เดี๋ยวแปะนับให้เอง 👀" : `✨ ${aura.title} · แปะว่าอ่านทรงต่อได้`, signals.isOver ? palette.red : palette.blue),
         ],
       },
     },
@@ -379,9 +382,9 @@ export const buildNutritionFlexMessage = ({ summary = {} } = {}) => {
         backgroundColor: palette.cream,
         paddingAll: "18px",
         contents: [
-          text({ text: "🥗 โภชนาการวันนี้", size: "xl", weight: "bold", color: palette.text }),
+          text({ text: "🥗 แปะเปิดโพยโภชนาการให้", size: "xl", weight: "bold", color: palette.text, wrap: true }),
           text({
-            text: signals.isEmpty ? "วันนี้ยังไม่มีมื้อที่แปะบันทึกไว้ 👀" : `${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal · เหลือ ${Math.round(left)} kcal`,
+            text: signals.isEmpty ? "วันนี้ยังไม่มีมื้อที่แปะจดไว้เลย 👀" : `${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal · เหลือ ${Math.round(left)} kcal`,
             size: "sm",
             color: signals.isOver ? palette.red : palette.green,
             weight: "bold",
@@ -389,13 +392,13 @@ export const buildNutritionFlexMessage = ({ summary = {} } = {}) => {
             margin: "sm",
           }),
           evidenceBox([
-            `🍚 คาร์บ ${Math.round(signals.carb)} g`,
-            `💪 โปรตีน ${Math.round(signals.protein)} g`,
-            `💧 ไขมัน ${Math.round(signals.fat)} g`,
-            `🍬 น้ำตาล ${Math.round(signals.sugar)} g`,
-            signals.topMeal ? `⭐ มื้อเด่น: ${truncate(signals.topMeal, 28)}` : "⭐ มื้อเด่นยังไม่มี",
-          ], "สารอาหารคร่าว ๆ"),
-          footerLine(signals.lowProtein ? "มื้อต่อไปเพิ่มโปรตีนหน่อย แปะว่าเวิร์ก 💪" : "ดูรวม ๆ แล้วคุมต่อได้ 😄"),
+            `คาร์บ ${Math.round(signals.carb)} g`,
+            `โปรตีน ${Math.round(signals.protein)} g`,
+            `ไขมัน ${Math.round(signals.fat)} g`,
+            `น้ำตาล ${Math.round(signals.sugar)} g`,
+            signals.topMeal ? `มื้อเด่น: ${truncate(signals.topMeal, 28)}` : "มื้อเด่นยังไม่มี",
+          ], "แปะจับตัวเลขมาให้"),
+          footerLine(signals.lowProtein ? "โปรตีนยังบางไปนิด มื้อต่อไปเติมหน่อย แปะว่าเวิร์ก 💪" : "ดูรวม ๆ แล้วคุมต่อได้อยู่ 😄"),
         ],
       },
     },
