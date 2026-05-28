@@ -35,21 +35,21 @@ const baseBubble = ({ altText, eyebrow, title, subtitle, boxTitle, boxText, foot
 export const buildSetGoalFlexMessage = () => baseBubble({
   altText: "ตั้งเป้าหมาย",
   eyebrow: "🎯 โหมดตั้งเป้า",
-  title: "เอาเป้ามา เดี๋ยวแปะจำให้",
-  subtitle: "ไม่ต้องเขียนสวยมาก พิมพ์แบบคนจริง ๆ ได้เลย",
+  title: "เอ้า เอาเป้ามา เดี๋ยวแปะจำให้",
+  subtitle: "ไม่ต้องเขียนหล่อมาก พิมพ์แบบคนจริง ๆ ได้เลย แปะอ่านออกอยู่ 👀",
   boxTitle: "ลองพิมพ์ประมาณนี้",
   boxText: "• อยากลดไขมันแบบไม่เครียด\n• อยากคุมน้ำหนักก่อนสงกรานต์\n• อยากกินดีขึ้น แต่ยังขอกินอร่อยอยู่",
-  footer: "เป้าไม่ต้องโหด แค่ทำต่อได้ก็พอ 😄",
+  footer: "เป้าไม่ต้องโหด เอาแบบทำต่อได้ แปะว่าเวิร์ก 😄",
 });
 
 export const buildEditMealFlexMessage = () => baseBubble({
   altText: "แก้มื้อล่าสุด",
-  eyebrow: "🧾 แก้มื้อเมื่อกี้",
-  title: "เมื่อกี้แปะจดเพี้ยนใช่มั้ย",
-  subtitle: "ไม่เป็นไร พิมพ์แก้มา เดี๋ยวแปะจัดให้ใหม่",
+  eyebrow: "🧾 โหมดแก้มื้อ",
+  title: "ไอหยา เมื่อกี้แปะจดเพี้ยนใช่มะ",
+  subtitle: "ไม่เป็นไร ลื้อพิมพ์แก้มา เดี๋ยวแปะจัดระเบียบให้ใหม่",
   boxTitle: "พิมพ์แบบนี้ได้เลย",
   boxText: "• แก้มื้อล่าสุดเป็น ข้าวหมูกระเทียมไข่ดาว\n• แก้เป็น 650 kcal\n• ลบมื้อล่าสุด",
-  footer: "แปะไม่ดื้อ แก้ได้ 😅",
+  footer: "แปะไม่ดื้อ แก้ได้อยู่ 😅",
 });
 
 export const buildDeleteMealFlexMessage = ({ deleted = {}, notFound = false } = {}) => {
@@ -58,13 +58,13 @@ export const buildDeleteMealFlexMessage = ({ deleted = {}, notFound = false } = 
 
   return baseBubble({
     altText: notFound ? "ยังไม่มีมื้อให้ลบ" : "ลบมื้อล่าสุดแล้ว",
-    eyebrow: notFound ? "👀 แปะหาแล้วนะ" : "🗑️ ลบให้แล้ว",
-    title: notFound ? "ยังไม่มีมื้อให้ลบนะ" : "โอเค มื้อนั้นหายไปแล้ว",
+    eyebrow: notFound ? "👀 แปะหาแล้ว" : "🗑️ แปะลบให้แล้ว",
+    title: notFound ? "เอ้า ยังไม่มีมื้อให้ลบนะ" : "โอเค มื้อนั้นหายไปแล้ว",
     subtitle: notFound
-      ? "ระบบยังไม่เจอมื้อล่าสุดของวันนี้ ส่งรูปหรือพิมพ์อาหารมาก่อนนะ"
+      ? "วันนี้แปะยังไม่เจอมื้อที่จดไว้ ส่งรูปหรือพิมพ์อาหารมาก่อนก็ได้"
       : `ลบ: ${deleted.deletedMeal?.menuName || "มื้อล่าสุด"}`,
     boxTitle: notFound ? "เริ่มใหม่ได้เลย" : "ยอดหลังลบ",
-    boxText: notFound ? "ส่งรูปอาหารมา เดี๋ยวแปะนับให้ 👀" : `${Math.round(total)} / ${Math.round(target)} kcal`,
-    footer: notFound ? "ยังทันอยู่ ไม่ต้องตกใจ 😄" : "ลบแล้วก็เริ่มคุมต่อได้ ชิล ๆ",
+    boxText: notFound ? "ส่งรูปอาหารมา เดี๋ยวแปะนับให้เอง 👀" : `${Math.round(total)} / ${Math.round(target)} kcal`,
+    footer: notFound ? "ยังทันอยู่ ไม่ต้องตกใจอะ 😄" : "ลบแล้วก็เริ่มคุมต่อได้ ชิล ๆ",
   });
 };
