@@ -6,6 +6,7 @@ import { handleImageMessage } from "./handlers/imageHandler.js";
 import { handleMealChoiceText } from "./handlers/mealChoiceHandler.js";
 import { handleFastFoodText } from "./handlers/fastFoodTextHandler.js";
 import { handleProfileQuestionText } from "./handlers/profileQuestionHandler.js";
+import { handlePlayfulText } from "./handlers/playfulTextHandler.js";
 import {
   handleRichMenuPostback,
   logTiming,
@@ -67,6 +68,12 @@ router.post("/webhook", line.middleware({ channelSecret: process.env.LINE_CHANNE
             logTiming("richMenu:typedUnhandled", eventStart, `action=${typedAction}`);
           }
           logTiming("event:textAction", eventStart, `action=${typedAction}`);
+          continue;
+        }
+
+        const handledPlayfulText = await handlePlayfulText(event);
+        if (handledPlayfulText) {
+          logTiming("event:textPlayful", eventStart);
           continue;
         }
 
