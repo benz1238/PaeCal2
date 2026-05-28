@@ -3,6 +3,7 @@ import { Router } from "express";
 import * as line from "@line/bot-sdk";
 
 import { handleImageMessage } from "./handlers/imageHandler.js";
+import { handleMealChoiceText } from "./handlers/mealChoiceHandler.js";
 import {
   handleRichMenuPostback,
   logTiming,
@@ -49,6 +50,12 @@ router.post("/webhook", line.middleware({ channelSecret: process.env.LINE_CHANNE
       if (event.type !== "message") continue;
 
       if (event.message?.type === "text") {
+        const handledFast = await handleMealChoiceText(event);
+        if (handledFast) {
+          logTiming("event:textFast", eventStart);
+          continue;
+        }
+
         await handleTextMessage(event);
         logTiming("event:text", eventStart);
         continue;
