@@ -3,9 +3,12 @@ import { postToSheet } from "./sheet.js";
 
 const SUPABASE_URL = String(process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const SUPABASE_ENABLED = String(process.env.SUPABASE_RICH_MENU_ENABLED || "false").toLowerCase() === "true";
+const SUPABASE_READ_ENABLED = String(process.env.SUPABASE_RICH_MENU_ENABLED || "false").toLowerCase() === "true";
+const SUPABASE_DUAL_WRITE_ENABLED = String(process.env.SUPABASE_DUAL_WRITE_ENABLED || "true").toLowerCase() !== "false";
 
-const isSupabaseReady = () => Boolean(SUPABASE_ENABLED && SUPABASE_URL && SUPABASE_KEY);
+const isSupabaseConfigured = () => Boolean(SUPABASE_URL && SUPABASE_KEY);
+const isSupabaseReadReady = () => Boolean(SUPABASE_READ_ENABLED && isSupabaseConfigured());
+const isSupabaseWriteReady = () => Boolean(SUPABASE_DUAL_WRITE_ENABLED && isSupabaseConfigured());
 
 const bangkokDate = () => {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -17,7 +20,7 @@ const bangkokDate = () => {
   return formatter.format(new Date());
 };
 
-const supabase = axios.create({
+const buildSupabaseClient = () => axios.create({
   baseURL: `${SUPABASE_URL}/rest/v1`,
   headers: {
     apikey: SUPABASE_KEY || "",
@@ -27,6 +30,7 @@ const supabase = axios.create({
   timeout: Number(process.env.SUPABASE_TIMEOUT_MS || 5000),
 });
 
+const supabase = buildSupabaseClient();
 const sheetFallback = async (payload) => postToSheet(payload);
 
 const toNumber = (value, fallback = 0) => {
@@ -34,16 +38,42 @@ const toNumber = (value, fallback = 0) => {
   return Number.isFinite(num) ? num : fallback;
 };
 
+const normalizeText = (value, fallback = "") => {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+};
+
 const sum = (rows, key) => rows.reduce((total, row) => total + toNumber(row?.[key], 0), 0);
 
+const ensureUser = async ({ userId, name = "", title = "", goal = "", calorieTarget = null } = {}) => {
+  if (!userId) throw new Error("Missing userId for ensureUser");
+
+  const payload = {
+    line_user_id: userId,
+    ...(name ? { display_name: name } : {}),
+    ...(title ? { title } : {}),
+    ...(goal ? { goal } : {}),
+    ...(calorieTarget ? { calorie_target: Math.round(toNumber(calorieTarget, 2050)) } : {}),
+  };
+
+  await supabase.post("/users", [payload], {
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    params: { on_conflict: "line_user_id" },
+  });
+};
+
 export const dbStatus = () => ({
-  supabaseEnabled: SUPABASE_ENABLED,
-  supabaseReady: isSupabaseReady(),
+  supabaseReadEnabled: SUPABASE_READ_ENABLED,
+  supabaseDualWriteEnabled: SUPABASE_DUAL_WRITE_ENABLED,
+  supabaseConfigured: isSupabaseConfigured(),
+  supabaseReadReady: isSupabaseReadReady(),
+  supabaseWriteReady: isSupabaseWriteReady(),
 });
 
 export const getDailySummary = async (userId) => {
-  if (!isSupabaseReady()) {
-    return sheetFallback({ action: "GET_DAILY_SUMMARY", userId });
+  if (!isSupabaseReadReady()) {
+    const sheet = await sheetFallback({ action: "GET_DAILY_SUMMARY", userId });
+    return { ...(sheet || {}), source: "sheet" };
   }
 
   const today = bangkokDate();
@@ -89,15 +119,12 @@ export const getDailySummary = async (userId) => {
 };
 
 export const updateSession = async ({ userId, step = "READY", sessionData = {} }) => {
-  if (!isSupabaseReady()) {
-    return sheetFallback({ action: "UPDATE_SESSION", userId, step, sessionData });
+  if (!isSupabaseReadReady()) {
+    const sheet = await sheetFallback({ action: "UPDATE_SESSION", userId, step, sessionData });
+    return { ...(sheet || {}), source: "sheet" };
   }
 
-  await supabase.post(
-    "/users",
-    [{ line_user_id: userId }],
-    { headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, params: { on_conflict: "line_user_id" } }
-  );
+  await ensureUser({ userId });
 
   const res = await supabase.post(
     "/user_sessions",
@@ -108,9 +135,63 @@ export const updateSession = async ({ userId, step = "READY", sessionData = {} }
   return { status: "success", source: "supabase", ...(Array.isArray(res.data) ? res.data[0] : {}) };
 };
 
+const writeMealToSupabase = async (payload = {}) => {
+  const userId = payload.userId;
+  if (!userId) throw new Error("Missing userId for Supabase meal write");
+
+  await ensureUser({
+    userId,
+    name: payload.name,
+    title: payload.title,
+    goal: payload.goal,
+    calorieTarget: payload.calorieTarget,
+  });
+
+  const meal = {
+    user_id: userId,
+    meal_date: bangkokDate(),
+    menu_name: normalizeText(payload.menuName, "อาหาร"),
+    kcal: toNumber(payload.kcal, 0),
+    carb: toNumber(payload.carb, 0),
+    protein: toNumber(payload.protein, 0),
+    fat: toNumber(payload.fat, 0),
+    sugar: toNumber(payload.sugar, 0),
+    source: normalizeText(payload.source, "line"),
+    raw: {
+      requestId: payload.requestId || "",
+      itemsJson: payload.itemsJson || "",
+      note: payload.note || "",
+    },
+  };
+
+  const res = await supabase.post("/meals", [meal], {
+    headers: { Prefer: "return=representation" },
+  });
+
+  return { status: "success", source: "supabase", meal: Array.isArray(res.data) ? res.data[0] : null };
+};
+
+export const logFood = async (payload = {}) => {
+  const sheetResult = await sheetFallback({ action: "LOG_FOOD", ...payload });
+
+  if (!isSupabaseWriteReady()) {
+    return { ...(sheetResult || {}), source: "sheet", supabaseWrite: "skipped" };
+  }
+
+  try {
+    const writeResult = await writeMealToSupabase(payload);
+    console.log(`[PaeCalDB] LOG_FOOD dual-write ok source=supabase menu=${payload.menuName || ""} kcal=${payload.kcal || 0}`);
+    return { ...(sheetResult || {}), source: "sheet+supabase", supabaseWrite: "success", supabaseMealId: writeResult.meal?.id || "" };
+  } catch (err) {
+    console.error("[PaeCalDB] LOG_FOOD Supabase dual-write failed", err?.response?.data || err.message || err);
+    return { ...(sheetResult || {}), source: "sheet", supabaseWrite: "failed" };
+  }
+};
+
 export const deleteLastMeal = async (userId) => {
-  if (!isSupabaseReady()) {
-    return sheetFallback({ action: "DELETE_LAST_MEAL", userId });
+  if (!isSupabaseReadReady()) {
+    const sheet = await sheetFallback({ action: "DELETE_LAST_MEAL", userId });
+    return { ...(sheet || {}), source: "sheet" };
   }
 
   const today = bangkokDate();
