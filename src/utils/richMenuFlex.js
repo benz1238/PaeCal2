@@ -30,15 +30,67 @@ const truncate = (value, max = 26) => {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 };
 
+const normalizeMealRow = (meal = {}) => ({
+  name: String(
+    meal.menuName ||
+    meal.menu_name ||
+    meal.name ||
+    meal.mealName ||
+    meal.foodName ||
+    meal.title ||
+    ""
+  ).trim(),
+  kcal: safeNumber(meal.kcal ?? meal.calories ?? meal.calorie ?? meal.energy, 0),
+});
+
+const resolveMeals = (summary = {}) => {
+  const candidates = [summary.meals, summary.todayMeals, summary.logs, summary.items, summary.foods];
+  for (const list of candidates) {
+    if (Array.isArray(list) && list.length) return list.map(normalizeMealRow).filter((meal) => meal.name || meal.kcal > 0);
+  }
+  return [];
+};
+
+const resolveTopMeal = (summary = {}) => {
+  const directName = String(
+    summary.topMealName ||
+    summary.topMeal ||
+    summary.problemMealName ||
+    summary.highestMealName ||
+    summary.maxMealName ||
+    summary.mostCaloriesMealName ||
+    summary.lastMeal?.menuName ||
+    summary.lastMeal?.menu_name ||
+    ""
+  ).trim();
+
+  const directKcal = safeNumber(
+    summary.topMealKcal ??
+    summary.problemMealKcal ??
+    summary.highestMealKcal ??
+    summary.maxMealKcal ??
+    summary.mostCaloriesMealKcal ??
+    summary.lastMeal?.kcal,
+    0
+  );
+
+  if (directName) return { name: directName, kcal: directKcal };
+
+  const meals = resolveMeals(summary);
+  if (!meals.length) return { name: "", kcal: 0 };
+  return [...meals].sort((a, b) => b.kcal - a.kcal)[0] || { name: "", kcal: 0 };
+};
+
 const getSummarySignals = (summary = {}) => {
+  const meals = resolveMeals(summary);
+  const topMeal = resolveTopMeal(summary);
   const kcal = getSummaryNumber(summary, ["todayCalories", "totalToday", "totalKcal", "kcal"], 0);
   const target = getSummaryNumber(summary, ["calorieTarget", "target", "dailyTarget"], 2050);
   const carb = getSummaryNumber(summary, ["totalCarb", "carb"], 0);
   const protein = getSummaryNumber(summary, ["totalProtein", "protein"], 0);
   const fat = getSummaryNumber(summary, ["totalFat", "fat"], 0);
   const sugar = getSummaryNumber(summary, ["totalSugar", "sugar"], 0);
-  const mealCount = getSummaryNumber(summary, ["mealCount", "totalMeals"], 0);
-  const topMeal = String(summary.topMealName || summary.topMeal || summary.problemMealName || "").trim();
+  const mealCount = getSummaryNumber(summary, ["mealCount", "totalMeals"], meals.length);
 
   return {
     kcal,
@@ -48,7 +100,8 @@ const getSummarySignals = (summary = {}) => {
     fat,
     sugar,
     mealCount,
-    topMeal,
+    topMeal: topMeal.name,
+    topMealKcal: topMeal.kcal,
     isEmpty: kcal <= 0 && mealCount <= 0,
     isOver: kcal > target,
     isNear: kcal > 0 && target - kcal <= 250,
@@ -84,8 +137,11 @@ const evidenceLines = (signals) => {
   }
 
   const lines = [];
-  if (signals.topMeal) lines.push(`มื้อเด่น: ${truncate(signals.topMeal, 18)}`);
-  if (signals.sweetSignal) lines.push("น้ำหวาน/หวานมีบท");
+  if (signals.topMeal) {
+    const kcalText = signals.topMealKcal > 0 ? ` ~${Math.round(signals.topMealKcal)} kcal` : "";
+    lines.push(`มื้อเด่น: ${truncate(signals.topMeal, 18)}${kcalText}`);
+  }
+  if (signals.sweetSignal) lines.push("น้ำตาลเริ่มมีบท");
   if (signals.highFat) lines.push("ไขมันขึ้นนำเกม");
   if (signals.lowProtein) lines.push("โปรตีนยังเบาไปนิด");
   if (signals.isOver) lines.push("วันนี้เกินเป้าแล้ว");
@@ -107,6 +163,15 @@ const evidenceBox = (lines, title = "หลักฐานที่แปะจ�
   contents: [
     text({ text: title, size: "sm", weight: "bold", color: palette.text }),
     ...lines.map((line) => text({ text: `• ${line}`, size: "sm", color: palette.brown, wrap: true })),
+  ],
+});
+
+const metricRow = (label, value, color = palette.text) => ({
+  type: "box",
+  layout: "horizontal",
+  contents: [
+    text({ text: label, size: "sm", color: palette.muted, flex: 4 }),
+    text({ text: value, size: "sm", color, weight: "bold", align: "end", flex: 5, wrap: true }),
   ],
 });
 
@@ -198,6 +263,9 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
   const signals = getSummarySignals(summary);
   const left = Math.max(signals.target - signals.kcal, 0);
   const over = Math.max(signals.kcal - signals.target, 0);
+  const topMealText = signals.topMeal
+    ? `${truncate(signals.topMeal, 20)}${signals.topMealKcal > 0 ? ` ~${Math.round(signals.topMealKcal)} kcal` : ""}`
+    : "ยังไม่มีมื้อเด่น";
   const statusText = signals.isEmpty
     ? "วันนี้ยังไม่มีมื้อที่แปะบันทึกไว้"
     : signals.isOver
@@ -206,7 +274,7 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
 
   return {
     type: "flex",
-    altText: "ดูแคลวันนี้",
+    altText: "สรุปวันนี้",
     contents: {
       type: "bubble",
       size: "mega",
@@ -216,7 +284,7 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
         backgroundColor: "#F8FAFC",
         paddingAll: "16px",
         contents: [
-          text({ text: "ดูแคลวันนี้", size: "xl", weight: "bold", color: palette.text }),
+          text({ text: "สรุปวันนี้", size: "xl", weight: "bold", color: palette.text }),
           text({
             text: signals.isEmpty ? "ยังไม่มีข้อมูลวันนี้" : `${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal`,
             size: "xxl",
@@ -226,12 +294,25 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
             margin: "sm",
           }),
           text({ text: statusText, size: "sm", weight: "bold", color: signals.isOver ? palette.red : palette.green, margin: "xs" }),
-          evidenceBox([
-            `บันทึกแล้ว ${Math.round(signals.mealCount)} มื้อ`,
-            signals.topMeal ? `มื้อเด่น: ${truncate(signals.topMeal, 18)}` : "มื้อเด่นยังไม่มี",
-            signals.isEmpty ? "ส่งรูปอาหารมาเริ่มนับได้เลย" : "อยากละเอียดกดโภชนาการต่อได้",
-          ], "สรุปเร็ว"),
-          footerLine(signals.isEmpty ? "ส่งรูปอาหารมาก่อน เดี๋ยวแปะนับให้" : "ตัวเลขคร่าว ๆ ใช้กะทางได้อยู่", signals.isOver ? palette.red : palette.blue),
+          {
+            type: "box",
+            layout: "vertical",
+            backgroundColor: "#FFFFFF",
+            cornerRadius: "16px",
+            paddingAll: "14px",
+            margin: "md",
+            spacing: "sm",
+            contents: [
+              text({ text: "ภาพรวมวันนี้", size: "sm", weight: "bold", color: palette.text }),
+              metricRow("จำนวนมื้อ", `${Math.round(signals.mealCount)} มื้อ`),
+              metricRow("มื้อเด่น", topMealText, signals.topMeal ? palette.orange : palette.muted),
+              metricRow("คาร์บ", `${Math.round(signals.carb)} g`),
+              metricRow("โปรตีน", `${Math.round(signals.protein)} g`, signals.lowProtein ? palette.orange : palette.green),
+              metricRow("ไขมัน", `${Math.round(signals.fat)} g`, signals.highFat ? palette.orange : palette.text),
+              metricRow("น้ำตาล", `${Math.round(signals.sugar)} g`, signals.sweetSignal ? palette.orange : palette.text),
+            ],
+          },
+          footerLine(signals.isEmpty ? "ส่งรูปอาหารมาก่อน เดี๋ยวแปะนับให้" : "สรุปวันนี้กลับมาครบแล้ว ใช้กะทางได้เลย", signals.isOver ? palette.red : palette.blue),
         ],
       },
     },
@@ -269,6 +350,8 @@ export const buildNutritionFlexMessage = ({ summary = {} } = {}) => {
             `คาร์บ ${Math.round(signals.carb)} g`,
             `โปรตีน ${Math.round(signals.protein)} g`,
             `ไขมัน ${Math.round(signals.fat)} g`,
+            `น้ำตาล ${Math.round(signals.sugar)} g`,
+            signals.topMeal ? `มื้อเด่น: ${truncate(signals.topMeal, 18)}` : "มื้อเด่นยังไม่มี",
           ], "สารอาหารคร่าว ๆ"),
           footerLine(signals.lowProtein ? "มื้อต่อไปเพิ่มโปรตีนหน่อย แปะว่าเวิร์ก" : "ดูรวม ๆ แล้วคุมต่อได้"),
         ],
