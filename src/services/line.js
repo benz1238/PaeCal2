@@ -1,6 +1,6 @@
 import axios from "axios";
 import * as line from "@line/bot-sdk";
-import { buildDailyRecapFlexMessage } from "../utils/dailyRecapFlex.js";
+import { buildDailyRecapFlexMessageNew } from "../utils/dailyRecapFlexNew.js";
 
 export const client = new line.messagingApi.MessagingApiClient({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
@@ -197,7 +197,7 @@ export const replyTypeFoodPrompt = async (replyToken) => {
 export const replySendPhotoGuide = async (replyToken) => {
   await replyText(
     replyToken,
-    ["ส่งรูปอาหารเข้ามาในแชตได้เลยนะ 👀", "กดรูป/อัลบั้มใน LINE แล้วส่งมาให้แปะดูได้เลย"].join("\n")
+    ["ส่งรูปอาหารเข้ามาในแชตได้เลยนะ 👀", "กดรูป/อัลบั้มใน LINE แล้วส่งมาให้แปะดูจ้า"].join("\n")
   );
 };
 
@@ -214,7 +214,7 @@ export const replyDailyRecapCardWithBubbles = async (replyToken, { title, card, 
     .map((text) => ({ type: "text", text }));
 
   const mascotUrl = process.env.PAECAL_RECAP_MASCOT_URL || "";
-  const flexMessage = buildDailyRecapFlexMessage({ title, summary, decision: decision || {}, mascotUrl });
+  const flexMessage = buildDailyRecapFlexMessageNew({ title, summary, decision: decision || {}, characterUrl: mascotUrl });
 
   await client.replyMessage({
     replyToken,
@@ -239,11 +239,10 @@ export const pushDailyRecapCardWithBubbles = async (to, { title, card, bubbles =
     .map((text) => ({ type: "text", text }));
 
   const mascotUrl = process.env.PAECAL_RECAP_MASCOT_URL || "";
-  const flexMessage = buildDailyRecapFlexMessage({ title, summary, decision: decision || {}, mascotUrl });
+  const flexMessage = buildDailyRecapFlexMessageNew({ title, summary, decision: decision || {}, characterUrl: mascotUrl });
 
   await client.pushMessage({
     to,
     messages: [flexMessage, ...bubbleMessages].slice(0, 5),
   });
 };
-
