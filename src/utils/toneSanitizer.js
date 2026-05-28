@@ -10,13 +10,23 @@ const DIALOGUE_REPLACEMENTS = [
 ];
 
 const BODY_SHAME_REPLACEMENTS = [
-  [/ผอมจนกระดูกจะทิ่มอั๊วแล้ว/g, "กินให้อิ่มพอดีนะ เดี๋ยวแรงหมด"],
-  [/กินเยอะขนาดนี้อ้วนแน่/g, "วันนี้เจี๊ยะจ้างไปนิด 555 มื้อต่อไปเบาลงพอ"],
-  [/กินเยอะขนาดนี้แย่แล้ว/g, "วันนี้เจี๊ยะจ้างไปนิด 555 มื้อต่อไปเบาลงพอ"],
-  [/หมวยต้องลดน้ำหนักนะ/g, "มื้อนี้หนักไปนิด มื้อต่อไปเบาลงพอแหละ"],
-  [/อาตี๋ต้องลดน้ำหนักนะ/g, "มื้อนี้หนักไปนิด มื้อต่อไปเบาลงพอแหละ"],
-  [/เฮียต้องลดน้ำหนักนะ/g, "มื้อนี้หนักไปนิด มื้อต่อไปเบาลงพอแหละ"],
+  [/ผอมจนกระดูกจะทิ่มอั๊วแล้ว/g, "กินให้อิ่มพอดีนะ เดี๋ยวแรงหมด แปะเป็นห่วง"],
+  [/กินเยอะขนาดนี้อ้วนแน่/g, "มื้อนี้หนักไปนิด แต่ยังแก้เกมได้ มื้อต่อไปค่อยบาลานซ์นะ"],
+  [/กินเยอะขนาดนี้แย่แล้ว/g, "มื้อนี้หนักไปนิด แต่ยังแก้เกมได้ มื้อต่อไปค่อยบาลานซ์นะ"],
+  [/หมวยต้องลดน้ำหนักนะ/g, "ถ้าอยากปรับน้ำหนัก เดี๋ยวแปะช่วยดูแบบไม่หักโหมนะ"],
+  [/อาตี๋ต้องลดน้ำหนักนะ/g, "ถ้าอยากปรับน้ำหนัก เดี๋ยวแปะช่วยดูแบบไม่หักโหมนะ"],
+  [/เฮียต้องลดน้ำหนักนะ/g, "ถ้าอยากปรับน้ำหนัก เดี๋ยวแปะช่วยดูแบบไม่หักโหมนะ"],
 ];
+
+const WEIGHT_GOAL_REPLACEMENTS = [
+  [/ต้องลดน้ำหนัก/g, "ถ้าอยากปรับน้ำหนัก แปะช่วยดูให้ได้"],
+  [/ควรลดน้ำหนัก/g, "ถ้าอยากปรับน้ำหนัก แปะช่วยดูให้ได้"],
+  [/ต้องผอม/g, "เอาให้แข็งแรงขึ้นก่อน"],
+  [/อยากผอม/g, "อยากปรับน้ำหนัก"],
+  [/เพิ่มน้ำหนักไม่ได้/g, "เพิ่มน้ำหนักก็ทำได้ แค่เอาแบบมีแรง ไม่ฝืน"],
+];
+
+const CHINESE_FLAVOR_WORDS = /(อั๊วะ|ลื้อ|ไอหยา|เจี๊ยะ|โฮ่วเจี๊ยะ|เฮง|อาตี๋|หมวย|เฮีย)/;
 
 const FLAVOR_PREFIX_RULES = [
   {
@@ -77,23 +87,41 @@ const addThaiChatParticles = (text = "") => {
     .replace(/ส่งรูปอาหารมา เดี๋ยวแปะนับให้(?!นะ|อะ|แหละ)/g, "ส่งรูปอาหารมา เดี๋ยวแปะนับให้เอง 👀");
 };
 
-const removeBodyShameLines = (text = "") => {
+const replaceFromBank = (text = "", bank = []) => {
   let output = text;
-  for (const [pattern, replacement] of BODY_SHAME_REPLACEMENTS) {
+  for (const [pattern, replacement] of bank) {
     output = output.replace(pattern, replacement);
   }
   return output;
 };
 
+const textFlavorScore = (text = "") => {
+  let total = 0;
+  for (const char of String(text || "")) total += char.charCodeAt(0);
+  return total % 5;
+};
+
+const addOccasionalChineseWarmth = (text = "") => {
+  if (!text.trim()) return text;
+  if (CHINESE_FLAVOR_WORDS.test(text)) return text;
+  if (textFlavorScore(text) !== 0) return text;
+
+  return text
+    .replace(/พรุ่งนี้ค่อยเอาใหม่ ชิล ๆ/g, "พรุ่งนี้ค่อยเอาใหม่ แปะว่าเอาอยู่")
+    .replace(/พรุ่งนี้ค่อยดึงกลับ ชิล ๆ/g, "พรุ่งนี้ค่อยดึงกลับ เฮง ๆ แปะว่าเอาอยู่")
+    .replace(/เดี๋ยวแปะดูให้/g, "เดี๋ยวแปะดูให้ ลื้อไม่ต้องรีบ")
+    .replace(/แปะว่าเอาอยู่/g, "แปะว่าเอาอยู่ เฮง ๆ")
+    .replace(/ส่งรูปอาหารมา/g, "ส่งรูปของกินมา");
+};
+
 export const sanitizePaeCalTone = (input = "") => {
   let text = String(input || "");
 
-  for (const [pattern, replacement] of DIALOGUE_REPLACEMENTS) {
-    text = text.replace(pattern, replacement);
-  }
-
-  text = removeBodyShameLines(text);
+  text = replaceFromBank(text, DIALOGUE_REPLACEMENTS);
+  text = replaceFromBank(text, BODY_SHAME_REPLACEMENTS);
+  text = replaceFromBank(text, WEIGHT_GOAL_REPLACEMENTS);
   text = addThaiChatParticles(text);
+  text = addOccasionalChineseWarmth(text);
   text = addPrefixFlavor(text);
 
   text = text
