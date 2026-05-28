@@ -17,15 +17,21 @@ const router = Router();
 
 const RICH_MENU_TEXT_ACTIONS = {
   MEAL_SUGGESTION: "กินอะไรดี",
-  DAILY_SUMMARY: "สรุปวันนี้",
-  DAILY_FOOD_WRAPPED: "สรุปวันนี้",
-  FOOD_AURA: "สรุปวันนี้",
+  DAILY_SUMMARY: "แคลวันนี้",
+  DAILY_FOOD_WRAPPED: "แคลวันนี้",
+  FOOD_AURA: "วันนี้อาหารฟ้องว่า",
   TODAY_CALORIES: "แคลวันนี้",
-  TODAY_NUTRITION: "สรุปวันนี้",
+  TODAY_NUTRITION: "แคลวันนี้",
   SET_GOAL: "ตั้งเป้าสุขภาพ",
   EDIT_LAST_MEAL: "แก้มื้อล่าสุด",
   DELETE_LAST_MEAL: "ลบมื้อล่าสุด",
 };
+
+const SILENT_RICH_MENU_ACTIONS = new Set([
+  "SWITCH_TO_VIBE_MENU",
+  "SWITCH_TO_CAL_MENU",
+  "open_keyboard",
+]);
 
 const parsePostbackData = (data) => {
   const raw = String(data || "").trim();
@@ -82,6 +88,10 @@ router.post(
             action: postback.action,
           });
 
+          if (SILENT_RICH_MENU_ACTIONS.has(postback.action)) {
+            continue;
+          }
+
           if (postback.action === "OPEN_PAELAEW_GUIDE") {
             await replyPaeLaewGuideCard(event.replyToken);
             continue;
@@ -97,29 +107,9 @@ router.post(
             continue;
           }
 
-          if (postback.action === "SWITCH_TO_VIBE_MENU") {
-            await replyText(
-              event.replyToken,
-              "ตอนนี้อยู่ฝั่งแปะอ่านทรงแล้วนะ 👀\nส่งรูปอาหารมา เดี๋ยวแปะอ่านให้"
-            );
-            continue;
-          }
-
-          if (postback.action === "SWITCH_TO_CAL_MENU") {
-            await replyText(
-              event.replyToken,
-              "เปิดโหมดแปะแคลให้แล้วจ้า 🔥\nอยากดูแคลวันนี้ กดดูได้เลย"
-            );
-            continue;
-          }
-
           const mappedText = RICH_MENU_TEXT_ACTIONS[postback.action];
           if (mappedText) {
             await routeTextAction(event, mappedText);
-            continue;
-          }
-
-          if (postback.action === "open_keyboard") {
             continue;
           }
 
