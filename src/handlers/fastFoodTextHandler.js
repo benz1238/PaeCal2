@@ -1,6 +1,5 @@
 import { replyTexts, replyText } from "../services/line.js";
-import { postToSheet } from "../services/sheet.js";
-import { logFood, logFoodTermCandidate } from "../services/db.js";
+import { getSession, updateSession, logFood, logFoodTermCandidate } from "../services/db.js";
 import { estimateFoodFromText } from "../services/openai.js";
 import { safeNumber, DEFAULT_CALORIE_TARGET } from "../utils/helpers.js";
 import { invalidateRichMenuSummaryCache } from "../utils/richMenuSummaryCache.js";
@@ -35,6 +34,9 @@ const LOCAL_FOOD_PRESETS = [
   { pattern: /ชาเขียวมัจฉะ|ชาเขียวมัทฉะ|มัจฉะ|มัทฉะ|matcha/i, menuName: "ชาเขียวมัจฉะ", kcal: 180, carb: 28, protein: 4, fat: 5, sugar: 22 },
   { pattern: /ชาไทย/i, menuName: "ชาไทย", kcal: 220, carb: 35, protein: 3, fat: 6, sugar: 30 },
   { pattern: /ชานม/i, menuName: "ชานม", kcal: 280, carb: 45, protein: 4, fat: 8, sugar: 36 },
+  { pattern: /ข้าวแกง\s*(สอง|2)\s*อย่าง|ข้าวราดแกง/i, menuName: "ข้าวแกงสองอย่าง", kcal: 650, carb: 82, protein: 24, fat: 24, sugar: 8 },
+  { pattern: /ไก่ทอดหน้าโรงเรียน|ไก่ทอด\s*รร|ไก่ทอดโรงเรียน/i, menuName: "ไก่ทอดหน้าโรงเรียน", kcal: 420, carb: 30, protein: 24, fat: 24, sugar: 4 },
+  { pattern: /หมูปิ้ง/i, menuName: "หมูปิ้ง", kcal: 320, carb: 18, protein: 18, fat: 20, sugar: 8 },
   { pattern: /ข้าวขาหมู/i, menuName: "ข้าวขาหมู", kcal: 780, carb: 82, protein: 32, fat: 34, sugar: 8 },
   { pattern: /ข้าวมันไก่/i, menuName: "ข้าวมันไก่", kcal: 650, carb: 70, protein: 32, fat: 26, sugar: 5 },
   { pattern: /ข้าวหมูกรอบ/i, menuName: "ข้าวหมูกรอบ", kcal: 820, carb: 75, protein: 30, fat: 42, sugar: 8 },
@@ -59,13 +61,6 @@ const isLikelyShortFoodText = (text = "") => {
   if (isQuestionOrAdviceText(value)) return false;
   return hasFoodKeyword(value);
 };
-
-const getSession = async (userId) => {
-  const session = await postToSheet({ action: "GET_SESSION", userId });
-  return { step: session?.step || "READY", data: session?.data || {}, ...session };
-};
-
-const updateSession = async ({ userId, step, sessionData }) => postToSheet({ action: "UPDATE_SESSION", userId, step, sessionData });
 
 const buildGoalFoodGuardReply = (foodText) => [
   "อันนี้ดูเป็นอาหารนะ ไม่ใช่เป้าหมายจ้า 👀",
@@ -109,36 +104,18 @@ const splitFoodText = (text = "") => normalize(text)
 const estimateFoodLocally = (text = "") => {
   const normalized = normalize(text).replace(/^กิน\s+/, "");
   const matched = [];
-
-  for (const preset of LOCAL_FOOD_PRESETS) {
-    if (preset.pattern.test(normalized)) matched.push(preset);
-  }
-
+  for (const preset of LOCAL_FOOD_PRESETS) if (preset.pattern.test(normalized)) matched.push(preset);
   const parts = splitFoodText(text);
   const isComplex = parts.length >= 2 || matched.length >= 2 || normalized.length >= 28;
   if (!isComplex || matched.length === 0) return null;
-
-  const totals = matched.reduce((acc, item) => ({
-    kcal: acc.kcal + item.kcal,
-    carb: acc.carb + item.carb,
-    protein: acc.protein + item.protein,
-    fat: acc.fat + item.fat,
-    sugar: acc.sugar + item.sugar,
-  }), { kcal: 0, carb: 0, protein: 0, fat: 0, sugar: 0 });
-
+  const totals = matched.reduce((acc, item) => ({ kcal: acc.kcal + item.kcal, carb: acc.carb + item.carb, protein: acc.protein + item.protein, fat: acc.fat + item.fat, sugar: acc.sugar + item.sugar }), { kcal: 0, carb: 0, protein: 0, fat: 0, sugar: 0 });
   const menuName = matched.map((item) => item.menuName).filter(Boolean).join(" + ");
-  return {
-    menuName: menuName || normalized,
-    ...totals,
-    confidence: "medium",
-    estimateMode: "local",
-  };
+  return { menuName: menuName || normalized, ...totals, confidence: "medium", estimateMode: "local" };
 };
 
 const estimateFood = async (text) => {
   const local = estimateFoodLocally(text);
   if (local) return local;
-
   const aiStart = nowMs();
   const foodData = await estimateFoodFromText(text);
   logTiming("fastFoodText:estimateOpenAI", aiStart, `text=${text} menu=${foodData?.menuName || ""}`);
@@ -150,13 +127,12 @@ export const handleFastFoodText = async (event) => {
   const userId = event.source?.userId;
   const replyToken = event.replyToken;
   const text = String(event.message?.text || "").trim();
-
   if (!userId || !text) return false;
+  if (!isLikelyShortFoodText(text)) return false;
 
-  const looksFood = isLikelyShortFoodText(text);
-  if (!looksFood) return false;
-
+  const sessionStart = nowMs();
   const session = await getSession(userId);
+  logTiming("fastFoodText:getSession", sessionStart, `source=${session.source || "unknown"}`);
 
   if (session.step === "ASK_GOAL_UPDATE" || session.step === "ASK_GOAL") {
     await updateSession({ userId, step: "READY", sessionData: session.data || {} });
@@ -164,13 +140,11 @@ export const handleFastFoodText = async (event) => {
     logTiming("event:goalFoodGuard", start, `text=${text}`);
     return true;
   }
-
   if (session.step && session.step !== "READY") return false;
 
   const estimateStart = nowMs();
   const foodData = await estimateFood(text);
   logTiming("fastFoodText:estimate", estimateStart, `mode=${foodData?.estimateMode || "unknown"} text=${text} menu=${foodData?.menuName || ""}`);
-
   const kcal = safeNumber(foodData?.kcal, 0);
   if (kcal <= 0) return false;
 
@@ -178,40 +152,15 @@ export const handleFastFoodText = async (event) => {
     logFoodTermCandidate({ term: text, foodData, source: "openai", example: text }).catch(() => {});
   }
 
-  const meal = {
-    menuName: foodData?.menuName || text,
-    kcal,
-    carb: safeNumber(foodData?.carb, 0),
-    protein: safeNumber(foodData?.protein, 0),
-    fat: safeNumber(foodData?.fat, 0),
-    sugar: safeNumber(foodData?.sugar, 0),
-  };
+  const meal = { menuName: foodData?.menuName || text, kcal, carb: safeNumber(foodData?.carb, 0), protein: safeNumber(foodData?.protein, 0), fat: safeNumber(foodData?.fat, 0), sugar: safeNumber(foodData?.sugar, 0) };
   const portion = resolveTextPortion({ kcal: meal.kcal });
   const requestId = `${event.message?.id || Date.now()}:fast-text-food`;
-
   invalidateRichMenuSummaryCache(userId);
-  const result = await logFood({
-    userId,
-    name: session.data?.name || "",
-    menuName: meal.menuName,
-    kcal: meal.kcal,
-    carb: meal.carb,
-    protein: meal.protein,
-    fat: meal.fat,
-    sugar: meal.sugar,
-    requestId,
-    source: foodData?.estimateMode === "local" ? "text_fast_local" : "text_fast_openai",
-    portionLevel: portion.level,
-    portionLabel: portion.label,
-    portionNote: portion.note,
-    confidence: foodData?.confidence || "medium",
-  });
+  const result = await logFood({ userId, name: session.data?.name || "", menuName: meal.menuName, kcal: meal.kcal, carb: meal.carb, protein: meal.protein, fat: meal.fat, sugar: meal.sugar, requestId, source: foodData?.estimateMode === "local" ? "text_fast_local" : "text_fast_openai", portionLevel: portion.level, portionLabel: portion.label, portionNote: portion.note, confidence: foodData?.confidence || "medium" });
   invalidateRichMenuSummaryCache(userId);
-
   const total = safeNumber(result.todayCalories ?? result.totalToday, meal.kcal);
   const target = safeNumber(result.calorieTarget, DEFAULT_CALORIE_TARGET);
   await replyTexts(replyToken, buildLoggedReply({ meal: { ...meal, portionLabel: portion.label }, total, target, estimateMode: foodData?.estimateMode }));
-
   logTiming("event:fastFoodText", start, `estimateMode=${foodData?.estimateMode || "unknown"} source=${result.source || "unknown"} supabaseWrite=${result.supabaseWrite || ""} portion=${portion.level}`);
   return true;
 };
