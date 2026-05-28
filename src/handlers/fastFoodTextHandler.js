@@ -1,6 +1,6 @@
 import { replyTexts, replyText } from "../services/line.js";
 import { postToSheet } from "../services/sheet.js";
-import { logFood } from "../services/db.js";
+import { logFood, logFoodTermCandidate } from "../services/db.js";
 import { estimateFoodFromText } from "../services/openai.js";
 import { safeNumber, DEFAULT_CALORIE_TARGET } from "../utils/helpers.js";
 import { invalidateRichMenuSummaryCache } from "../utils/richMenuSummaryCache.js";
@@ -173,6 +173,10 @@ export const handleFastFoodText = async (event) => {
 
   const kcal = safeNumber(foodData?.kcal, 0);
   if (kcal <= 0) return false;
+
+  if (foodData?.estimateMode === "openai") {
+    logFoodTermCandidate({ term: text, foodData, source: "openai", example: text }).catch(() => {});
+  }
 
   const meal = {
     menuName: foodData?.menuName || text,
