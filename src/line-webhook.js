@@ -28,9 +28,7 @@ const TEXT_ACTION_ALIASES = new Map([
   ["ลบมื้อล่าสุด", "DELETE_LAST_MEAL"],
   ["ลบมื้อ", "DELETE_LAST_MEAL"],
   ["ลบล่าสุด", "DELETE_LAST_MEAL"],
-  ["ลบอันเมื่อกี้", "DELETE_LAST_MEAL"],
   ["ลบมื้อเมื่อกี้", "DELETE_LAST_MEAL"],
-  ["ส่งผิด", "DELETE_LAST_MEAL"],
 
   ["แก้มื้อล่าสุด", "EDIT_LAST_MEAL"],
   ["แก้มื้อ", "EDIT_LAST_MEAL"],
@@ -47,8 +45,6 @@ const TEXT_ACTION_ALIASES = new Map([
   ["แคลวันนี้", "TODAY_CALORIES"],
   ["ดูแคลวันนี้", "TODAY_CALORIES"],
   ["ดูแคล", "TODAY_CALORIES"],
-  ["วันนี้กินไปเท่าไหร่", "TODAY_CALORIES"],
-  ["วันนี้กินไปเท่าไร", "TODAY_CALORIES"],
 
   ["โภชนาการ", "TODAY_NUTRITION"],
   ["ดูโภชนาการ", "TODAY_NUTRITION"],
@@ -56,7 +52,6 @@ const TEXT_ACTION_ALIASES = new Map([
 
   ["สรุปวันนี้", "TODAY_CALORIES"],
   ["todayrecap", "TODAY_CALORIES"],
-  ["วันนี้กินอะไรไปบ้าง", "TODAY_CALORIES"],
 
   ["วันนี้อาหารฟ้องว่า", "DAILY_FOOD_WRAPPED"],
   ["อาหารฟ้องว่า", "DAILY_FOOD_WRAPPED"],
@@ -68,7 +63,6 @@ const TEXT_ACTION_ALIASES = new Map([
 
   ["กินอะไรดี", "MEAL_SUGGESTION"],
   ["กินไรดี", "MEAL_SUGGESTION"],
-  ["หิวแล้ว", "MEAL_SUGGESTION"],
 
   ["แปะรูปอาหาร", "SEND_PHOTO_GUIDE"],
   ["ส่งรูปอาหาร", "SEND_PHOTO_GUIDE"],
@@ -80,6 +74,12 @@ const TEXT_ACTION_ALIASES = new Map([
 ]);
 
 const resolveTypedRichMenuAction = (text = "") => TEXT_ACTION_ALIASES.get(normalizeTextCommand(text)) || "";
+
+const buildSyntheticPostback = (action) => ({
+  raw: `typed:${action}`,
+  action,
+  params: new URLSearchParams(`action=${encodeURIComponent(action)}`),
+});
 
 router.post("/webhook", line.middleware({ channelSecret: process.env.LINE_CHANNEL_SECRET }), async (req, res) => {
   res.status(200).json({ ok: true });
@@ -117,7 +117,15 @@ router.post("/webhook", line.middleware({ channelSecret: process.env.LINE_CHANNE
         const typedAction = resolveTypedRichMenuAction(text);
         if (typedAction) {
           console.log("LINE Text action routed:", { userId: event.source.userId, text, action: typedAction });
-          await routeTextAction(event, typedAction);
+          const handled = await handleRichMenuPostback({
+            event,
+            postback: buildSyntheticPostback(typedAction),
+            eventStart,
+          });
+          if (!handled) {
+            console.log("Unhandled LINE text action:", { text, action: typedAction });
+            logTiming("richMenu:typedUnhandled", eventStart, `action=${typedAction}`);
+          }
           logTiming("event:textAction", eventStart, `action=${typedAction}`);
           continue;
         }
