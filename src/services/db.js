@@ -49,6 +49,16 @@ const normalizeText = (value, fallback = "") => {
   return text || fallback;
 };
 
+const parseJsonSafely = (value, fallback = null) => {
+  if (!value) return fallback;
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+};
+
 const sum = (rows, key) => rows.reduce((total, row) => total + toNumber(row?.[key], 0), 0);
 
 const ensureUser = async ({ userId, name = "", title = "", goal = "", calorieTarget = null } = {}) => {
@@ -88,7 +98,7 @@ export const getDailySummary = async (userId) => {
     supabase.get("/users", {
       params: {
         line_user_id: `eq.${userId}`,
-        select: "line_user_id,title,goal,calorie_target",
+        select: "line_user_id,display_name,title,goal,calorie_target",
         limit: 1,
       },
     }),
@@ -96,7 +106,7 @@ export const getDailySummary = async (userId) => {
       params: {
         user_id: `eq.${userId}`,
         meal_date: `eq.${today}`,
-        select: "id,menu_name,kcal,carb,protein,fat,sugar,created_at",
+        select: "id,menu_name,kcal,carb,protein,fat,sugar,portion_level,portion_label,portion_note,confidence,source,created_at,raw",
         order: "created_at.desc",
       },
     }),
@@ -109,9 +119,7 @@ export const getDailySummary = async (userId) => {
     const sheet = await sheetFallback({ action: "GET_DAILY_SUMMARY", userId });
     const sheetTotal = toNumber(sheet?.todayCalories ?? sheet?.totalToday, 0);
     const sheetMealCount = toNumber(sheet?.mealCount, 0);
-    if (sheetTotal > 0 || sheetMealCount > 0) {
-      return { ...(sheet || {}), source: "supabase_empty_sheet_fallback" };
-    }
+    if (sheetTotal > 0 || sheetMealCount > 0) return { ...(sheet || {}), source: "supabase_empty_sheet_fallback" };
   }
 
   const topMeal = [...meals].sort((a, b) => toNumber(b.kcal) - toNumber(a.kcal))[0] || null;
@@ -120,7 +128,10 @@ export const getDailySummary = async (userId) => {
     status: "success",
     source: "supabase",
     date: today,
-    title: user?.title || "ลื้อ",
+    userId,
+    name: user?.display_name || "",
+    displayName: user?.display_name || "",
+    title: user?.title || user?.display_name || "ลื้อ",
     goal: user?.goal || "",
     calorieTarget: toNumber(user?.calorie_target, 2050),
     todayCalories: sum(meals, "kcal"),
@@ -132,7 +143,22 @@ export const getDailySummary = async (userId) => {
     mealCount: meals.length,
     topMealName: topMeal?.menu_name || "",
     topMealKcal: topMeal?.kcal || 0,
-    meals,
+    meals: meals.map((meal) => ({
+      id: meal.id,
+      menuName: meal.menu_name,
+      kcal: meal.kcal,
+      carb: meal.carb,
+      protein: meal.protein,
+      fat: meal.fat,
+      sugar: meal.sugar,
+      portionLevel: meal.portion_level,
+      portionLabel: meal.portion_label,
+      portionNote: meal.portion_note,
+      confidence: meal.confidence,
+      source: meal.source,
+      createdAt: meal.created_at,
+      raw: meal.raw,
+    })),
   };
 };
 
@@ -165,6 +191,7 @@ const writeMealToSupabase = async (payload = {}) => {
     calorieTarget: payload.calorieTarget,
   });
 
+  const items = parseJsonSafely(payload.itemsJson, []);
   const meal = {
     user_id: userId,
     meal_date: bangkokDate(),
@@ -174,31 +201,33 @@ const writeMealToSupabase = async (payload = {}) => {
     protein: toNumber(payload.protein, 0),
     fat: toNumber(payload.fat, 0),
     sugar: toNumber(payload.sugar, 0),
+    portion_level: normalizeText(payload.portionLevel, "normal"),
+    portion_label: normalizeText(payload.portionLabel, "พอดี"),
+    portion_note: normalizeText(payload.portionNote, ""),
+    confidence: normalizeText(payload.confidence, "medium"),
     source: normalizeText(payload.source, "line"),
     raw: {
       requestId: payload.requestId || "",
+      items,
       itemsJson: payload.itemsJson || "",
       note: payload.note || "",
+      imageSubject: payload.imageSubject || "",
+      imageCaption: payload.imageCaption || "",
     },
   };
 
-  const res = await supabase.post("/meals", [meal], {
-    headers: { Prefer: "return=representation" },
-  });
-
+  const res = await supabase.post("/meals", [meal], { headers: { Prefer: "return=representation" } });
   return { status: "success", source: "supabase", meal: Array.isArray(res.data) ? res.data[0] : null };
 };
 
 export const logFood = async (payload = {}) => {
   const sheetResult = await sheetFallback({ action: "LOG_FOOD", ...payload });
 
-  if (!isSupabaseWriteReady()) {
-    return { ...(sheetResult || {}), source: "sheet", supabaseWrite: "skipped" };
-  }
+  if (!isSupabaseWriteReady()) return { ...(sheetResult || {}), source: "sheet", supabaseWrite: "skipped" };
 
   try {
     const writeResult = await writeMealToSupabase(payload);
-    console.log(`[PaeCalDB] LOG_FOOD dual-write ok source=supabase menu=${payload.menuName || ""} kcal=${payload.kcal || 0}`);
+    console.log(`[PaeCalDB] LOG_FOOD dual-write ok source=supabase menu=${payload.menuName || ""} kcal=${payload.kcal || 0} portion=${payload.portionLevel || ""}`);
     return { ...(sheetResult || {}), source: "sheet+supabase", supabaseWrite: "success", supabaseMealId: writeResult.meal?.id || "" };
   } catch (err) {
     console.error("[PaeCalDB] LOG_FOOD Supabase dual-write failed", err?.response?.data || err.message || err);
@@ -214,19 +243,11 @@ export const deleteLastMeal = async (userId) => {
 
   const today = bangkokDate();
   const lastMealRes = await supabase.get("/meals", {
-    params: {
-      user_id: `eq.${userId}`,
-      meal_date: `eq.${today}`,
-      select: "id,menu_name,kcal",
-      order: "created_at.desc",
-      limit: 1,
-    },
+    params: { user_id: `eq.${userId}`, meal_date: `eq.${today}`, select: "id,menu_name,kcal", order: "created_at.desc", limit: 1 },
   });
 
   const lastMeal = Array.isArray(lastMealRes.data) ? lastMealRes.data[0] : null;
-  if (!lastMeal?.id) {
-    return { status: "not_found", source: "supabase" };
-  }
+  if (!lastMeal?.id) return { status: "not_found", source: "supabase" };
 
   await supabase.delete("/meals", { params: { id: `eq.${lastMeal.id}` } });
   const summary = await getDailySummary(userId);
@@ -235,10 +256,6 @@ export const deleteLastMeal = async (userId) => {
     ...summary,
     status: "success",
     source: "supabase",
-    deletedMeal: {
-      id: lastMeal.id,
-      menuName: lastMeal.menu_name,
-      kcal: lastMeal.kcal,
-    },
+    deletedMeal: { id: lastMeal.id, menuName: lastMeal.menu_name, kcal: lastMeal.kcal },
   };
 };
