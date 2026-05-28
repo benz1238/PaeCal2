@@ -81,8 +81,9 @@ router.post("/webhook", line.middleware({ channelSecret: process.env.LINE_CHANNE
           continue;
         }
 
+        console.log("LINE Text legacy handler fallback:", { userId: event.source.userId, text });
         await handleTextMessage(event);
-        logTiming("event:text", eventStart);
+        logTiming("event:textLegacy", eventStart);
         continue;
       }
 
