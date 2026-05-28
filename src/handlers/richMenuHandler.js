@@ -3,10 +3,10 @@ import {
   replyFlex,
   replyPaeLaewGuideCard,
   replySendPhotoGuide,
+  replyText,
   replyTypeFoodPrompt,
 } from "../services/line.js";
 import { deleteLastMeal, getDailySummary, updateSession } from "../services/db.js";
-import { buildMealSuggestionCarouselFlexMessage } from "../utils/mealSuggestionFlex.js";
 import {
   buildCalorieSummaryFlexMessage,
   buildFoodAuraFlexMessage,
@@ -121,10 +121,80 @@ const replyCalorieSummary = async ({ replyToken, userId }) => {
   logTiming("richMenu:replyCalorieSummaryFlex", start);
 };
 
+const getBangkokHour = () => {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Bangkok",
+      hour: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date());
+    return Number(parts.find((part) => part.type === "hour")?.value || 12);
+  } catch {
+    return 12;
+  }
+};
+
+const buildMealSuggestionText = () => {
+  const hour = getBangkokHour();
+
+  if (hour >= 5 && hour < 10) {
+    return `โอเค เช้า ๆ แบบนี้แปะว่าเอาอุ่น ๆ อยู่ท้องก่อน 👀
+
+เลือกทางนี้ได้อยู่:
+1. โจ๊กหมู + ไข่
+2. ข้าวต้มปลา/ไก่
+3. โยเกิร์ต + กล้วย
+
+เริ่มวันแบบไม่ตีกับท้อง แปะว่าโอเค 😄`;
+  }
+
+  if (hour >= 10 && hour < 14) {
+    return `ไอหยา เที่ยงพอดี หิวจริงแล้วมั้ง 👀
+
+แปะว่าเอาอิ่ม แต่ไม่ต้องมันจัด:
+1. ข้าวไก่ย่าง + ผัก
+2. สุกี้น้ำ
+3. กะเพราไก่ไม่มัน + ไข่ต้ม
+
+กินให้อิ่มแบบไม่ง่วงบ่ายนะ`;
+  }
+
+  if (hour >= 14 && hour < 17) {
+    return `เอ้า บ่ายแล้ว ถ้าหิวตอนนี้อย่าเพิ่งเปิดเกมใหญ่ 555
+
+เอาแบบกันหลุดก่อน:
+1. ไข่ต้ม + ผลไม้
+2. ซุปใส / เกาเหลา
+3. โยเกิร์ตไม่หวาน
+
+ประคองไว้ก่อน มื้อเย็นจะได้ไม่ต่อยาก 😅`;
+  }
+
+  if (hour >= 17 && hour < 21) {
+    return `โอเค เย็นแล้วนะ มื้อนี้เอาอิ่มพอดีดีกว่า 👀
+
+แปะเลือกให้ 3 ทาง:
+1. สุกี้น้ำ
+2. เกาเหลา + ข้าวนิดเดียว
+3. ข้าวปลา/ไก่ย่าง + ผัก
+
+ไม่ต้องเล่นใหญ่ คืนนี้ท้องจะได้ไม่ทำงานโอที`;
+  }
+
+  return `ไอหยา ดึกแล้วนะ ถ้ายังหิวจริง ๆ เบา ๆ ก็พอ 👀
+
+เอาแค่นี้พอแหละ:
+1. นมจืด / โยเกิร์ตไม่หวาน
+2. ไข่ต้ม 1 ฟอง
+3. ซุปใสถ้วยเล็ก
+
+กินกันวูบพอ แล้วไปพักนะ 😴`;
+};
+
 const replyMealSuggestionFast = async ({ replyToken }) => {
   const start = nowMs();
-  await replyFlex(replyToken, buildMealSuggestionCarouselFlexMessage());
-  logTiming("richMenu:mealSuggestionCarousel", start);
+  await replyText(replyToken, buildMealSuggestionText());
+  logTiming("richMenu:mealSuggestionText", start);
 };
 
 const replySetGoalFast = async ({ replyToken, userId }) => {
