@@ -43,7 +43,7 @@ const heroTitleBlock = ({ name, personaTitle, characterUrl = '' }) => ({
   type: 'box',
   layout: 'horizontal',
   spacing: '12px',
-  marginBottom: '12px',
+  margin: 'none',
   contents: [
     {
       type: 'box',
@@ -102,7 +102,7 @@ const heroTitleBlock = ({ name, personaTitle, characterUrl = '' }) => ({
               contents: [
                 {
                   type: 'text',
-                  text: '🧧',
+                  text: '🍚',
                   size: 'xxl',
                   align: 'center',
                 },
@@ -125,7 +125,7 @@ const insightBox = ({ insight }) => ({
   cornerRadius: '16px',
   paddingAll: '12px',
   spacing: '4px',
-  marginBottom: '12px',
+  margin: 'md',
   contents: [
     {
       type: 'text',
@@ -178,7 +178,7 @@ const statsCard = ({ eaten, target, carb, protein, fat, sugar, mealCount }) => {
     spacing: '8px',
     borderWidth: '1px',
     borderColor: palette.border,
-    marginBottom: '12px',
+    margin: 'md',
     contents: [
       {
         type: 'text',
@@ -189,7 +189,7 @@ const statsCard = ({ eaten, target, carb, protein, fat, sugar, mealCount }) => {
       },
       {
         type: 'text',
-        text: `เหลือ ${Math.round(left)} kcal อยู่`,
+        text: statusText,
         size: 'md',
         weight: 'bold',
         color: statusColor,
@@ -200,18 +200,11 @@ const statsCard = ({ eaten, target, carb, protein, fat, sugar, mealCount }) => {
         color: palette.border,
         margin: 'sm',
       },
-      // Kcal row
       {
         type: 'box',
         layout: 'horizontal',
         contents: [
-          {
-            type: 'text',
-            text: '🔥 กินไป',
-            size: 'sm',
-            color: palette.muted,
-            flex: 4,
-          },
+          { type: 'text', text: '🔥 กินไป', size: 'sm', color: palette.muted, flex: 4 },
           {
             type: 'text',
             text: `${Math.round(eaten)} / ${Math.round(target)} kcal`,
@@ -223,41 +216,19 @@ const statsCard = ({ eaten, target, carb, protein, fat, sugar, mealCount }) => {
           },
         ],
       },
-      // Carb row
       {
         type: 'box',
         layout: 'horizontal',
         contents: [
-          {
-            type: 'text',
-            text: '🍚 คาร์บ',
-            size: 'sm',
-            color: palette.muted,
-            flex: 4,
-          },
-          {
-            type: 'text',
-            text: `${Math.round(carb)} g`,
-            size: 'sm',
-            weight: 'bold',
-            color: palette.text,
-            align: 'end',
-            flex: 6,
-          },
+          { type: 'text', text: '🍚 คาร์บ', size: 'sm', color: palette.muted, flex: 4 },
+          { type: 'text', text: `${Math.round(carb)} g`, size: 'sm', weight: 'bold', color: palette.text, align: 'end', flex: 6 },
         ],
       },
-      // Protein row
       {
         type: 'box',
         layout: 'horizontal',
         contents: [
-          {
-            type: 'text',
-            text: '💪 โปรตีน',
-            size: 'sm',
-            color: palette.muted,
-            flex: 4,
-          },
+          { type: 'text', text: '💪 โปรตีน', size: 'sm', color: palette.muted, flex: 4 },
           {
             type: 'text',
             text: `${Math.round(protein)} g`,
@@ -269,73 +240,28 @@ const statsCard = ({ eaten, target, carb, protein, fat, sugar, mealCount }) => {
           },
         ],
       },
-      // Fat row
       {
         type: 'box',
         layout: 'horizontal',
         contents: [
-          {
-            type: 'text',
-            text: '💧 ไขมัน',
-            size: 'sm',
-            color: palette.muted,
-            flex: 4,
-          },
-          {
-            type: 'text',
-            text: `${Math.round(fat)} g`,
-            size: 'sm',
-            weight: 'bold',
-            color: palette.text,
-            align: 'end',
-            flex: 6,
-          },
+          { type: 'text', text: '💧 ไขมัน', size: 'sm', color: palette.muted, flex: 4 },
+          { type: 'text', text: `${Math.round(fat)} g`, size: 'sm', weight: 'bold', color: palette.text, align: 'end', flex: 6 },
         ],
       },
-      // Sugar row
       {
         type: 'box',
         layout: 'horizontal',
         contents: [
-          {
-            type: 'text',
-            text: '🍬 น้ำตาล',
-            size: 'sm',
-            color: palette.muted,
-            flex: 4,
-          },
-          {
-            type: 'text',
-            text: `${Math.round(sugar)} g`,
-            size: 'sm',
-            weight: 'bold',
-            color: palette.text,
-            align: 'end',
-            flex: 6,
-          },
+          { type: 'text', text: '🍬 น้ำตาล', size: 'sm', color: palette.muted, flex: 4 },
+          { type: 'text', text: `${Math.round(sugar)} g`, size: 'sm', weight: 'bold', color: palette.text, align: 'end', flex: 6 },
         ],
       },
-      // Meal count row
       {
         type: 'box',
         layout: 'horizontal',
         contents: [
-          {
-            type: 'text',
-            text: '🍽️ มื้อ',
-            size: 'sm',
-            color: palette.muted,
-            flex: 4,
-          },
-          {
-            type: 'text',
-            text: `${Math.round(mealCount)} มื้อ`,
-            size: 'sm',
-            weight: 'bold',
-            color: palette.text,
-            align: 'end',
-            flex: 6,
-          },
+          { type: 'text', text: '🍽️ มื้อ', size: 'sm', color: palette.muted, flex: 4 },
+          { type: 'text', text: `${Math.round(mealCount)} มื้อ`, size: 'sm', weight: 'bold', color: palette.text, align: 'end', flex: 6 },
         ],
       },
     ],
@@ -351,7 +277,7 @@ const suggestionBox = ({ goal, topMeal }) => ({
   type: 'box',
   layout: 'horizontal',
   spacing: '10px',
-  marginBottom: '12px',
+  margin: 'md',
   contents: [
     {
       type: 'box',
@@ -362,21 +288,8 @@ const suggestionBox = ({ goal, topMeal }) => ({
       paddingAll: '12px',
       spacing: '4px',
       contents: [
-        {
-          type: 'text',
-          text: '🎯 เป้าหมาย',
-          size: 'sm',
-          weight: 'bold',
-          color: palette.text,
-        },
-        {
-          type: 'text',
-          text: goal,
-          size: 'xs',
-          color: palette.brown,
-          wrap: true,
-          maxLines: 2,
-        },
+        { type: 'text', text: '🎯 เป้าหมาย', size: 'sm', weight: 'bold', color: palette.text },
+        { type: 'text', text: goal, size: 'xs', color: palette.brown, wrap: true, maxLines: 2 },
       ],
     },
     {
@@ -388,21 +301,8 @@ const suggestionBox = ({ goal, topMeal }) => ({
       paddingAll: '12px',
       spacing: '4px',
       contents: [
-        {
-          type: 'text',
-          text: '⭐ มื้อเด่น',
-          size: 'sm',
-          weight: 'bold',
-          color: palette.text,
-        },
-        {
-          type: 'text',
-          text: topMeal,
-          size: 'xs',
-          color: palette.brown,
-          wrap: true,
-          maxLines: 2,
-        },
+        { type: 'text', text: '⭐ มื้อเด่น', size: 'sm', weight: 'bold', color: palette.text },
+        { type: 'text', text: topMeal, size: 'xs', color: palette.brown, wrap: true, maxLines: 2 },
       ],
     },
   ],
@@ -415,6 +315,7 @@ const suggestionBox = ({ goal, topMeal }) => ({
 const footerBox = ({ message }) => ({
   type: 'box',
   layout: 'vertical',
+  margin: 'md',
   contents: [
     {
       type: 'separator',
@@ -430,6 +331,7 @@ const footerBox = ({ message }) => ({
       align: 'center',
       wrap: true,
       maxLines: 2,
+      margin: 'sm',
     },
   ],
 });
@@ -451,18 +353,10 @@ const buildPersonaTitle = ({ day = {}, memory = {} }) => {
  * Build insight message (what Pae noticed today)
  */
 const buildInsightMessage = ({ day = {}, memory = {}, problemMeal = null }) => {
-  if (memory.hasSweetPattern) {
-    return 'ใจอยากคุม แต่ของหวานมาเด่นจริง ๆ';
-  }
-  if (memory.hasFriedPattern) {
-    return 'ใจอยากคุม แต่ของทอด/มันมาเด่นจริง ๆ';
-  }
-  if (day.isVeryOver || memory.hasHeavyPattern) {
-    return 'ใจอยากคุม แต่วันนี้อยากกินเยอะซะแล้ว';
-  }
-  if (problemMeal?.menuName) {
-    return `${truncate(problemMeal.menuName, 20)} นำทีมวันนี้`;
-  }
+  if (memory.hasSweetPattern) return 'ใจอยากคุม แต่ของหวานมาเด่นจริง ๆ';
+  if (memory.hasFriedPattern) return 'ใจอยากคุม แต่ของทอด/มันมาเด่นจริง ๆ';
+  if (day.isVeryOver || memory.hasHeavyPattern) return 'ใจอยากคุม แต่วันนี้อยากกินเยอะซะแล้ว';
+  if (problemMeal?.menuName) return `${truncate(problemMeal.menuName, 20)} นำทีมวันนี้`;
   return 'ทรงรวมวันนี้ยังพอไปได้';
 };
 
@@ -470,18 +364,10 @@ const buildInsightMessage = ({ day = {}, memory = {}, problemMeal = null }) => {
  * Build closing message (what to do next)
  */
 const buildClosingMessage = ({ day = {}, memory = {} }) => {
-  if (day.isOver || memory.hasHeavyPattern) {
-    return 'ต่อไป คุมของทอดกับน้ำหวานนิดนึง';
-  }
-  if (memory.hasSweetPattern) {
-    return 'ต่อไป พักหวานสักรอบ แปะว่าเวิร์ก';
-  }
-  if (memory.hasFriedPattern) {
-    return 'ต่อไป พักทอดนิดนึง แล้วไปต่อได้';
-  }
-  if (day.goodProteinDay || memory.hasProteinWin) {
-    return 'ต่อไป คุมต่ออีกนิด ทรงนี้ใช้ได้';
-  }
+  if (day.isOver || memory.hasHeavyPattern) return 'ต่อไป คุมของทอดกับน้ำหวานนิดนึง';
+  if (memory.hasSweetPattern) return 'ต่อไป พักหวานสักรอบ แปะว่าเวิร์ก';
+  if (memory.hasFriedPattern) return 'ต่อไป พักทอดนิดนึง แล้วไปต่อได้';
+  if (day.goodProteinDay || memory.hasProteinWin) return 'ต่อไป คุมต่ออีกนิด ทรงนี้ใช้ได้';
   return 'ต่อไป คุมต่ออีกนิด';
 };
 
@@ -497,8 +383,7 @@ export const buildDailyRecapFlexMessageNew = ({
 }) => {
   const day = decision.day || {};
   const memory = decision.memory || day.memory || {};
-  const problemMeal =
-    decision.problemMeal || (Array.isArray(day.meals) ? day.meals[0] : null) || null;
+  const problemMeal = decision.problemMeal || (Array.isArray(day.meals) ? day.meals[0] : null) || null;
 
   const eaten = safeNumber(day.eaten ?? summary.todayCalories ?? summary.totalToday, 0);
   const target = safeNumber(day.target ?? summary.calorieTarget, DEFAULT_CALORIE_TARGET);
@@ -512,17 +397,11 @@ export const buildDailyRecapFlexMessageNew = ({
   const insightMessage = buildInsightMessage({ day, memory, problemMeal });
   const closingMessage = buildClosingMessage({ day, memory });
 
-  const goalText = truncate(
-    normalize(summary.goal || summary.healthGoal || summary.userGoal, 'ยังไม่ได้ตั้งเป้า'),
-    20
-  );
+  const goalText = truncate(normalize(summary.goal || summary.healthGoal || summary.userGoal, 'ยังไม่ได้ตั้งเป้า'), 20);
 
   const topMealText =
     problemMeal?.menuName && problemMeal?.menuName !== 'ยังไม่มีมื้อเด่น'
-      ? truncate(
-          `${problemMeal.menuName}${problemMeal?.kcal ? ` · ${Math.round(problemMeal.kcal)} kcal` : ''}`,
-          24
-        )
+      ? truncate(`${problemMeal.menuName}${problemMeal?.kcal ? ` · ${Math.round(problemMeal.kcal)} kcal` : ''}`, 24)
       : 'ยังไม่มีมื้อเด่น';
 
   return {
@@ -538,39 +417,11 @@ export const buildDailyRecapFlexMessageNew = ({
         backgroundColor: palette.cream,
         paddingAll: '14px',
         contents: [
-          // Hero title with character
-          heroTitleBlock({
-            name: title,
-            personaTitle,
-            characterUrl,
-          }),
-
-          // Insight box (yellow)
-          insightBox({
-            insight: insightMessage,
-          }),
-
-          // Stats card
-          statsCard({
-            eaten,
-            target,
-            carb,
-            protein,
-            fat,
-            sugar,
-            mealCount,
-          }),
-
-          // Suggestion boxes
-          suggestionBox({
-            goal: goalText,
-            topMeal: topMealText,
-          }),
-
-          // Footer
-          footerBox({
-            message: closingMessage,
-          }),
+          heroTitleBlock({ name: title, personaTitle, characterUrl }),
+          insightBox({ insight: insightMessage }),
+          statsCard({ eaten, target, carb, protein, fat, sugar, mealCount }),
+          suggestionBox({ goal: goalText, topMeal: topMealText }),
+          footerBox({ message: closingMessage }),
         ],
       },
     },
