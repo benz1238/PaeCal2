@@ -13,8 +13,8 @@ const ALIAS = {
   cal: "paecal-cal-menu",
 };
 
-const VIBE_IMAGE_PATH = path.join(rootDir, "assets", "richmenus", "paecal-richmenu-vibe.png");
-const CAL_IMAGE_PATH = path.join(rootDir, "assets", "richmenus", "paecal-richmenu-cal.png");
+const VIBE_IMAGE_PATH = path.join(rootDir, "assets", "richmenus", "paecal-richmenu-vibe.jpg");
+const CAL_IMAGE_PATH = path.join(rootDir, "assets", "richmenus", "paecal-richmenu-cal.jpg");
 
 const area = (x, y, width, height) => ({ bounds: { x, y, width, height } });
 const postback = (label, data, extra = {}) => ({ type: "postback", label, data, ...extra });
@@ -27,16 +27,12 @@ const switchMenu = (label, richMenuAliasId, data) => ({
 
 const buildLineApi = (token) => axios.create({
   baseURL: "https://api.line.me/v2/bot",
-  headers: {
-    Authorization: `Bearer ${token}`,
-  },
+  headers: { Authorization: `Bearer ${token}` },
 });
 
 const buildLineDataApi = (token) => axios.create({
   baseURL: "https://api-data.line.me/v2/bot",
-  headers: {
-    Authorization: `Bearer ${token}`,
-  },
+  headers: { Authorization: `Bearer ${token}` },
 });
 
 const buildVibeRichMenu = () => ({
@@ -45,34 +41,12 @@ const buildVibeRichMenu = () => ({
   name: "PaeCal - แปะอ่านทรง",
   chatBarText: "แปะอ่านทรง",
   areas: [
-    {
-      ...area(0, 0, 1250, 300),
-      action: postback("แปะอ่านทรง", "action=SWITCH_TO_VIBE_MENU"),
-    },
-    {
-      ...area(1250, 0, 1250, 300),
-      action: switchMenu("แปะแคล", ALIAS.cal, "action=SWITCH_TO_CAL_MENU"),
-    },
-    {
-      ...area(0, 300, 2500, 500),
-      action: postback("ส่งรูปให้แปะอ่าน", "action=SEND_PHOTO_GUIDE"),
-    },
-    {
-      ...area(0, 800, 625, 886),
-      action: postback("วันนี้อาหารฟ้องว่า", "action=DAILY_FOOD_WRAPPED"),
-    },
-    {
-      ...area(625, 800, 625, 886),
-      action: postback("สรุปวันนี้", "action=DAILY_SUMMARY"),
-    },
-    {
-      ...area(1250, 800, 625, 886),
-      action: postback("กินอะไรดี", "action=MEAL_SUGGESTION"),
-    },
-    {
-      ...area(1875, 800, 625, 886),
-      action: postback("ฉายาวันนี้", "action=FOOD_AURA"),
-    },
+    { ...area(0, 0, 1250, 300), action: postback("แปะอ่านทรง", "action=SWITCH_TO_VIBE_MENU") },
+    { ...area(1250, 0, 1250, 300), action: switchMenu("แปะแคล", ALIAS.cal, "action=SWITCH_TO_CAL_MENU") },
+    { ...area(0, 300, 2500, 500), action: postback("ส่งรูปให้แปะอ่าน", "action=SEND_PHOTO_GUIDE") },
+    { ...area(0, 800, 833, 886), action: postback("วันนี้อาหารฟ้องว่า", "action=DAILY_FOOD_WRAPPED") },
+    { ...area(833, 800, 834, 886), action: postback("กินอะไรดี", "action=MEAL_SUGGESTION") },
+    { ...area(1667, 800, 833, 886), action: postback("ฉายาวันนี้", "action=FOOD_AURA") },
   ],
 });
 
@@ -82,34 +56,12 @@ const buildCalRichMenu = () => ({
   name: "PaeCal - แปะแคล",
   chatBarText: "แปะแคล",
   areas: [
-    {
-      ...area(0, 0, 1250, 300),
-      action: switchMenu("แปะอ่านทรง", ALIAS.vibe, "action=SWITCH_TO_VIBE_MENU"),
-    },
-    {
-      ...area(1250, 0, 1250, 300),
-      action: postback("แปะแคล", "action=SWITCH_TO_CAL_MENU"),
-    },
-    {
-      ...area(0, 300, 2500, 500),
-      action: postback("ดูแคลวันนี้", "action=TODAY_CALORIES"),
-    },
-    {
-      ...area(0, 800, 1250, 443),
-      action: postback("โภชนาการ", "action=TODAY_NUTRITION"),
-    },
-    {
-      ...area(1250, 800, 1250, 443),
-      action: postback("ตั้งเป้าหมาย", "action=SET_GOAL"),
-    },
-    {
-      ...area(0, 1243, 1250, 443),
-      action: postback("แก้มื้อล่าสุด", "action=EDIT_LAST_MEAL"),
-    },
-    {
-      ...area(1250, 1243, 1250, 443),
-      action: postback("ลบมื้อล่าสุด", "action=DELETE_LAST_MEAL"),
-    },
+    { ...area(0, 0, 1250, 300), action: switchMenu("แปะอ่านทรง", ALIAS.vibe, "action=SWITCH_TO_VIBE_MENU") },
+    { ...area(1250, 0, 1250, 300), action: postback("แปะแคล", "action=SWITCH_TO_CAL_MENU") },
+    { ...area(0, 300, 2500, 500), action: postback("ดูแคลวันนี้", "action=TODAY_CALORIES") },
+    { ...area(0, 800, 833, 886), action: postback("แก้มื้อล่าสุด", "action=EDIT_LAST_MEAL") },
+    { ...area(833, 800, 834, 886), action: postback("ลบมื้อล่าสุด", "action=DELETE_LAST_MEAL") },
+    { ...area(1667, 800, 833, 886), action: postback("ตั้งเป้าหมาย", "action=SET_GOAL") },
   ],
 });
 
@@ -126,12 +78,8 @@ const createRichMenu = async (lineApi, payload) => {
 
 const uploadRichMenuImage = async (lineDataApi, richMenuId, imagePath) => {
   const image = fs.readFileSync(imagePath);
-
   await lineDataApi.post(`/richmenu/${richMenuId}/content`, image, {
-    headers: {
-      "Content-Type": "image/png",
-      "Content-Length": image.length,
-    },
+    headers: { "Content-Type": "image/jpeg", "Content-Length": image.length },
     maxBodyLength: Infinity,
   });
 };
@@ -148,16 +96,12 @@ const getAlias = async (lineApi, aliasId) => {
 
 const upsertAlias = async (lineApi, aliasId, richMenuId) => {
   const existing = await getAlias(lineApi, aliasId);
-
   if (existing) {
     await lineApi.post(`/richmenu/alias/${aliasId}`, { richMenuId });
     return "updated";
   }
 
-  await lineApi.post("/richmenu/alias", {
-    richMenuAliasId: aliasId,
-    richMenuId,
-  });
+  await lineApi.post("/richmenu/alias", { richMenuAliasId: aliasId, richMenuId });
   return "created";
 };
 
@@ -166,9 +110,7 @@ const setDefaultRichMenu = async (lineApi, richMenuId) => {
 };
 
 export const setupRichMenus = async ({ token = process.env.LINE_CHANNEL_ACCESS_TOKEN, logger = console } = {}) => {
-  if (!token) {
-    throw new Error("Missing LINE_CHANNEL_ACCESS_TOKEN.");
-  }
+  if (!token) throw new Error("Missing LINE_CHANNEL_ACCESS_TOKEN.");
 
   ensureFile(VIBE_IMAGE_PATH);
   ensureFile(CAL_IMAGE_PATH);
@@ -194,21 +136,13 @@ export const setupRichMenus = async ({ token = process.env.LINE_CHANNEL_ACCESS_T
   await setDefaultRichMenu(lineApi, vibeRichMenuId);
   logger.log("Set default rich menu to: แปะอ่านทรง");
 
-  return {
-    vibeRichMenuId,
-    calRichMenuId,
-    aliases: ALIAS,
-    defaultRichMenuId: vibeRichMenuId,
-  };
+  return { vibeRichMenuId, calRichMenuId, aliases: ALIAS, defaultRichMenuId: vibeRichMenuId };
 };
 
 const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === __filename;
-
 if (isDirectRun) {
   setupRichMenus()
-    .then(() => {
-      console.log("Done. Open LINE and test the rich menu buttons.");
-    })
+    .then(() => console.log("Done. Open LINE and test the rich menu buttons."))
     .catch((err) => {
       console.error("Failed to setup rich menus:");
       console.error(err.response?.data || err.message || err);
