@@ -1,4 +1,5 @@
 const DEFAULT_SESSION_TTL_MS = Number(process.env.SESSION_CACHE_TTL_MS || 600000);
+const NON_READY_SESSION_TTL_MS = Number(process.env.NON_READY_SESSION_CACHE_TTL_MS || 15000);
 
 const cache = new Map();
 
@@ -12,6 +13,17 @@ const normalizeSession = (session = {}) => ({
   data: session?.data || {},
 });
 
+const isNonReadyOnboardingStep = (step = "") => /ASK_NAME|ASK_PROFILE|ASK_GENDER|ASK_AGE|ASK_WEIGHT|ASK_HEIGHT|ONBOARD/i.test(String(step || ""));
+
+const shouldBypassCachedSession = (session = {}) => {
+  const normalized = normalizeSession(session);
+  if (normalized.step === "READY") return false;
+
+  // Old onboarding/session states were a frequent source of false blocks after migrating to Supabase.
+  // Do not trust them for long-lived cache; let handlers re-read the current DB session instead.
+  return isNonReadyOnboardingStep(normalized.step);
+};
+
 export const getCachedSession = (userId) => {
   const key = normalizeUserId(userId);
   if (!key) return null;
@@ -24,7 +36,13 @@ export const getCachedSession = (userId) => {
     return null;
   }
 
-  return normalizeSession(entry.session);
+  const normalized = normalizeSession(entry.session);
+  if (shouldBypassCachedSession(normalized)) {
+    cache.delete(key);
+    return null;
+  }
+
+  return normalized;
 };
 
 export const setCachedSession = (userId, session, ttlMs = DEFAULT_SESSION_TTL_MS) => {
@@ -32,10 +50,11 @@ export const setCachedSession = (userId, session, ttlMs = DEFAULT_SESSION_TTL_MS
   if (!key || !session) return null;
 
   const normalized = normalizeSession(session);
+  const ttl = normalized.step === "READY" ? ttlMs : Math.min(ttlMs, NON_READY_SESSION_TTL_MS);
 
   cache.set(key, {
     session: normalized,
-    expiresAt: now() + ttlMs,
+    expiresAt: now() + ttl,
     updatedAt: now(),
   });
 
@@ -67,4 +86,5 @@ export const invalidateSessionCache = (userId) => {
 export const getSessionCacheStats = () => ({
   size: cache.size,
   ttlMs: DEFAULT_SESSION_TTL_MS,
+  nonReadyTtlMs: NON_READY_SESSION_TTL_MS,
 });
