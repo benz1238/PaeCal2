@@ -96,7 +96,7 @@ const evidenceLines = (signals) => {
 
 const text = (props) => ({ type: "text", ...props });
 
-const evidenceBox = (lines) => ({
+const evidenceBox = (lines, title = "หลักฐานที่แปะจับได้") => ({
   type: "box",
   layout: "vertical",
   backgroundColor: "#FFFFFF",
@@ -105,16 +105,16 @@ const evidenceBox = (lines) => ({
   spacing: "sm",
   margin: "md",
   contents: [
-    text({ text: "หลักฐานที่แปะจับได้", size: "sm", weight: "bold", color: palette.text }),
+    text({ text: title, size: "sm", weight: "bold", color: palette.text }),
     ...lines.map((line) => text({ text: `• ${line}`, size: "sm", color: palette.brown, wrap: true })),
   ],
 });
 
-const footerLine = (message) => text({
+const footerLine = (message, color = palette.blue) => text({
   text: message,
   size: "sm",
   weight: "bold",
-  color: palette.blue,
+  color,
   wrap: true,
   align: "center",
   margin: "md",
@@ -194,6 +194,50 @@ export const buildFoodAuraFlexMessage = ({ summary = {} } = {}) => {
   };
 };
 
+export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
+  const signals = getSummarySignals(summary);
+  const left = Math.max(signals.target - signals.kcal, 0);
+  const over = Math.max(signals.kcal - signals.target, 0);
+  const statusText = signals.isEmpty
+    ? "วันนี้ยังไม่มีมื้อที่แปะบันทึกไว้"
+    : signals.isOver
+      ? `เกินเป้า ${Math.round(over)} kcal`
+      : `เหลือ ${Math.round(left)} kcal`;
+
+  return {
+    type: "flex",
+    altText: "ดูแคลวันนี้",
+    contents: {
+      type: "bubble",
+      size: "mega",
+      body: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: "#F8FAFC",
+        paddingAll: "16px",
+        contents: [
+          text({ text: "ดูแคลวันนี้", size: "xl", weight: "bold", color: palette.text }),
+          text({
+            text: signals.isEmpty ? "ยังไม่มีข้อมูลวันนี้" : `${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal`,
+            size: "xxl",
+            weight: "bold",
+            color: signals.isOver ? palette.red : palette.blue,
+            wrap: true,
+            margin: "sm",
+          }),
+          text({ text: statusText, size: "sm", weight: "bold", color: signals.isOver ? palette.red : palette.green, margin: "xs" }),
+          evidenceBox([
+            `บันทึกแล้ว ${Math.round(signals.mealCount)} มื้อ`,
+            signals.topMeal ? `มื้อเด่น: ${truncate(signals.topMeal, 18)}` : "มื้อเด่นยังไม่มี",
+            signals.isEmpty ? "ส่งรูปอาหารมาเริ่มนับได้เลย" : "อยากละเอียดกดโภชนาการต่อได้",
+          ], "สรุปเร็ว"),
+          footerLine(signals.isEmpty ? "ส่งรูปอาหารมาก่อน เดี๋ยวแปะนับให้" : "ตัวเลขคร่าว ๆ ใช้กะทางได้อยู่", signals.isOver ? palette.red : palette.blue),
+        ],
+      },
+    },
+  };
+};
+
 export const buildNutritionFlexMessage = ({ summary = {} } = {}) => {
   const signals = getSummarySignals(summary);
   const left = Math.max(signals.target - signals.kcal, 0);
@@ -225,7 +269,7 @@ export const buildNutritionFlexMessage = ({ summary = {} } = {}) => {
             `คาร์บ ${Math.round(signals.carb)} g`,
             `โปรตีน ${Math.round(signals.protein)} g`,
             `ไขมัน ${Math.round(signals.fat)} g`,
-          ]),
+          ], "สารอาหารคร่าว ๆ"),
           footerLine(signals.lowProtein ? "มื้อต่อไปเพิ่มโปรตีนหน่อย แปะว่าเวิร์ก" : "ดูรวม ๆ แล้วคุมต่อได้"),
         ],
       },
