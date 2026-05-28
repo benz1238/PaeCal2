@@ -16,7 +16,7 @@ const FOOD_KEYWORDS = [
   "ซูชิ", "ซูชิโระ", "ซาชิมิ", "มากิ", "sushi", "sashimi", "sushiro",
   "กะเพรา", "กระเพรา", "ข้าวมันไก่", "ข้าวขาหมู", "ข้าวหมูกรอบ", "ข้าวหมูแดง", "ข้าวผัด",
   "ส้มตำ", "ลาบ", "น้ำตก", "ยำ", "สุกี้", "ชาบู", "หมูกระทะ", "หมูทะ", "ปิ้งย่าง", "บุฟเฟต์",
-  "ไส้กรอก", "ลูกชิ้น", "ลูกชิ้นปลาระเบิด", "ชีส", "ทอด", "ของทอด",
+  "ไส้กรอก", "ลูกชิ้น", "ชีส", "ทอด", "ของทอด",
   "ชาไทย", "ชานม", "ชาเขียว", "มัจฉะ", "มัทฉะ", "กาแฟ", "โกโก้", "นม", "น้ำหวาน", "โค้ก", "โค๊ก", "เป๊ปซี่",
   "เค้ก", "ขนม", "คุกกี้", "โดนัท", "ไอติม", "บิงซู", "ผลไม้", "กล้วย", "แตงโม", "มะม่วง",
 ];
@@ -32,12 +32,12 @@ const LOCAL_FOOD_PRESETS = [
   { pattern: /หมูกระทะ|หมูทะ|ปิ้งย่าง|บุฟเฟต์/i, menuName: "หมูกระทะ", kcal: 850, carb: 55, protein: 42, fat: 48, sugar: 12 },
   { pattern: /ไส้กรอกชีส/i, menuName: "ไส้กรอกชีส", kcal: 260, carb: 10, protein: 10, fat: 20, sugar: 2 },
   { pattern: /ไส้กรอก/i, menuName: "ไส้กรอก", kcal: 180, carb: 7, protein: 8, fat: 13, sugar: 2 },
-  { pattern: /ลูกชิ้นปลาระเบิด|ลูกชิ้นทอด/i, menuName: "ลูกชิ้นปลาระเบิด", kcal: 280, carb: 28, protein: 12, fat: 14, sugar: 4 },
+  { pattern: /ลูกชิ้นทอด/i, menuName: "ลูกชิ้นทอด", kcal: 280, carb: 28, protein: 12, fat: 14, sugar: 4 },
   { pattern: /ชาเขียวมัจฉะ|ชาเขียวมัทฉะ|มัจฉะ|มัทฉะ|matcha/i, menuName: "ชาเขียวมัจฉะ", kcal: 180, carb: 28, protein: 4, fat: 5, sugar: 22 },
   { pattern: /ชาไทย/i, menuName: "ชาไทย", kcal: 220, carb: 35, protein: 3, fat: 6, sugar: 30 },
   { pattern: /ชานม/i, menuName: "ชานม", kcal: 280, carb: 45, protein: 4, fat: 8, sugar: 36 },
   { pattern: /ข้าวแกง\s*(สอง|2)\s*อย่าง|ข้าวราดแกง/i, menuName: "ข้าวแกงสองอย่าง", kcal: 650, carb: 82, protein: 24, fat: 24, sugar: 8 },
-  { pattern: /ไก่ทอดหน้าโรงเรียน|ไก่ทอด\s*รร|ไก่ทอดโรงเรียน/i, menuName: "ไก่ทอดหน้าโรงเรียน", kcal: 420, carb: 30, protein: 24, fat: 24, sugar: 4 },
+  { pattern: /ไก่ทอด/i, menuName: "ไก่ทอด", kcal: 420, carb: 30, protein: 24, fat: 24, sugar: 4 },
   { pattern: /หมูปิ้ง/i, menuName: "หมูปิ้ง", kcal: 320, carb: 18, protein: 18, fat: 20, sugar: 8 },
   { pattern: /ข้าวขาหมู/i, menuName: "ข้าวขาหมู", kcal: 780, carb: 82, protein: 32, fat: 34, sugar: 8 },
   { pattern: /ข้าวมันไก่/i, menuName: "ข้าวมันไก่", kcal: 650, carb: 70, protein: 32, fat: 26, sugar: 5 },
@@ -107,11 +107,15 @@ const estimateFoodLocally = (text = "") => {
   const normalized = normalize(text).replace(/^กิน\s+/, "");
   const matched = [];
   for (const preset of LOCAL_FOOD_PRESETS) if (preset.pattern.test(normalized)) matched.push(preset);
+  if (matched.length === 0) return null;
+
   const parts = splitFoodText(text);
+  const isSimpleSinglePreset = matched.length === 1 && parts.length <= 1 && normalized.length <= 40;
   const isComplex = parts.length >= 2 || matched.length >= 2 || normalized.length >= 28;
-  if (!isComplex || matched.length === 0) return null;
+  if (!isSimpleSinglePreset && !isComplex) return null;
+
   const totals = matched.reduce((acc, item) => ({ kcal: acc.kcal + item.kcal, carb: acc.carb + item.carb, protein: acc.protein + item.protein, fat: acc.fat + item.fat, sugar: acc.sugar + item.sugar }), { kcal: 0, carb: 0, protein: 0, fat: 0, sugar: 0 });
-  const menuName = matched.map((item) => item.menuName).filter(Boolean).join(" + ");
+  const menuName = isSimpleSinglePreset ? matched[0].menuName : matched.map((item) => item.menuName).filter(Boolean).join(" + ");
   return { menuName: menuName || normalized, ...totals, confidence: "medium", estimateMode: "local" };
 };
 
