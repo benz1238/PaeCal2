@@ -148,8 +148,8 @@ const replyDeleteLastMealFast = async ({ replyToken, userId }) => {
 
   let summary = {};
   if (!notFound) {
-    summary = await dbAction("GET_DAILY_SUMMARY:afterDelete", () => getDailySummary(userId));
-    setCachedRichMenuSummary(userId, summary || {});
+    summary = await dbAction("GET_DAILY_SUMMARY:afterDelete", () => getDailySummary(userId, { allowSheetFallback: false }));
+    if (summary?.status === "success") setCachedRichMenuSummary(userId, summary || {});
   }
 
   const deletedForCard = {
