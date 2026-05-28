@@ -23,6 +23,11 @@ import { setupRichMenus } from "../scripts/setup-richmenus.js";
 const app = express();
 const router = Router();
 
+const SUMMARY_CACHE_TTL_MS = Number(process.env.RICH_MENU_SUMMARY_CACHE_TTL_MS || 60000);
+const ACTION_LOCK_TTL_MS = Number(process.env.RICH_MENU_ACTION_LOCK_TTL_MS || 3500);
+const summaryCache = new Map();
+const actionLocks = new Map();
+
 const SILENT_RICH_MENU_ACTIONS = new Set([
   "SWITCH_TO_VIBE_MENU",
   "SWITCH_TO_CAL_MENU",
@@ -53,6 +58,31 @@ const parsePostbackData = (data) => {
   }
 };
 
+const getLockKey = (userId, action) => `${userId}:${action}`;
+const shouldSkipDuplicateAction = (userId, action) => {
+  if (!userId || !action) return false;
+  if (action === "SWITCH_TO_VIBE_MENU" || action === "SWITCH_TO_CAL_MENU") return false;
+
+  const now = nowMs();
+  const key = getLockKey(userId, action);
+  const lockedUntil = actionLocks.get(key) || 0;
+
+  if (lockedUntil > now) return true;
+
+  actionLocks.set(key, now + ACTION_LOCK_TTL_MS);
+  return false;
+};
+
+const clearExpiredCaches = () => {
+  const now = nowMs();
+  for (const [key, value] of summaryCache.entries()) {
+    if (!value || value.expiresAt <= now) summaryCache.delete(key);
+  }
+  for (const [key, value] of actionLocks.entries()) {
+    if (value <= now) actionLocks.delete(key);
+  }
+};
+
 const routeTextAction = async (event, text) => {
   const start = nowMs();
   await handleTextMessage({
@@ -70,8 +100,24 @@ const sheetAction = async (payload, label) => {
   return result || {};
 };
 
+const invalidateUserSummaryCache = (userId) => {
+  if (userId) summaryCache.delete(userId);
+};
+
 const getDailySummaryForRichMenu = async (userId, action) => {
+  clearExpiredCaches();
+
+  const cached = summaryCache.get(userId);
+  if (cached && cached.expiresAt > nowMs()) {
+    console.log(`[PaeCalTiming] cache:GET_DAILY_SUMMARY 0ms action=${action} hit=true`);
+    return cached.summary || {};
+  }
+
   const summary = await sheetAction({ action: "GET_DAILY_SUMMARY", userId }, `GET_DAILY_SUMMARY action=${action}`);
+  summaryCache.set(userId, {
+    summary: summary || {},
+    expiresAt: nowMs() + SUMMARY_CACHE_TTL_MS,
+  });
   return summary || {};
 };
 
@@ -103,63 +149,130 @@ const replyCalorieSummary = async ({ replyToken, userId }) => {
 const replySetGoalFast = async ({ replyToken, userId }) => {
   const start = nowMs();
   await sheetAction({ action: "UPDATE_SESSION", userId, step: "ASK_GOAL_UPDATE", sessionData: {} }, "UPDATE_SESSION:setGoal");
-  await replyText(
-    replyToken,
-    [
-      "ได้เลย แปะเปิดโหมดตั้งเป้าให้แล้ว 🎯",
-      "พิมพ์เป้าหมายมาได้เลย เช่น",
-      "• อยากลดไขมัน",
-      "• อยากคุมน้ำหนัก",
-      "• อยากกินสุขภาพดีขึ้น",
-    ].join("\n")
-  );
+  await replyFlex(replyToken, {
+    type: "flex",
+    altText: "ตั้งเป้าหมาย",
+    contents: {
+      type: "bubble",
+      size: "mega",
+      body: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: "#FFF7ED",
+        paddingAll: "16px",
+        contents: [
+          { type: "text", text: "🎯 ตั้งเป้าหมาย", size: "xl", weight: "bold", color: "#1F2937" },
+          { type: "text", text: "พิมพ์เป้าหมายมาได้เลย แปะจะจำไว้ให้", size: "sm", color: "#7C2D12", wrap: true, margin: "sm" },
+          {
+            type: "box",
+            layout: "vertical",
+            backgroundColor: "#FFFFFF",
+            cornerRadius: "16px",
+            paddingAll: "14px",
+            margin: "md",
+            spacing: "sm",
+            contents: [
+              { type: "text", text: "ตัวอย่าง", size: "sm", weight: "bold", color: "#1F2937" },
+              { type: "text", text: "• อยากลดไขมัน\n• อยากคุมน้ำหนัก\n• อยากกินสุขภาพดีขึ้น", size: "sm", color: "#7C2D12", wrap: true },
+            ],
+          },
+        ],
+      },
+    },
+  });
   logTiming("richMenu:setGoalFast", start);
 };
 
 const replyEditMealFast = async ({ replyToken }) => {
   const start = nowMs();
-  await replyText(
-    replyToken,
-    [
-      "อยากแก้มื้อล่าสุดใช่ไหม 🧾",
-      "พิมพ์แบบนี้ได้เลย:",
-      "• แก้มื้อล่าสุดเป็น ข้าวหมูกระเทียมไข่ดาว",
-      "• แก้เป็น 650 kcal",
-      "• ลบมื้อล่าสุด",
-    ].join("\n")
-  );
+  await replyFlex(replyToken, {
+    type: "flex",
+    altText: "แก้มื้อล่าสุด",
+    contents: {
+      type: "bubble",
+      size: "mega",
+      body: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: "#FFF7ED",
+        paddingAll: "16px",
+        contents: [
+          { type: "text", text: "🧾 แก้มื้อล่าสุด", size: "xl", weight: "bold", color: "#1F2937" },
+          { type: "text", text: "พิมพ์แก้ตามนี้ได้เลย เดี๋ยวแปะจัดให้", size: "sm", color: "#7C2D12", wrap: true, margin: "sm" },
+          {
+            type: "box",
+            layout: "vertical",
+            backgroundColor: "#FFFFFF",
+            cornerRadius: "16px",
+            paddingAll: "14px",
+            margin: "md",
+            spacing: "sm",
+            contents: [
+              { type: "text", text: "ตัวอย่าง", size: "sm", weight: "bold", color: "#1F2937" },
+              { type: "text", text: "• แก้มื้อล่าสุดเป็น ข้าวหมูกระเทียมไข่ดาว\n• แก้เป็น 650 kcal\n• ลบมื้อล่าสุด", size: "sm", color: "#7C2D12", wrap: true },
+            ],
+          },
+        ],
+      },
+    },
+  });
   logTiming("richMenu:editMealFast", start);
 };
 
 const replyDeleteLastMealFast = async ({ replyToken, userId }) => {
   const start = nowMs();
   const deleted = await sheetAction({ action: "DELETE_LAST_MEAL", userId }, "DELETE_LAST_MEAL:richMenu");
+  invalidateUserSummaryCache(userId);
 
-  if (deleted.status === "not_found") {
-    await replyText(replyToken, "แปะยังไม่เจอมื้อล่าสุดให้ลบน้า 😅\nส่งรูปอาหารมาก่อน แล้วค่อยลบได้จ้า");
-    logTiming("richMenu:deleteLastMealFast", start, "status=not_found");
-    return;
-  }
-
+  const notFound = deleted.status === "not_found";
   const total = deleted.todayCalories ?? deleted.totalToday ?? 0;
   const target = deleted.calorieTarget || 2050;
-  await replyText(
-    replyToken,
-    [
-      "โอเค แปะลบมื้อล่าสุดให้แล้ว 🗑️",
-      `ลบ: ${deleted.deletedMeal?.menuName || "มื้อล่าสุด"}`,
-      "",
-      `วันนี้เหลือในระบบ: ${Math.round(total)} / ${Math.round(target)} kcal`,
-    ].join("\n")
-  );
-  logTiming("richMenu:deleteLastMealFast", start);
+
+  await replyFlex(replyToken, {
+    type: "flex",
+    altText: notFound ? "ยังไม่มีมื้อให้ลบ" : "ลบมื้อล่าสุดแล้ว",
+    contents: {
+      type: "bubble",
+      size: "mega",
+      body: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: "#FFF7ED",
+        paddingAll: "16px",
+        contents: [
+          { type: "text", text: notFound ? "ยังไม่มีมื้อให้ลบ 😅" : "ลบมื้อล่าสุดแล้ว 🗑️", size: "xl", weight: "bold", color: "#1F2937", wrap: true },
+          {
+            type: "text",
+            text: notFound
+              ? "แปะยังไม่เจอมื้อล่าสุดในระบบ ส่งรูปอาหารมาก่อน แล้วค่อยลบได้จ้า"
+              : `ลบ: ${deleted.deletedMeal?.menuName || "มื้อล่าสุด"}`,
+            size: "sm",
+            color: "#7C2D12",
+            wrap: true,
+            margin: "sm",
+          },
+          {
+            type: "box",
+            layout: "vertical",
+            backgroundColor: "#FFFFFF",
+            cornerRadius: "16px",
+            paddingAll: "14px",
+            margin: "md",
+            contents: [
+              { type: "text", text: notFound ? "เริ่มบันทึกได้เลย" : "ยอดหลังลบ", size: "sm", weight: "bold", color: "#1F2937" },
+              { type: "text", text: notFound ? "ส่งรูปอาหารมา เดี๋ยวแปะนับให้" : `${Math.round(total)} / ${Math.round(target)} kcal`, size: "sm", color: "#003C88", weight: "bold", margin: "sm" },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  logTiming("richMenu:deleteLastMealFast", start, notFound ? "status=not_found" : "status=deleted");
 };
 
 router.post(
   "/webhook",
-  line.middleware({
-    channelSecret: process.env.LINE_CHANNEL_SECRET,
-  }),
+  line.middleware({ channelSecret: process.env.LINE_CHANNEL_SECRET }),
   async (req, res) => {
     res.status(200).json({ ok: true });
 
@@ -180,11 +293,12 @@ router.post(
           const postback = parsePostbackData(event.postback?.data);
           const userId = event.source.userId;
 
-          console.log("LINE Postback received:", {
-            userId,
-            data: postback.raw,
-            action: postback.action,
-          });
+          console.log("LINE Postback received:", { userId, data: postback.raw, action: postback.action });
+
+          if (shouldSkipDuplicateAction(userId, postback.action)) {
+            logTiming("richMenu:debounced", eventStart, `action=${postback.action}`);
+            continue;
+          }
 
           if (SILENT_RICH_MENU_ACTIONS.has(postback.action)) {
             logTiming("richMenu:silent", eventStart, `action=${postback.action}`);
@@ -275,7 +389,7 @@ router.post(
 
         try {
           if (event.replyToken) {
-            await replyText(replyToken, "แปะสะดุดนิดนึง ลองส่งใหม่อีกทีนะ 😅");
+            await replyText(event.replyToken, "แปะสะดุดนิดนึง ลองส่งใหม่อีกทีนะ 😅");
           }
         } catch (replyErr) {
           console.error("Reply error:", replyErr?.response?.data || replyErr);
@@ -292,24 +406,15 @@ app.get("/", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
-  res.json({
-    ok: true,
-    service: "pae-cal-line-bot",
-    time: new Date().toISOString(),
-  });
+  res.json({ ok: true, service: "pae-cal-line-bot", time: new Date().toISOString() });
 });
 
 app.get("/admin/setup-richmenus", async (req, res) => {
   const configuredKey = process.env.PAECAL_ADMIN_SETUP_KEY;
   const requestKey = String(req.query.key || "").trim();
 
-  if (!configuredKey) {
-    return res.status(500).json({ ok: false, error: "Missing PAECAL_ADMIN_SETUP_KEY env." });
-  }
-
-  if (!requestKey || requestKey !== configuredKey) {
-    return res.status(403).json({ ok: false, error: "Invalid setup key." });
-  }
+  if (!configuredKey) return res.status(500).json({ ok: false, error: "Missing PAECAL_ADMIN_SETUP_KEY env." });
+  if (!requestKey || requestKey !== configuredKey) return res.status(403).json({ ok: false, error: "Invalid setup key." });
 
   try {
     const logs = [];
@@ -327,10 +432,7 @@ app.get("/admin/setup-richmenus", async (req, res) => {
     return res.json({ ok: true, result, logs });
   } catch (err) {
     console.error("Rich menu setup failed:", err?.response?.data || err);
-    return res.status(500).json({
-      ok: false,
-      error: err?.response?.data || err.message || "Unknown setup error",
-    });
+    return res.status(500).json({ ok: false, error: err?.response?.data || err.message || "Unknown setup error" });
   }
 });
 
