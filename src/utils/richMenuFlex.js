@@ -17,6 +17,9 @@ const palette = {
   softYellow: "#FDE68A",
 };
 
+let footerCounter = 0;
+const rotate = (items = []) => items[(footerCounter++) % Math.max(items.length, 1)] || "";
+
 const safeNumber = (value, fallback = 0) => {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
@@ -149,6 +152,64 @@ const titleVibe = (signals, titleCard) => {
   return "อั๊วะพูดจริงไม่ได้โม้~";
 };
 
+const titleFooter = (signals) => rotate(signals.isEmpty ? [
+  "โต๊ะยังว่างอยู่ แปะรอจานแรกนะ 👀",
+  "ยังไม่มีหลักฐาน แปะยังไม่ตั้งฉายามั่ว 555",
+  "มื้อแรกมาเมื่อไหร่ เดี๋ยวแปะตั้งให้แบบมีชั้นเชิง",
+] : [
+  "พรุ่งนี้มาดูกันใหม่ แปะรออยู่ 555+",
+  "ฉายานี้แปะให้แล้ว ห้ามคืน 555",
+  "อั๊วะจดไว้แล้ว พรุ่งนี้มาดูว่าอีโวไหม",
+  "วันนี้ได้ฉายาแล้ว พรุ่งนี้อย่าให้แปะเดาผิดนะ 👀",
+]);
+
+const wrappedFooter = (signals) => rotate(signals.isEmpty ? [
+  "โต๊ะยังว่างอยู่ แปะรอหลักฐานก่อน 👀",
+  "ยังไม่มีคดีอาหารให้แปะอ่าน 555",
+  "ส่งมื้อแรกมาเมื่อไหร่ เดี๋ยวแปะอ่านทรงให้",
+] : signals.isOver ? [
+  "ไอหยา~ วันนี้มีหลุด แต่ยังไม่พัง พรุ่งนี้ค่อยตัดเกมใหม่",
+  "วันนี้ใจใหญ่ไปนิด พรุ่งนี้แปะช่วยดึงกลับ",
+  "คดีนี้ยังไม่ปิด พรุ่งนี้ค่อยว่ากันใหม่ 555",
+  "มื้อต่อไปเบาลงนิดเดียว แปะว่าเอากลับมาได้",
+] : [
+  "คุมต่ออีกนิด แปะว่าเอาอยู่ 😄",
+  "ทรงนี้ยังนิ่ง ลื้ออย่าเพิ่งเปิดเกมใหญ่ 555",
+  "อั๊วะให้ผ่านก่อน แต่พรุ่งนี้ยังต้องดูต่อ 👀",
+  "ค่อย ๆ ไปแบบนี้แหละ โฮ่วเจี๊ยะก็ยังไม่ผิด",
+]);
+
+const calorieFooter = (signals) => rotate(signals.isEmpty ? [
+  "โต๊ะยังว่างอยู่ แปะรอมื้อแรกนะ 👀",
+  "ยังไม่มีตัวเลขให้จับ แปะขอนั่งจิบชารอ 🍵",
+  "เริ่มมื้อแรกเมื่อไหร่ แปะจะจดให้เอง",
+] : signals.isOver ? [
+  "วันนี้ใจใหญ่ไปนิด พรุ่งนี้ค่อยตั้งหลักใหม่",
+  "เกินแล้วก็รู้ตัว อันนี้ดี เดี๋ยวแปะช่วยดึงกลับ",
+  "ไม่ต้องตกใจ เกมยังไม่แตก 555",
+  "คืนนี้พักก่อน พรุ่งนี้ค่อยคุมใหม่แบบไม่ฝืน",
+] : [
+  "ค่อย ๆ คุมต่อ ลื้อยังอยู่ในเกมอยู่ 555+",
+  "เหลือพื้นที่อยู่ แต่อย่าเจี๊ยะเพลินเกินนะ 👀",
+  "อั๊วะว่าไปต่อได้ แต่อย่าเปิดบอสของหวานตอนดึก",
+  "วันนี้ยังมีทรง แปะยืนดูอยู่หน้าครัว 555",
+]);
+
+const nutritionFooter = (signals) => rotate(signals.isEmpty ? [
+  "ยังไม่มีโพยให้เปิด แปะรอมื้อแรกอยู่ 👀",
+  "โต๊ะยังโล่ง โพยโภชนาการยังขาวสะอาด 555",
+  "ส่งมื้อแรกมา เดี๋ยวแปะเปิดโพยให้",
+] : signals.lowProtein ? [
+  "โปรตีนยังบางไปนิด มื้อต่อไปเติมหน่อย แปะว่าเวิร์ก 💪",
+  "กล้ามยังเคาะโต๊ะเรียกโปรตีนอยู่ ลื้อได้ยินไหม 555",
+  "เติมไข่/ปลา/ไก่หน่อย โพยจะสวยขึ้นทันที",
+] : [
+  "ดูรวม ๆ แล้วคุมต่อได้อยู่ แปะยังไม่เรียกเปาปุ้นจิ้น 555",
+  "โพยวันนี้ยังไม่ดุ แปะให้ผ่านแบบมีเชิง",
+  "ตัวเลขไม่ตีกันมาก อั๊วะว่าโอเคอยู่",
+  "คุมแบบนี้ต่อได้ แต่อย่าชะล่าใจนะลื้อ 👀",
+]);
+
 const text = (props) => ({ type: "text", ...props });
 
 const evidenceBox = (lines, title = "หลักฐานที่แปะจับได้") => ({
@@ -231,7 +292,7 @@ export const buildFoodAuraFlexMessage = ({ summary = {} } = {}) => {
           text({ text: titleCard.name, size: "xxl", weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs" }),
           characterPanel({ titleCard, signals }),
           text({ text: signals.isEmpty ? "ส่งมื้อแรกมาก่อน เดี๋ยวแปะตั้งฉายาให้" : "อั๊วะพูดจริงไม่ได้โม้~", size: "md", color: palette.brown, weight: "bold", wrap: true, margin: "md" }),
-          footerLine(signals.isEmpty ? "โต๊ะยังว่างอยู่ แปะรอจานแรกนะ 👀" : "พรุ่งนี้มาดูกันใหม่ แปะรออยู่ 555+"),
+          footerLine(titleFooter(signals)),
         ],
       },
     },
@@ -264,7 +325,7 @@ export const buildFoodWrappedFlexMessage = ({ summary = {} } = {}) => {
             `รวมวันนี้: ${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal`,
           ], "🔍 หลักฐานบนโต๊ะ"),
           text({ text: `${culprit.emoji} ${culprit.detail}`, size: "md", color: palette.brown, weight: "bold", wrap: true, margin: "md" }),
-          footerLine(signals.isOver ? "ไอหยา~ วันนี้มีหลุด แต่ยังไม่พัง พรุ่งนี้ค่อยตัดเกมใหม่" : "คุมต่ออีกนิด แปะว่าเอาอยู่ 😄"),
+          footerLine(wrappedFooter(signals)),
         ],
       },
     },
@@ -286,11 +347,6 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
       ? `ไอหยา~ เกินไป ${Math.round(over)} kcal แล้วนะ`
       : `โอเค เหลืออีก ${Math.round(left)} kcal`;
   const mascotEmoji = signals.isEmpty ? "🧐" : signals.isOver ? "😤" : signals.isNear ? "👀" : "😄";
-  const footer = signals.isEmpty
-    ? "โต๊ะยังว่างอยู่ แปะรอมื้อแรกนะ 👀"
-    : signals.isOver
-      ? "วันนี้ใจใหญ่ไปนิด พรุ่งนี้ค่อยตั้งหลักใหม่"
-      : "ค่อย ๆ คุมต่อ ลื้อยังอยู่ในเกมอยู่ 555+";
 
   return {
     type: "flex",
@@ -362,7 +418,7 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
             bg: palette.sky,
             color: palette.brown,
           }),
-          footerLine(footer, signals.isOver ? palette.red : palette.blue),
+          footerLine(calorieFooter(signals), signals.isOver ? palette.red : palette.blue),
         ],
       },
     },
@@ -401,7 +457,7 @@ export const buildNutritionFlexMessage = ({ summary = {} } = {}) => {
             `น้ำตาล ${Math.round(signals.sugar)} g`,
             signals.topMeal ? `มื้อเด่น: ${truncate(signals.topMeal, 28)}` : "มื้อเด่นยังไม่มี",
           ], "แปะจับตัวเลขมาให้"),
-          footerLine(signals.lowProtein ? "โปรตีนยังบางไปนิด มื้อต่อไปเติมหน่อย แปะว่าเวิร์ก 💪" : "ดูรวม ๆ แล้วคุมต่อได้อยู่ แปะยังไม่เรียกเปาปุ้นจิ้น 555"),
+          footerLine(nutritionFooter(signals)),
         ],
       },
     },
