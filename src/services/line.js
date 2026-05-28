@@ -1,6 +1,7 @@
 import axios from "axios";
 import * as line from "@line/bot-sdk";
 import { buildDailyRecapFlexMessageNew } from "../utils/dailyRecapFlexNew.js";
+import { sanitizePaeCalTone } from "../utils/toneSanitizer.js";
 
 export const client = new line.messagingApi.MessagingApiClient({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
@@ -10,7 +11,7 @@ const toTextMessages = (texts) => {
   const list = Array.isArray(texts) ? texts : [texts];
 
   return list
-    .map((text) => String(text || "").trim())
+    .map((text) => sanitizePaeCalTone(text))
     .filter(Boolean)
     .slice(0, 5)
     .map((text) => ({ type: "text", text }));
@@ -200,11 +201,7 @@ export const replySendPhotoGuide = async (replyToken) => {
 };
 
 export const replyDailyRecapCardWithBubbles = async (replyToken, { title, card, bubbles = [], summary = {}, decision = null }) => {
-  const bubbleMessages = (Array.isArray(bubbles) ? bubbles : [bubbles])
-    .map((text) => String(text || "").trim())
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((text) => ({ type: "text", text }));
+  const bubbleMessages = toTextMessages(Array.isArray(bubbles) ? bubbles : [bubbles]).slice(0, 2);
 
   const mascotUrl = process.env.PAECAL_RECAP_MASCOT_URL || "";
   const flexMessage = buildDailyRecapFlexMessageNew({ title, summary, decision: decision || {}, characterUrl: mascotUrl });
@@ -225,11 +222,7 @@ export const pushFlex = async (to, messages) => {
 };
 
 export const pushDailyRecapCardWithBubbles = async (to, { title, card, bubbles = [], summary = {}, decision = null }) => {
-  const bubbleMessages = (Array.isArray(bubbles) ? bubbles : [bubbles])
-    .map((text) => String(text || "").trim())
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((text) => ({ type: "text", text }));
+  const bubbleMessages = toTextMessages(Array.isArray(bubbles) ? bubbles : [bubbles]).slice(0, 2);
 
   const mascotUrl = process.env.PAECAL_RECAP_MASCOT_URL || "";
   const flexMessage = buildDailyRecapFlexMessageNew({ title, summary, decision: decision || {}, characterUrl: mascotUrl });
