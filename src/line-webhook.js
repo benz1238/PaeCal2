@@ -19,6 +19,32 @@ const app = express();
 const router = Router();
 const nowMs = () => Date.now();
 
+const normalizeTextCommand = (value = "") => String(value || "").trim().toLowerCase().replace(/\s+/g, "");
+
+const TEXT_ACTION_ALIASES = new Map([
+  ["ลบมื้อล่าสุด", "DELETE_LAST_MEAL"],
+  ["ลบมื้อ", "DELETE_LAST_MEAL"],
+  ["ลบล่าสุด", "DELETE_LAST_MEAL"],
+  ["แก้มื้อล่าสุด", "EDIT_LAST_MEAL"],
+  ["แก้มื้อ", "EDIT_LAST_MEAL"],
+  ["ตั้งเป้าหมาย", "SET_GOAL"],
+  ["ตั้งเป้า", "SET_GOAL"],
+  ["เปลี่ยนเป้า", "SET_GOAL"],
+  ["แคลวันนี้", "TODAY_CALORIES"],
+  ["ดูแคลวันนี้", "TODAY_CALORIES"],
+  ["ดูแคล", "TODAY_CALORIES"],
+  ["โภชนาการ", "TODAY_NUTRITION"],
+  ["ดูโภชนาการ", "TODAY_NUTRITION"],
+  ["วันนี้อาหารฟ้องว่า", "DAILY_FOOD_WRAPPED"],
+  ["อาหารฟ้องว่า", "DAILY_FOOD_WRAPPED"],
+  ["ฉายาวันนี้", "FOOD_AURA"],
+  ["ฉายา", "FOOD_AURA"],
+  ["กินอะไรดี", "MEAL_SUGGESTION"],
+  ["กินไรดี", "MEAL_SUGGESTION"],
+]);
+
+const resolveTypedRichMenuAction = (text = "") => TEXT_ACTION_ALIASES.get(normalizeTextCommand(text)) || "";
+
 router.post("/webhook", line.middleware({ channelSecret: process.env.LINE_CHANNEL_SECRET }), async (req, res) => {
   res.status(200).json({ ok: true });
   const events = req.body.events || [];
@@ -51,6 +77,15 @@ router.post("/webhook", line.middleware({ channelSecret: process.env.LINE_CHANNE
       if (event.type !== "message") continue;
 
       if (event.message?.type === "text") {
+        const text = String(event.message?.text || "").trim();
+        const typedAction = resolveTypedRichMenuAction(text);
+        if (typedAction) {
+          console.log("LINE Text action routed:", { userId: event.source.userId, text, action: typedAction });
+          await routeTextAction(event, typedAction);
+          logTiming("event:textAction", eventStart, `action=${typedAction}`);
+          continue;
+        }
+
         const handledMealChoice = await handleMealChoiceText(event);
         if (handledMealChoice) {
           logTiming("event:textFast", eventStart);
