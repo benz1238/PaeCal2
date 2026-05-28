@@ -1,3 +1,6 @@
+let utilityFooterCounter = 0;
+const rotate = (items = []) => items[(utilityFooterCounter++) % Math.max(items.length, 1)] || "";
+
 const baseBubble = ({ altText, eyebrow, title, subtitle, boxTitle, boxText, footer, accent = "#D97706" }) => ({
   type: "flex",
   altText,
@@ -32,6 +35,31 @@ const baseBubble = ({ altText, eyebrow, title, subtitle, boxTitle, boxText, foot
   },
 });
 
+const setGoalFooter = () => rotate([
+  "ภารกิจที่ยิ่งใหญ่ มาพร้อมจานที่ใหญ่ยิ่ง 🍚",
+  "ตั้งเป้าแบบไม่ทรมาน เดี๋ยวแปะคุมจังหวะให้",
+  "ไม่ต้องเป็นองค์หญิงกำมะลอ ตั้งเป้าจริง ๆ มาเลย 555",
+  "เป้าใหญ่ได้ แต่จานต้องคุยกันก่อนนะลื้อ 👀",
+]);
+
+const editMealFooter = () => rotate([
+  "เปาปุ้นจิ้นยังมีวันตัดสินใหม่ แปะก็แก้ให้ได้ 555",
+  "หลักฐานใหม่มาเมื่อไหร่ แปะแก้สำนวนให้ทันที",
+  "จดเพี้ยนไม่กลัว กลัวลื้อไม่บอกแปะมากกว่า 👀",
+  "คดีมื้ออาหารยังอุทธรณ์ได้ ลื้อพิมพ์มาเลย",
+]);
+
+const deleteMealFooter = (notFound = false) => rotate(notFound ? [
+  "ยังไม่มีคดีให้เปาปุ้นจิ้นตัดสิน 555",
+  "โต๊ะยังโล่ง แปะยังไม่เจอหลักฐาน",
+  "ไม่มีมื้อให้ลบ แปะขอเก็บถังขยะก่อน 👀",
+] : [
+  "ลบแล้วก็เริ่มคุมต่อได้ ชิล ๆ",
+  "มื้อนั้นหายไปแล้ว เหมือนไม่เคยขึ้นศาล 555",
+  "แฟ้มคดีปิดแล้ว ลื้อไปต่อได้",
+  "แปะลบให้แล้ว อย่ากดซ้ำจนแปะงงนะ 👀",
+]);
+
 export const buildSetGoalFlexMessage = () => baseBubble({
   altText: "ตั้งเป้าหมาย",
   eyebrow: "🎯 โหมดตั้งเป้า",
@@ -39,7 +67,7 @@ export const buildSetGoalFlexMessage = () => baseBubble({
   subtitle: "พิมพ์แบบคนจริง ๆ ได้เลย ไม่ต้องทำพิธีใหญ่ แปะอ่านออกอยู่ 👀",
   boxTitle: "ลองพิมพ์ประมาณนี้",
   boxText: "• เป้าหมาย กินให้พอดี\n• เป้าหมาย เพิ่มแรง\n• เป้าหมาย คุมหวาน\n• เป้าหมาย กินดีขึ้นแต่ยังขออร่อย",
-  footer: "ภารกิจที่ยิ่งใหญ่ มาพร้อมจานที่ใหญ่ยิ่ง 🍚",
+  footer: setGoalFooter(),
 });
 
 export const buildEditMealFlexMessage = () => baseBubble({
@@ -49,7 +77,7 @@ export const buildEditMealFlexMessage = () => baseBubble({
   subtitle: "ไม่เป็นไร ลื้อพิมพ์ให้อั๊วะมาใหม่ เดี๋ยวจัดให้ใหม่",
   boxTitle: "พิมพ์แบบนี้ได้เลย",
   boxText: "• แก้มื้อล่าสุดเป็น ข้าวหมูกระเทียมไข่ดาว\n• แก้เป็น 650 kcal\n• ลบมื้อล่าสุด",
-  footer: "เปาปุ้นจิ้นยังมีวันตัดสินใหม่ แปะก็แก้ให้ได้ 555",
+  footer: editMealFooter(),
 });
 
 export const buildDeleteMealFlexMessage = ({ deleted = {}, notFound = false } = {}) => {
@@ -65,6 +93,6 @@ export const buildDeleteMealFlexMessage = ({ deleted = {}, notFound = false } = 
       : `มื้อนั้นที่ลื้อกินไป มันได้หายไปแล้ว\nลบ: ${deleted.deletedMeal?.menuName || "มื้อล่าสุด"}`,
     boxTitle: notFound ? "เริ่มใหม่ได้เลย" : "ยอดหลังลบ",
     boxText: notFound ? "ยังโล่งอยู่ แปะรอจดมื้อแรกให้" : `${Math.round(total)} / ${Math.round(target)} kcal`,
-    footer: notFound ? "ยังไม่มีคดีให้เปาปุ้นจิ้นตัดสิน 555" : "ลบแล้วก็เริ่มคุมต่อได้ ชิล ๆ",
+    footer: deleteMealFooter(notFound),
   });
 };
