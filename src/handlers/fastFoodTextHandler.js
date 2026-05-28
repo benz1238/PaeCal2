@@ -65,11 +65,21 @@ const isLikelyShortFoodText = (text = "") => {
 };
 
 const buildGoalFoodGuardReply = (foodText) => [
-  "เอ้า อันนี้ดูเป็นของกินนะ ไม่ใช่เป้าหมาย 👀",
-  `ถ้าจะให้แปะลงมื้อ พิมพ์ว่า: กิน ${foodText}`,
-  "หรือส่งรูปมาเลยก็ได้ เดี๋ยวแปะอ่านทรงให้ 📸",
-  "ถ้าจะตั้งเป้า พิมพ์แบบ: เป้าหมาย กินให้พอดี / เพิ่มแรง / คุมหวาน",
-].join("\n");
+  [
+    "เอ้า! อันนี้ของกินนะ 👀",
+    "ยังไม่ใช่เป้าหมายอะ",
+    "ถ้าจะให้แปะลงมื้อ",
+    `พิมพ์: กิน ${foodText}`,
+  ].join("\n"),
+  [
+    "หรือส่งรูปมาเลยก็ได้",
+    "เดี๋ยวแปะอ่านทรงให้ 📸",
+    "ถ้าจะตั้งเป้า ลองพิมพ์:",
+    "เป้าหมาย กินให้พอดี",
+    "เป้าหมาย เพิ่มแรง",
+    "เป้าหมาย คุมหวาน",
+  ].join("\n"),
+];
 
 const buildLoggedReply = ({ meal, total, target, estimateMode }) => {
   const left = Math.max(target - total, 0);
@@ -142,7 +152,7 @@ export const handleFastFoodText = async (event) => {
 
   if (session.step === "ASK_GOAL_UPDATE" || session.step === "ASK_GOAL") {
     await updateSession({ userId, step: "READY", sessionData: session.data || {} });
-    await replyText(replyToken, buildGoalFoodGuardReply(text));
+    await replyTexts(replyToken, buildGoalFoodGuardReply(text));
     logTiming("event:goalFoodGuard", start, `text=${text}`);
     return true;
   }
