@@ -6,7 +6,7 @@ import { invalidateRichMenuSummaryCache } from "../utils/richMenuSummaryCache.js
 import { estimateFoodFromImage } from "../services/openai.js";
 import { DEFAULT_CALORIE_TARGET, safeNumber } from "../utils/helpers.js";
 import { buildProgressBar } from "../utils/advice.js";
-import { renderNoFoodDetectedReply } from "../utils/personality.js";
+import { renderContextualNoFoodImageReply } from "../utils/noFoodImageReply.js";
 
 const nowMs = () => Date.now();
 
@@ -16,12 +16,13 @@ const logTiming = (scope, step, startedAt, extra = "") => {
   return ms;
 };
 
+const normalizeText = (value) => String(value || "").trim();
+const cleanUserTitle = (value = "") => normalizeText(value).replace(/^(แปะ|อาแปะ|เฮีย|เจ๊|ซ้อ|อาตี๋|ตี๋|หมวย)+/i, "").trim();
+
 const resolveFastTitle = (session) => {
   const data = session?.data || {};
-  return String(data.title || data.name || "ลื้อ").trim() || "ลื้อ";
+  return cleanUserTitle(data.name) || cleanUserTitle(data.title) || "ลื้อ";
 };
-
-const normalizeText = (value) => String(value || "").trim();
 
 const resolveCachedTodayCalories = (session) => safeNumber(
   session?.todayCalories ?? session?.totalToday ?? session?.data?.todayCalories ?? session?.data?.totalToday,
@@ -31,6 +32,9 @@ const resolveCachedTodayCalories = (session) => safeNumber(
 const DRINK_IMAGE_PATTERN = /(โค้ก|โค๊ก|โคคา|โคล่า|coke|cola|pepsi|เป๊ปซี่|น้ำอัดลม|สไปรท์|แฟนต้า|ชานม|ชาไทย|ชาเขียว|มัทฉะ|กาแฟ|โกโก้|นม|น้ำหวาน|หวานเย็น|น้ำแดง|น้ำเขียว|เครื่องดื่ม|แก้วน้ำ|กระป๋อง|ขวด|moccona|มอคโคน่า|nescafe|เนสกาแฟ|birdy|เบอร์ดี้|milo|ไมโล|ovaltine|โอวัลติน)/i;
 const NON_DRINK_MAIN_SUBJECT_PATTERN = /(แมว|หมา|สุนัข|ไก่|นก|เอกสาร|จอคอม|หน้าจอ|รถ|วิว)/i;
 const READY_TO_DRINK_PATTERN = /(พร้อมดื่ม|ready\s*to\s*drink|iced|เย็น|แก้ว|cup|ขวด|bottle|กระป๋อง|can|ถือแก้ว|ถือขวด|ถือกระป๋อง)/i;
+const DRINK_MENU_PATTERN = /(ชานม|ชามะนาว|ชาไทย|ชาเขียว|ชาดำ|ชาเย็น|มัทฉะ|โกโก้|กาแฟ|ลาเต้|คาปูชิโน|อเมริกาโน่|นมเย็น|นมสด|โค้ก|โคก|โค๊ก|เป๊ปซี่|น้ำอัดลม|สไปรท์|แฟนต้า|น้ำหวาน|หวานเย็น|น้ำแดง|น้ำเขียว|น้ำผลไม้|สมูทตี้|เครื่องดื่ม|coke|cola|pepsi|coffee|tea|milk|cocoa|latte|smoothie|juice|moccona|มอคโคน่า|nescafe|เนสกาแฟ|birdy|เบอร์ดี้|milo|ไมโล|ovaltine|โอวัลติน)/i;
+const SWEET_MENU_PATTERN = /(ของหวาน|ขนม|เค้ก|คุกกี้|โดนัท|บราวนี่|ไอศกรีม|บิงซู|ฮันนี่โทสต์|dessert|cookie|cake|donut|brownie|ice\s*cream|pudding|โรตี|แพนเค้ก|waffle|วาฟเฟิล|ครัวซองต์|ช็อกโกแลต)/i;
+const SOLID_FOOD_PATTERN = /(ข้าว|หมู|ไก่|ปลา|กุ้ง|ไข่|เนื้อ|ก๋วยเตี๋ยว|บะหมี่|เส้น|ผัด|ทอด|ย่าง|ต้ม|แกง|ยำ|สลัด|ซุป|ผลไม้|มะม่วง|ส้มโอ|ส้ม|กล้วย|แตงโม|อาหาร|จาน|มื้อ|ขาหมู|กะเพรา|กระเพรา|ส้มตำ|ลาบ|หมูกระทะ|ชาบู|พิซซ่า|เบอร์เกอร์)/i;
 
 const detectPackagedDrinkProfile = (combined = "") => {
   const text = normalizeText(combined).toLowerCase();
@@ -104,9 +108,6 @@ const resolvePortion = ({ kcal = 0, portionLevel = "normal", note = "" } = {}) =
   return { level, label: "พอดี", reaction: "😋", note: providedNote || "ปริมาณประมาณหนึ่งมื้อพอดี 👌" };
 };
 
-const DRINK_MENU_PATTERN = /(ชานม|ชามะนาว|ชาไทย|ชาเขียว|ชาดำ|ชาเย็น|มัทฉะ|โกโก้|กาแฟ|ลาเต้|คาปูชิโน|อเมริกาโน่|นมเย็น|นมสด|โค้ก|โคก|โค๊ก|เป๊ปซี่|น้ำอัดลม|สไปรท์|แฟนต้า|น้ำหวาน|หวานเย็น|น้ำแดง|น้ำเขียว|น้ำผลไม้|สมูทตี้|เครื่องดื่ม|coke|cola|pepsi|coffee|tea|milk|cocoa|latte|smoothie|juice|moccona|มอคโคน่า|nescafe|เนสกาแฟ|birdy|เบอร์ดี้|milo|ไมโล|ovaltine|โอวัลติน)/i;
-const SWEET_MENU_PATTERN = /(ของหวาน|ขนม|เค้ก|คุกกี้|โดนัท|บราวนี่|ไอศกรีม|บิงซู|ฮันนี่โทสต์|dessert|cookie|cake|donut|brownie|ice\s*cream|pudding|โรตี|แพนเค้ก|waffle|วาฟเฟิล|ครัวซองต์|ช็อกโกแลต)/i;
-const SOLID_FOOD_PATTERN = /(ข้าว|หมู|ไก่|ปลา|กุ้ง|ไข่|เนื้อ|ก๋วยเตี๋ยว|บะหมี่|เส้น|ผัด|ทอด|ย่าง|ต้ม|แกง|ยำ|สลัด|ซุป|ผลไม้|มะม่วง|ส้มโอ|ส้ม|กล้วย|แตงโม|อาหาร|จาน|มื้อ|ขาหมู|กะเพรา|กระเพรา|ส้มตำ|ลาบ|หมูกระทะ|ชาบู|พิซซ่า|เบอร์เกอร์)/i;
 const isDrinkMenu = (menuName = "") => DRINK_MENU_PATTERN.test(String(menuName || ""));
 const joinItemNames = (meal = {}) => Array.isArray(meal.items) ? meal.items.map((item) => item?.name).filter(Boolean).join(" + ") : "";
 const hasSolidFood = (meal = {}) => SOLID_FOOD_PATTERN.test(`${meal.menuName || ""} ${joinItemNames(meal)}`) || !isDrinkMenu(`${meal.menuName || ""} ${joinItemNames(meal)}`);
@@ -153,7 +154,8 @@ const buildImageInsight = ({ meal, summary, goalText }) => {
 const buildImageFoodMessages = ({ meal, summary, title, session }) => {
   const includesSugarType = hasDrink(meal) || hasSweet(meal);
   const detailLines = [hasSolidFood(meal) ? buildNutritionLine({ carb: meal.carb, protein: meal.protein, fat: meal.fat }) : "", includesSugarType ? buildDrinkSugarLine({ menuName: meal.menuName, kcal: meal.kcal, carb: meal.carb, allowAnyDrink: true }) : ""].filter(Boolean).join("\n");
-  const firstMessage = `${meal.reaction} ${title} แปะดูให้แล้ว\n\n🍽️ เมนู\n${meal.menuName}\n🔥 ~${meal.kcal} kcal${detailLines ? `\n${detailLines}` : ""}\n📏 ปริมาณ: ${meal.portionLabel}`;
+  const opener = title && title !== "ลื้อ" ? `${title} แปะดูให้แล้ว` : "แปะดูให้แล้ว";
+  const firstMessage = `${meal.reaction} ${opener}\n\n🍽️ เมนู\n${meal.menuName}\n🔥 ~${meal.kcal} kcal${detailLines ? `\n${detailLines}` : ""}\n📏 ปริมาณ: ${meal.portionLabel}`;
   const { macroLine, goalLine } = buildImageInsight({ meal, summary, goalText: session?.data?.goal || "" });
   const secondLines = [`💡 ${macroLine}`, goalLine];
   if (normalizeText(meal.confidence).toLowerCase() === "low") secondLines.push("👀 แปะประเมินจากรูปคร่าว ๆ นะ");
@@ -207,7 +209,8 @@ const analyzeImageEvent = async (event) => {
   const menuName = normalizeText(analyzedData?.menuName) || "อาหาร";
   const confidence = normalizeText(analyzedData?.confidence || "medium");
   const portion = resolvePortion({ kcal, portionLevel: analyzedData?.portionLevel, note: analyzedData?.portionNote || analyzedData?.note });
-  return { isFood: kcal > 0 || Boolean(menuName && menuName !== "อาหาร"), menuName, kcal, carb, protein, fat, confidence, portion, imageSubject, imageCaption, raw: analyzedData };
+  const isFood = Boolean(analyzedData?.isFood) || kcal > 0 || Boolean(menuName && menuName !== "อาหาร");
+  return { isFood, menuName, kcal, carb, protein, fat, confidence, portion, imageSubject, imageCaption, raw: analyzedData };
 };
 
 const buildMealFromAnalyzedImages = (foodResults = []) => {
@@ -242,7 +245,7 @@ const processImageBatch = async ({ userId, events }) => {
   if (!foodResults.length) {
     const firstNoFood = analyzedResults[0] || {};
     const pushNoFoodT = nowMs();
-    await pushTexts(userId, [renderNoFoodDetectedReply({ imageSubject: firstNoFood.imageSubject, imageCaption: firstNoFood.imageCaption })]);
+    await pushTexts(userId, [renderContextualNoFoodImageReply({ imageSubject: firstNoFood.imageSubject, imageCaption: firstNoFood.imageCaption })]);
     logTiming("image", "pushNoFood", pushNoFoodT, `subject=${firstNoFood.imageSubject || "unknown"}`);
     logTiming("imageBatch", "total", totalT);
     return;
