@@ -1,7 +1,12 @@
 import axios from "axios";
 import { postToSheet } from "./sheet.js";
 
-const SUPABASE_URL = String(process.env.SUPABASE_URL || "").replace(/\/$/, "");
+const normalizeSupabaseUrl = (value = "") => String(value || "")
+  .trim()
+  .replace(/\/+$/, "")
+  .replace(/\/rest\/v1\/?$/, "");
+
+const SUPABASE_URL = normalizeSupabaseUrl(process.env.SUPABASE_URL || "");
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SUPABASE_READ_ENABLED = String(process.env.SUPABASE_RICH_MENU_ENABLED || "false").toLowerCase() === "true";
 const SUPABASE_DUAL_WRITE_ENABLED = String(process.env.SUPABASE_DUAL_WRITE_ENABLED || "true").toLowerCase() !== "false";
@@ -126,6 +131,7 @@ export const getDailySummary = async (userId) => {
     totalSugar: sum(meals, "sugar"),
     mealCount: meals.length,
     topMealName: topMeal?.menu_name || "",
+    topMealKcal: topMeal?.kcal || 0,
     meals,
   };
 };
