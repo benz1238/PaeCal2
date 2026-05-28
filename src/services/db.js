@@ -11,10 +11,12 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SUPABASE_READ_ENABLED = String(process.env.SUPABASE_RICH_MENU_ENABLED || "false").toLowerCase() === "true";
 const SUPABASE_DUAL_WRITE_ENABLED = String(process.env.SUPABASE_DUAL_WRITE_ENABLED || "true").toLowerCase() !== "false";
 const SUPABASE_EMPTY_SUMMARY_FALLBACK_ENABLED = String(process.env.SUPABASE_EMPTY_SUMMARY_FALLBACK_ENABLED || "true").toLowerCase() !== "false";
+const SHEET_DELETE_FALLBACK_ENABLED = String(process.env.SHEET_DELETE_FALLBACK_ENABLED || "false").toLowerCase() === "true";
 
 const isSupabaseConfigured = () => Boolean(SUPABASE_URL && SUPABASE_KEY);
 const isSupabaseReadReady = () => Boolean(SUPABASE_READ_ENABLED && isSupabaseConfigured());
 const isSupabaseWriteReady = () => Boolean(SUPABASE_DUAL_WRITE_ENABLED && isSupabaseConfigured());
+const isSupabaseDeleteReady = () => isSupabaseConfigured();
 
 const bangkokDate = () => {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -84,6 +86,8 @@ export const dbStatus = () => ({
   supabaseConfigured: isSupabaseConfigured(),
   supabaseReadReady: isSupabaseReadReady(),
   supabaseWriteReady: isSupabaseWriteReady(),
+  supabaseDeleteReady: isSupabaseDeleteReady(),
+  sheetDeleteFallbackEnabled: SHEET_DELETE_FALLBACK_ENABLED,
   supabaseEmptySummaryFallbackEnabled: SUPABASE_EMPTY_SUMMARY_FALLBACK_ENABLED,
 });
 
@@ -236,26 +240,29 @@ export const logFood = async (payload = {}) => {
 };
 
 export const deleteLastMeal = async (userId) => {
-  if (!isSupabaseReadReady()) {
-    const sheet = await sheetFallback({ action: "DELETE_LAST_MEAL", userId });
-    return { ...(sheet || {}), source: "sheet" };
+  if (isSupabaseDeleteReady()) {
+    try {
+      const today = bangkokDate();
+      const lastMealRes = await supabase.get("/meals", {
+        params: { user_id: `eq.${userId}`, meal_date: `eq.${today}`, select: "id,menu_name,kcal", order: "created_at.desc", limit: 1 },
+      });
+
+      const lastMeal = Array.isArray(lastMealRes.data) ? lastMealRes.data[0] : null;
+      if (!lastMeal?.id) return { status: "not_found", source: "supabase" };
+
+      await supabase.delete("/meals", { params: { id: `eq.${lastMeal.id}` } });
+      return {
+        status: "success",
+        source: "supabase_fast_delete",
+        deletedMeal: { id: lastMeal.id, menuName: lastMeal.menu_name, kcal: lastMeal.kcal },
+      };
+    } catch (err) {
+      console.error("[PaeCalDB] DELETE_LAST_MEAL Supabase failed", err?.response?.data || err.message || err);
+      if (!SHEET_DELETE_FALLBACK_ENABLED) return { status: "error", source: "supabase_delete_failed" };
+    }
   }
 
-  const today = bangkokDate();
-  const lastMealRes = await supabase.get("/meals", {
-    params: { user_id: `eq.${userId}`, meal_date: `eq.${today}`, select: "id,menu_name,kcal", order: "created_at.desc", limit: 1 },
-  });
-
-  const lastMeal = Array.isArray(lastMealRes.data) ? lastMealRes.data[0] : null;
-  if (!lastMeal?.id) return { status: "not_found", source: "supabase" };
-
-  await supabase.delete("/meals", { params: { id: `eq.${lastMeal.id}` } });
-  const summary = await getDailySummary(userId);
-
-  return {
-    ...summary,
-    status: "success",
-    source: "supabase",
-    deletedMeal: { id: lastMeal.id, menuName: lastMeal.menu_name, kcal: lastMeal.kcal },
-  };
+  if (!SHEET_DELETE_FALLBACK_ENABLED) return { status: "not_found", source: "no_sheet_delete_fallback" };
+  const sheet = await sheetFallback({ action: "DELETE_LAST_MEAL", userId });
+  return { ...(sheet || {}), source: "sheet" };
 };
