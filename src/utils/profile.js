@@ -1,6 +1,6 @@
 import { DEFAULT_CALORIE_TARGET, isFemaleText } from "./helpers.js";
-import { postToSheet } from "../services/sheet.js";
 import { getLineDisplayName } from "../services/line.js";
+import { getProfile as getDbProfile, updateSession } from "../services/db.js";
 
 export const getTitle = (gender, age, name = "") => {
   const ageNum = parseInt(age, 10) || 0;
@@ -14,12 +14,7 @@ export const getTitle = (gender, age, name = "") => {
   return female ? `หมวย${cleanName}` : `ตี๋${cleanName}`;
 };
 
-export const getProfile = async (userId) => {
-  return await postToSheet({
-    action: "GET_PROFILE",
-    userId,
-  });
-};
+export const getProfile = async (userId) => getDbProfile(userId);
 
 export const buildTitleFromProfile = ({ name, stats, fallbackTitle = "" }) => {
   if (fallbackTitle && fallbackTitle !== "เฮีย") {
@@ -73,8 +68,7 @@ export const syncSessionFromProfile = async ({
     ...extraData,
   };
 
-  await postToSheet({
-    action: "UPDATE_SESSION",
+  await updateSession({
     userId,
     step: session?.step || "READY",
     sessionData: mergedData,
