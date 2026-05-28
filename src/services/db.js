@@ -203,8 +203,9 @@ const fetchMealsMinimal = async (userId, today) => supabase.get("/meals", {
   params: { user_id: `eq.${userId}`, meal_date: `eq.${today}`, select: "id,menu_name,kcal,carb,protein,fat,sugar,source,created_at,raw", order: "created_at.desc" },
 });
 
-export const getDailySummary = async (userId) => {
+export const getDailySummary = async (userId, { allowSheetFallback = true } = {}) => {
   if (!isSupabaseReadReady()) {
+    if (!allowSheetFallback) return { status: "error", source: "supabase_read_disabled" };
     const sheet = await sheetFallback({ action: "GET_DAILY_SUMMARY", userId });
     return { ...(sheet || {}), source: "sheet" };
   }
@@ -222,7 +223,7 @@ export const getDailySummary = async (userId) => {
     const user = Array.isArray(userRes.data) ? userRes.data[0] : null;
     const meals = Array.isArray(mealRes.data) ? mealRes.data : [];
     const topMeal = [...meals].sort((a, b) => toNumber(b.kcal) - toNumber(a.kcal))[0] || null;
-    if (meals.length === 0 && SHEET_READ_FALLBACK_ENABLED) {
+    if (meals.length === 0 && SHEET_READ_FALLBACK_ENABLED && allowSheetFallback) {
       const sheet = await sheetFallback({ action: "GET_DAILY_SUMMARY", userId });
       const sheetTotal = toNumber(sheet?.todayCalories ?? sheet?.totalToday, 0);
       const sheetMealCount = toNumber(sheet?.mealCount, 0);
@@ -237,7 +238,7 @@ export const getDailySummary = async (userId) => {
     };
   } catch (err) {
     console.error("[PaeCalDB] GET_DAILY_SUMMARY Supabase failed", err?.response?.data || err.message || err);
-    if (!SHEET_READ_FALLBACK_ENABLED) return { status: "error", source: "supabase_read_failed" };
+    if (!SHEET_READ_FALLBACK_ENABLED || !allowSheetFallback) return { status: "error", source: "supabase_read_failed" };
     const sheet = await sheetFallback({ action: "GET_DAILY_SUMMARY", userId });
     return { ...(sheet || {}), source: "sheet" };
   }
