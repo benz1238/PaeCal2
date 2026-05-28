@@ -2,19 +2,48 @@ const pick = (items = []) => items[Math.floor(Math.random() * items.length)] || 
 const normalize = (value = "") => String(value || "").trim();
 
 const has = (text, pattern) => pattern.test(text);
+const score = (text, patterns = []) => patterns.reduce((total, pattern) => total + (pattern.test(text) ? 1 : 0), 0);
+
+const PAECAL_SIGNAL_PATTERNS = [
+  /(แปะ|แปะแคล|paecal|pae\s*cal)/i,
+  /(มาสคอต|mascot|ตัวการ์ตูน|cartoon|illustration|การ์ตูนผู้ชาย)/i,
+  /(ผู้ชายใส่แว่น|คนใส่แว่น|แว่น)/i,
+  /(ผ้าขนหนู|ผ้าขนหนูสีส้ม|ผ้าสีส้ม|เสื้อส้ม)/i,
+  /(พื้นหลังแดง|ฉากแดง|วงกลมแดง)/i,
+  /(หนวด|ตอหนวด|เครา)/i,
+];
+
+const renderPaeCalSelfReply = () => pick([
+  "ใช่ นี่อั๊วะเอง 555\nแต่อย่าเอาแปะไปนับแคลนะ ลื้อส่งของกินมา เดี๋ยวแปะอ่านทรงให้ 👀",
+  "ใช่ดิ นี่อั๊วะเอง 👀\nรูปแปะไม่มี kcal นะ มีแต่ความตั้งใจดูแลลื้อ 555\nส่งอาหารมา เดี๋ยวอั๊วะดูให้",
+  "เอ้า รูปแปะมาเอง 555\nอันนี้ลงมื้อไม่ได้ แต่แปะรับไว้ในหมวดหน้าตาดีแบบพอไหว\nส่งจานอาหารมา เดี๋ยวแปะอ่านทรงให้",
+]);
 
 export const renderContextualNoFoodImageReply = ({ imageSubject, imageCaption } = {}) => {
   const subject = normalize(imageSubject);
   const caption = normalize(imageCaption);
   const detail = `${subject} ${caption}`.trim();
+  const paeCalScore = score(detail, PAECAL_SIGNAL_PATTERNS);
 
-  // Bias illustrated Thai-Chinese uncle / glasses / orange towel toward PaeCal mascot.
-  if (has(detail, /(แปะ|แปะแคล|paecal|pae\s*cal|มาสคอต|mascot|ตัวการ์ตูน|cartoon|illustration|การ์ตูนผู้ชาย|ผู้ชายใส่แว่น|คนใส่แว่น|แว่น|ผ้าขนหนู|ผ้าขนหนูสีส้ม|เสื้อส้ม|พื้นหลังแดง|หนวด|ตอหนวด)/i)) {
+  // Animals first: a cat/dog wearing glasses is still a cat/dog, not PaeCal.
+  if (has(detail, /(แมว|cat|kitten)/i)) {
     return pick([
-      "ใช่ นี่อั๊วะเอง 555\nแต่อย่าเอาแปะไปนับแคลนะ ลื้อส่งของกินมา เดี๋ยวแปะอ่านทรงให้ 👀",
-      "ใช่ดิ นี่อั๊วะเอง 👀\nรูปแปะไม่มี kcal นะ มีแต่ความตั้งใจดูแลลื้อ 555\nส่งอาหารมา เดี๋ยวอั๊วะดูให้",
-      "เอ้า รูปแปะมาเอง 555\nอันนี้ลงมื้อไม่ได้ แต่แปะรับไว้ในหมวดหน้าตาดีแบบพอไหว\nส่งจานอาหารมา เดี๋ยวแปะอ่านทรงให้",
+      "xiǎomāo lailai มาม่ะ 🐱\nน่ารักอยู่ แต่แปะยังลงแคลให้น้องไม่ได้นะ 555\nลื้อส่งของกินมา เดี๋ยวแปะอ่านทรงให้ 👀",
+      "เอ้า เสี่ยวเมามาแล้ว 555\nแปะให้ผ่านหมวดน่ารัก แต่ยังไม่ใช่มื้ออาหารนะ\nส่งจานของลื้อมา เดี๋ยวดูให้",
+      "xiǎomāo น่ารักแหละ 👀\nแต่น้องไม่มี kcal ให้แปะจดนะ 555\nของกินลื้ออยู่ไหน ส่งมา ๆ",
     ]);
+  }
+
+  if (has(detail, /(หมา|สุนัข|dog|puppy)/i)) {
+    return pick([
+      "เอ้า น้องหมามา 555\nแปะให้คะแนนความน่ารักก่อน แต่แคลยังไม่ลงนะ\nส่งอาหารของลื้อมา เดี๋ยวแปะดูให้",
+      "โฮ่งมาแบบนี้ แปะยิ้มอยู่ 555\nแต่ยังไม่ใช่ของกินนะ ลื้อส่งจานจริงมาได้เลย",
+      "น้องหมาได้อยู่ 👀\nแต่แปะนับแคลให้น้องไม่ได้อะ ส่งมื้อของลื้อมาแทน",
+    ]);
+  }
+
+  if (paeCalScore >= 2) {
+    return renderPaeCalSelfReply();
   }
 
   if (has(detail, /(photoshop|โฟโต้ชอป|โฟโต้ช็อป|ps\b|adobe\s*photoshop)/i)) {
@@ -33,22 +62,6 @@ export const renderContextualNoFoodImageReply = ({ imageSubject, imageCaption } 
     ]);
   }
 
-  if (has(detail, /(แมว|cat|kitten)/i)) {
-    return pick([
-      "xiǎomāo lailai มาม่ะ 🐱\nน่ารักอยู่ แต่แปะยังลงแคลให้น้องไม่ได้นะ 555\nลื้อส่งของกินมา เดี๋ยวแปะอ่านทรงให้ 👀",
-      "เอ้า เสี่ยวเมามาแล้ว 555\nแปะให้ผ่านหมวดน่ารัก แต่ยังไม่ใช่มื้ออาหารนะ\nส่งจานของลื้อมา เดี๋ยวดูให้",
-      "xiǎomāo น่ารักแหละ 👀\nแต่น้องไม่มี kcal ให้แปะจดนะ 555\nของกินลื้ออยู่ไหน ส่งมา ๆ",
-    ]);
-  }
-
-  if (has(detail, /(หมา|สุนัข|dog|puppy)/i)) {
-    return pick([
-      "เอ้า น้องหมามา 555\nแปะให้คะแนนความน่ารักก่อน แต่แคลยังไม่ลงนะ\nส่งอาหารของลื้อมา เดี๋ยวแปะดูให้",
-      "โฮ่งมาแบบนี้ แปะยิ้มอยู่ 555\nแต่ยังไม่ใช่ของกินนะ ลื้อส่งจานจริงมาได้เลย",
-      "น้องหมาได้อยู่ 👀\nแต่แปะนับแคลให้น้องไม่ได้อะ ส่งมื้อของลื้อมาแทน",
-    ]);
-  }
-
   if (has(detail, /(จอ|หน้าจอ|screenshot|screen|คอม|มือถือ|แชต|chat)/i)) {
     return pick([
       "เอ้า อันนี้เหมือนรูปหน้าจอนะ 555\nแปะยังนับแคลไม่ได้อะ\nส่งรูปอาหารจริงมา เดี๋ยวแปะดูให้ 👀",
@@ -57,6 +70,7 @@ export const renderContextualNoFoodImageReply = ({ imageSubject, imageCaption } 
     ]);
   }
 
+  // If vision only says "person/selfie" but has no mascot signals, do not pretend it is PaeCal.
   if (has(detail, /(คน|หน้า|selfie|เซลฟี่|portrait|รูปคน)/i)) {
     return pick([
       "เอ้า อันนี้รูปคนนะ 555\nแปะดูแคลจากหน้าไม่ได้อะ\nส่งรูปอาหารมา เดี๋ยวแปะจัดให้ 👀",
