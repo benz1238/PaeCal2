@@ -71,19 +71,31 @@ const fireAndForgetSheet = (payload, label = "sheetBackup") => {
     .catch((err) => console.warn(`[PaeCalDB] ${label} failed`, err?.message || err));
 };
 
-const ensureUser = async ({ userId, name = "", title = "", goal = "", calorieTarget = null } = {}) => {
+const ensureUser = async ({ userId, name = "", title = "", goal = "", calorieTarget = null, stats = "" } = {}) => {
   if (!userId) throw new Error("Missing userId for ensureUser");
+  const profileRaw = stats ? { stats } : undefined;
   const payload = {
     line_user_id: userId,
     ...(name ? { display_name: name } : {}),
     ...(title ? { title } : {}),
     ...(goal ? { goal } : {}),
     ...(calorieTarget ? { calorie_target: Math.round(toNumber(calorieTarget, 2050)) } : {}),
+    ...(profileRaw ? { profile: profileRaw } : {}),
   };
-  await supabase.post("/users", [payload], {
-    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-    params: { on_conflict: "line_user_id" },
-  });
+  try {
+    await supabase.post("/users", [payload], {
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      params: { on_conflict: "line_user_id" },
+    });
+  } catch (err) {
+    if (!isMissingColumnError(err)) throw err;
+    const minimalPayload = { ...payload };
+    delete minimalPayload.profile;
+    await supabase.post("/users", [minimalPayload], {
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      params: { on_conflict: "line_user_id" },
+    });
+  }
 };
 
 export const dbStatus = () => ({
@@ -120,7 +132,7 @@ export const getSession = async (userId) => {
 export const updateSession = async ({ userId, step = "READY", sessionData = {} }) => {
   if (isSupabaseConfigured()) {
     try {
-      await ensureUser({ userId, name: sessionData?.name, title: sessionData?.title, goal: sessionData?.goal, calorieTarget: sessionData?.calorieTarget });
+      await ensureUser({ userId, name: sessionData?.name, title: sessionData?.title, goal: sessionData?.goal, calorieTarget: sessionData?.calorieTarget, stats: sessionData?.stats });
       const res = await supabase.post(
         "/user_sessions",
         [{ user_id: userId, step, data: sessionData, updated_at: new Date().toISOString() }],
@@ -139,17 +151,40 @@ export const updateSession = async ({ userId, step = "READY", sessionData = {} }
 export const getProfile = async (userId) => {
   if (isSupabaseConfigured()) {
     try {
-      const res = await supabase.get("/users", {
-        params: { line_user_id: `eq.${userId}`, select: "line_user_id,display_name,title,goal,calorie_target", limit: 1 },
-      });
+      let res;
+      try {
+        res = await supabase.get("/users", {
+          params: { line_user_id: `eq.${userId}`, select: "line_user_id,display_name,title,goal,calorie_target,profile", limit: 1 },
+        });
+      } catch (err) {
+        if (!isMissingColumnError(err)) throw err;
+        res = await supabase.get("/users", {
+          params: { line_user_id: `eq.${userId}`, select: "line_user_id,display_name,title,goal,calorie_target", limit: 1 },
+        });
+      }
       const row = Array.isArray(res.data) ? res.data[0] : null;
-      if (row) return { status: "success", source: "supabase", name: row.display_name || "", title: row.title || "", goal: row.goal || "", calorieTarget: toNumber(row.calorie_target, 2050) };
+      if (row) return { status: "success", source: "supabase", name: row.display_name || "", title: row.title || "", stats: row.profile?.stats || "", goal: row.goal || "", calorieTarget: toNumber(row.calorie_target, 2050) };
       return { status: "not_found", source: "supabase" };
     } catch (err) {
       console.warn("[PaeCalDB] GET_PROFILE Supabase failed", err?.response?.data || err.message || err);
     }
   }
   const sheet = await sheetFallback({ action: "GET_PROFILE", userId });
+  return { ...(sheet || {}), source: "sheet" };
+};
+
+export const saveProfile = async ({ userId, name = "", title = "", stats = "", goal = "", calorieTarget = 2050 } = {}) => {
+  if (isSupabaseConfigured()) {
+    try {
+      await ensureUser({ userId, name, title, stats, goal, calorieTarget });
+      await updateSession({ userId, step: "READY", sessionData: { name, title, stats, goal, calorieTarget } });
+      fireAndForgetSheet({ action: "SAVE_PROFILE", userId, name, title, stats, goal, calorieTarget }, "SAVE_PROFILE sheetBackup");
+      return { status: "success", source: "supabase", name, title, stats, goal, calorieTarget };
+    } catch (err) {
+      console.warn("[PaeCalDB] SAVE_PROFILE Supabase failed", err?.response?.data || err.message || err);
+    }
+  }
+  const sheet = await sheetFallback({ action: "SAVE_PROFILE", userId, name, title, stats, goal, calorieTarget });
   return { ...(sheet || {}), source: "sheet" };
 };
 
@@ -236,6 +271,49 @@ export const logFood = async (payload = {}) => {
   }
   const sheetResult = await sheetFallback({ action: "LOG_FOOD", ...payload });
   return { ...(sheetResult || {}), source: "sheet", supabaseWrite: "failed_or_skipped" };
+};
+
+export const getLastMeal = async (userId) => {
+  if (isSupabaseConfigured()) {
+    try {
+      const today = bangkokDate();
+      const res = await supabase.get("/meals", {
+        params: { user_id: `eq.${userId}`, meal_date: `eq.${today}`, select: "id,menu_name,kcal,carb,protein,fat,sugar,created_at,raw", order: "created_at.desc", limit: 1 },
+      });
+      const row = Array.isArray(res.data) ? res.data[0] : null;
+      if (!row) return { status: "not_found", source: "supabase", meal: null };
+      return { status: "success", source: "supabase", meal: { id: row.id, menuName: row.menu_name, kcal: row.kcal, carb: row.carb, protein: row.protein, fat: row.fat, sugar: row.sugar, createdAt: row.created_at, raw: row.raw } };
+    } catch (err) {
+      console.warn("[PaeCalDB] GET_LAST_MEAL Supabase failed", err?.response?.data || err.message || err);
+    }
+  }
+  const sheet = await sheetFallback({ action: "GET_LAST_MEAL", userId });
+  return { ...(sheet || {}), source: "sheet" };
+};
+
+export const updateLastMeal = async (payload = {}) => {
+  const userId = payload.userId;
+  if (isSupabaseConfigured() && userId) {
+    try {
+      const latest = await getLastMeal(userId);
+      const mealId = latest?.meal?.id;
+      if (!mealId) return { status: "not_found", source: "supabase" };
+      const updatePayload = {};
+      if (payload.menuName) updatePayload.menu_name = payload.menuName;
+      if (payload.kcal !== undefined) updatePayload.kcal = toNumber(payload.kcal, 0);
+      if (payload.carb !== undefined) updatePayload.carb = toNumber(payload.carb, 0);
+      if (payload.protein !== undefined) updatePayload.protein = toNumber(payload.protein, 0);
+      if (payload.fat !== undefined) updatePayload.fat = toNumber(payload.fat, 0);
+      if (payload.sugar !== undefined) updatePayload.sugar = toNumber(payload.sugar, 0);
+      if (!Object.keys(updatePayload).length) return { status: "skipped", source: "supabase", reason: "empty_update" };
+      await supabase.patch("/meals", updatePayload, { params: { id: `eq.${mealId}` } });
+      return { status: "success", source: "supabase", meal: { ...latest.meal, ...payload } };
+    } catch (err) {
+      console.warn("[PaeCalDB] UPDATE_LAST_MEAL Supabase failed", err?.response?.data || err.message || err);
+    }
+  }
+  const sheet = await sheetFallback({ action: "UPDATE_LAST_MEAL", ...payload });
+  return { ...(sheet || {}), source: "sheet" };
 };
 
 const upsertCandidate = async ({ candidate, foodData = {}, source = "openai", example = "", itemCount = 1 }) => {
