@@ -265,3 +265,126 @@ const writeMealToSupabase = async (payload = {}) => {
     return { status: "success", source: "supabase", schemaMode: "minimal", meal: Array.isArray(res.data) ? res.data[0] : null };
   }
 };
+
+export const logFood = async (payload = {}) => {
+  if (isSupabaseWriteReady()) {
+    try {
+      const writeResult = await writeMealToSupabase(payload);
+      fireAndForgetSheet({ action: "LOG_FOOD", ...payload }, "LOG_FOOD sheetBackup");
+      const summary = await getDailySummary(payload.userId);
+      console.log(`[PaeCalDB] LOG_FOOD supabase-first ok menu=${payload.menuName || ""} kcal=${payload.kcal || 0} portion=${payload.portionLevel || ""} schema=${writeResult.schemaMode}`);
+      return { ...(summary || {}), source: "supabase", supabaseWrite: "success", supabaseSchemaMode: writeResult.schemaMode, supabaseMealId: writeResult.meal?.id || "" };
+    } catch (err) { console.error("[PaeCalDB] LOG_FOOD Supabase-first failed", err?.response?.data || err.message || err); }
+  }
+  const sheetResult = await sheetFallback({ action: "LOG_FOOD", ...payload });
+  return { ...(sheetResult || {}), source: "sheet", supabaseWrite: "failed_or_skipped" };
+};
+
+export const getLastMeal = async (userId) => {
+  if (isSupabaseConfigured()) {
+    try {
+      const today = bangkokDate();
+      const res = await supabase.get("/meals", {
+        params: { user_id: `eq.${userId}`, meal_date: `eq.${today}`, select: "id,menu_name,kcal,carb,protein,fat,sugar,created_at,raw", order: "created_at.desc", limit: 1 },
+      });
+      const row = Array.isArray(res.data) ? res.data[0] : null;
+      if (!row) return { status: "not_found", source: "supabase", meal: null };
+      return { status: "success", source: "supabase", meal: { id: row.id, menuName: row.menu_name, kcal: row.kcal, carb: row.carb, protein: row.protein, fat: row.fat, sugar: row.sugar, createdAt: row.created_at, raw: row.raw } };
+    } catch (err) {
+      console.warn("[PaeCalDB] GET_LAST_MEAL Supabase failed", err?.response?.data || err.message || err);
+    }
+  }
+  const sheet = await sheetFallback({ action: "GET_LAST_MEAL", userId });
+  return { ...(sheet || {}), source: "sheet" };
+};
+
+export const updateLastMeal = async (payload = {}) => {
+  const userId = payload.userId;
+  if (isSupabaseConfigured() && userId) {
+    try {
+      const latest = await getLastMeal(userId);
+      const mealId = latest?.meal?.id;
+      if (!mealId) return { status: "not_found", source: "supabase" };
+      const updatePayload = {};
+      if (payload.menuName) updatePayload.menu_name = payload.menuName;
+      if (payload.kcal !== undefined) updatePayload.kcal = toNumber(payload.kcal, 0);
+      if (payload.carb !== undefined) updatePayload.carb = toNumber(payload.carb, 0);
+      if (payload.protein !== undefined) updatePayload.protein = toNumber(payload.protein, 0);
+      if (payload.fat !== undefined) updatePayload.fat = toNumber(payload.fat, 0);
+      if (payload.sugar !== undefined) updatePayload.sugar = toNumber(payload.sugar, 0);
+      if (!Object.keys(updatePayload).length) return { status: "skipped", source: "supabase", reason: "empty_update" };
+      await supabase.patch("/meals", updatePayload, { params: { id: `eq.${mealId}` } });
+      return { status: "success", source: "supabase", meal: { ...latest.meal, ...payload } };
+    } catch (err) {
+      console.warn("[PaeCalDB] UPDATE_LAST_MEAL Supabase failed", err?.response?.data || err.message || err);
+    }
+  }
+  const sheet = await sheetFallback({ action: "UPDATE_LAST_MEAL", ...payload });
+  return { ...(sheet || {}), source: "sheet" };
+};
+
+const upsertCandidate = async ({ candidate, foodData = {}, source = "openai", example = "", itemCount = 1 }) => {
+  const key = candidate.canonicalKey || candidate.normalized;
+  const existedRes = await supabase.get("/food_term_candidates", { params: { term: `eq.${key}`, select: "term,hit_count,examples,matched_aliases", limit: 1 } });
+  const existed = Array.isArray(existedRes.data) ? existedRes.data[0] : null;
+  const previousExamples = Array.isArray(existed?.examples) ? existed.examples : [];
+  const previousAliases = Array.isArray(existed?.matched_aliases) ? existed.matched_aliases : [];
+  const nextAliases = [...new Set([...previousAliases, ...(candidate.matchedAliases || [])])].slice(0, 20);
+  const payload = {
+    term: key,
+    normalized_term: candidate.normalized,
+    raw_term: candidate.raw || example || key,
+    canonical_key: key,
+    matched_aliases: nextAliases,
+    item_count: itemCount,
+    hit_count: existed ? toNumber(existed.hit_count, 0) + 1 : 1,
+    last_menu_name: normalizeText(foodData.menuName, key),
+    last_kcal: toNumber(foodData.kcal, 0),
+    last_carb: toNumber(foodData.carb, 0),
+    last_protein: toNumber(foodData.protein, 0),
+    last_fat: toNumber(foodData.fat, 0),
+    last_sugar: toNumber(foodData.sugar, 0),
+    last_confidence: normalizeText(foodData.confidence, "medium"),
+    last_source: source,
+    examples: [...previousExamples.slice(-4), { text: example || candidate.raw || key, at: new Date().toISOString() }],
+    last_seen_at: new Date().toISOString(),
+  };
+  await supabase.post("/food_term_candidates", [payload], { headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, params: { on_conflict: "term" } });
+  console.log(`[PaeCalDB] foodTermCandidate logged key=${key} hits=${payload.hit_count}`);
+};
+
+export const logFoodTermCandidate = async ({ term, foodData = {}, source = "openai", example = "" } = {}) => {
+  if (!FOOD_TERM_LEARNING_ENABLED || !isSupabaseConfigured()) return { status: "skipped", source: "disabled" };
+  const candidates = extractFoodTermCandidates(term);
+  if (!candidates.length) return { status: "skipped", source: "empty" };
+  try {
+    await Promise.all(candidates.slice(0, 8).map((candidate) => upsertCandidate({ candidate, foodData, source, example: example || term, itemCount: candidates.length })));
+    return { status: "success", source: "supabase", count: candidates.length };
+  } catch (err) {
+    if (isMissingColumnError(err)) {
+      console.warn("[PaeCalDB] foodTermCandidate skipped because migration 004 is not run yet");
+      return { status: "skipped", source: "missing_migration" };
+    }
+    console.warn("[PaeCalDB] foodTermCandidate failed", err?.response?.data || err.message || err);
+    return { status: "failed", source: "supabase" };
+  }
+};
+
+export const deleteLastMeal = async (userId) => {
+  if (isSupabaseDeleteReady()) {
+    try {
+      const today = bangkokDate();
+      const lastMealRes = await supabase.get("/meals", { params: { user_id: `eq.${userId}`, meal_date: `eq.${today}`, select: "id,menu_name,kcal", order: "created_at.desc", limit: 1 } });
+      const lastMeal = Array.isArray(lastMealRes.data) ? lastMealRes.data[0] : null;
+      if (!lastMeal?.id) return { status: "not_found", source: "supabase" };
+      await supabase.delete("/meals", { params: { id: `eq.${lastMeal.id}` } });
+      return { status: "success", source: "supabase_fast_delete", deletedMeal: { id: lastMeal.id, menuName: lastMeal.menu_name, kcal: lastMeal.kcal } };
+    } catch (err) {
+      console.error("[PaeCalDB] DELETE_LAST_MEAL Supabase failed", err?.response?.data || err.message || err);
+      if (!SHEET_DELETE_FALLBACK_ENABLED) return { status: "error", source: "supabase_delete_failed" };
+    }
+  }
+  if (!SHEET_DELETE_FALLBACK_ENABLED) return { status: "not_found", source: "no_sheet_delete_fallback" };
+  const sheet = await sheetFallback({ action: "DELETE_LAST_MEAL", userId });
+  return { ...(sheet || {}), source: "sheet" };
+};
