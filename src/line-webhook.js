@@ -5,6 +5,7 @@ import * as line from "@line/bot-sdk";
 import { handleImageMessage } from "./handlers/imageHandler.js";
 import { handleMealChoiceText } from "./handlers/mealChoiceHandler.js";
 import { handleFastFoodText } from "./handlers/fastFoodTextHandler.js";
+import { handleProfileQuestionText } from "./handlers/profileQuestionHandler.js";
 import {
   handleRichMenuPostback,
   logTiming,
@@ -78,6 +79,12 @@ router.post("/webhook", line.middleware({ channelSecret: process.env.LINE_CHANNE
         const handledFastFood = await handleFastFoodText(event);
         if (handledFastFood) {
           logTiming("event:textFastFood", eventStart);
+          continue;
+        }
+
+        const handledProfileQuestion = await handleProfileQuestionText(event);
+        if (handledProfileQuestion) {
+          logTiming("event:textProfileQuestion", eventStart);
           continue;
         }
 
