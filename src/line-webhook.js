@@ -5,11 +5,18 @@ import * as line from "@line/bot-sdk";
 import { handleTextMessage } from "./handlers/textHandler.js";
 import { handleImageMessage } from "./handlers/imageHandler.js";
 import {
+  replyFlex,
   replyPaeLaewGuideCard,
   replySendPhotoGuide,
   replyText,
   replyTypeFoodPrompt,
 } from "./services/line.js";
+import { postToSheet } from "./services/sheet.js";
+import {
+  buildFoodAuraFlexMessage,
+  buildFoodWrappedFlexMessage,
+  buildNutritionFlexMessage,
+} from "./utils/richMenuFlex.js";
 import { setupRichMenus } from "../scripts/setup-richmenus.js";
 
 const app = express();
@@ -17,11 +24,7 @@ const router = Router();
 
 const RICH_MENU_TEXT_ACTIONS = {
   MEAL_SUGGESTION: "กินอะไรดี",
-  DAILY_SUMMARY: "แคลวันนี้",
-  DAILY_FOOD_WRAPPED: "แคลวันนี้",
-  FOOD_AURA: "วันนี้อาหารฟ้องว่า",
   TODAY_CALORIES: "แคลวันนี้",
-  TODAY_NUTRITION: "แคลวันนี้",
   SET_GOAL: "ตั้งเป้าสุขภาพ",
   EDIT_LAST_MEAL: "แก้มื้อล่าสุด",
   DELETE_LAST_MEAL: "ลบมื้อล่าสุด",
@@ -32,6 +35,11 @@ const SILENT_RICH_MENU_ACTIONS = new Set([
   "SWITCH_TO_CAL_MENU",
   "open_keyboard",
 ]);
+
+const nowMs = () => Date.now();
+const logTiming = (label, start, extra = "") => {
+  console.log(`[PaeCalTiming] ${label} ${Date.now() - start}ms${extra ? ` ${extra}` : ""}`);
+};
 
 const parsePostbackData = (data) => {
   const raw = String(data || "").trim();
@@ -53,11 +61,38 @@ const parsePostbackData = (data) => {
 };
 
 const routeTextAction = async (event, text) => {
+  const start = nowMs();
   await handleTextMessage({
     ...event,
     type: "message",
     message: { type: "text", text },
   });
+  logTiming("richMenu:routeTextAction", start, `text=${text}`);
+};
+
+const getDailySummaryForRichMenu = async (userId, action) => {
+  const start = nowMs();
+  const summary = await postToSheet({ action: "GET_DAILY_SUMMARY", userId });
+  logTiming("richMenu:getDailySummary", start, `action=${action}`);
+  return summary || {};
+};
+
+const replyFoodWrapped = async ({ replyToken, userId, action }) => {
+  const start = nowMs();
+  const summary = await getDailySummaryForRichMenu(userId, action);
+  const flex = action === "FOOD_AURA"
+    ? buildFoodAuraFlexMessage({ summary })
+    : buildFoodWrappedFlexMessage({ summary });
+
+  await replyFlex(replyToken, flex);
+  logTiming("richMenu:replyVibeFlex", start, `action=${action}`);
+};
+
+const replyNutrition = async ({ replyToken, userId }) => {
+  const start = nowMs();
+  const summary = await getDailySummaryForRichMenu(userId, "TODAY_NUTRITION");
+  await replyFlex(replyToken, buildNutritionFlexMessage({ summary }));
+  logTiming("richMenu:replyNutritionFlex", start);
 };
 
 router.post(
@@ -71,11 +106,13 @@ router.post(
     const events = req.body.events || [];
 
     for (const event of events) {
+      const eventStart = nowMs();
       try {
         if (!event.source?.userId) continue;
 
         if (event.type === "follow") {
           await routeTextAction(event, "__FOLLOW__");
+          logTiming("event:follow", eventStart);
           continue;
         }
 
@@ -89,31 +126,53 @@ router.post(
           });
 
           if (SILENT_RICH_MENU_ACTIONS.has(postback.action)) {
+            logTiming("richMenu:silent", eventStart, `action=${postback.action}`);
             continue;
           }
 
           if (postback.action === "OPEN_PAELAEW_GUIDE") {
             await replyPaeLaewGuideCard(event.replyToken);
+            logTiming("richMenu:guideCard", eventStart, `action=${postback.action}`);
             continue;
           }
 
           if (postback.action === "TYPE_FOOD_PROMPT") {
             await replyTypeFoodPrompt(event.replyToken);
+            logTiming("richMenu:typeFoodPrompt", eventStart);
             continue;
           }
 
           if (postback.action === "SEND_PHOTO_GUIDE") {
             await replySendPhotoGuide(event.replyToken);
+            logTiming("richMenu:sendPhotoGuide", eventStart);
+            continue;
+          }
+
+          if (postback.action === "DAILY_FOOD_WRAPPED" || postback.action === "FOOD_AURA" || postback.action === "DAILY_SUMMARY") {
+            await replyFoodWrapped({
+              replyToken: event.replyToken,
+              userId: event.source.userId,
+              action: postback.action,
+            });
+            logTiming("richMenu:vibeAction", eventStart, `action=${postback.action}`);
+            continue;
+          }
+
+          if (postback.action === "TODAY_NUTRITION") {
+            await replyNutrition({ replyToken: event.replyToken, userId: event.source.userId });
+            logTiming("richMenu:nutritionAction", eventStart);
             continue;
           }
 
           const mappedText = RICH_MENU_TEXT_ACTIONS[postback.action];
           if (mappedText) {
             await routeTextAction(event, mappedText);
+            logTiming("richMenu:textAction", eventStart, `action=${postback.action}`);
             continue;
           }
 
           console.log("Unhandled LINE postback:", postback.raw);
+          logTiming("richMenu:unhandled", eventStart, `action=${postback.action}`);
           continue;
         }
 
@@ -121,15 +180,18 @@ router.post(
 
         if (event.message?.type === "text") {
           await handleTextMessage(event);
+          logTiming("event:text", eventStart);
           continue;
         }
 
         if (event.message?.type === "image") {
           await handleImageMessage(event);
+          logTiming("event:image", eventStart);
           continue;
         }
       } catch (err) {
         console.error("LINE Webhook Error:", err?.response?.data || err);
+        logTiming("event:error", eventStart);
 
         try {
           if (event.replyToken) {
@@ -180,6 +242,7 @@ app.get("/admin/setup-richmenus", async (req, res) => {
 
   try {
     const logs = [];
+    const setupStart = nowMs();
     const result = await setupRichMenus({
       logger: {
         log: (message) => {
@@ -188,6 +251,7 @@ app.get("/admin/setup-richmenus", async (req, res) => {
         },
       },
     });
+    logTiming("admin:setupRichMenus", setupStart);
 
     return res.json({
       ok: true,
