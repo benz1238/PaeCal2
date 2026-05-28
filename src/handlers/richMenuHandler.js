@@ -26,11 +26,15 @@ import {
 } from "../utils/richMenuSummaryCache.js";
 
 const ACTION_LOCK_TTL_MS = Number(process.env.RICH_MENU_ACTION_LOCK_TTL_MS || 3500);
+const SWITCH_MENU_ACTION_LOCK_TTL_MS = Number(process.env.RICH_MENU_SWITCH_LOCK_TTL_MS || 1000);
 const actionLocks = new Map();
 
-const SILENT_RICH_MENU_ACTIONS = new Set([
+const SWITCH_RICH_MENU_ACTIONS = new Set([
   "SWITCH_TO_VIBE_MENU",
   "SWITCH_TO_CAL_MENU",
+]);
+
+const SILENT_RICH_MENU_ACTIONS = new Set([
   "open_keyboard",
 ]);
 
@@ -49,6 +53,10 @@ export const parsePostbackData = (data) => {
   }
 };
 
+const getActionLockTtlMs = (action) => (
+  SWITCH_RICH_MENU_ACTIONS.has(action) ? SWITCH_MENU_ACTION_LOCK_TTL_MS : ACTION_LOCK_TTL_MS
+);
+
 const shouldSkipDuplicateAction = (userId, action) => {
   if (!userId || !action) return false;
   if (SILENT_RICH_MENU_ACTIONS.has(action)) return false;
@@ -58,7 +66,7 @@ const shouldSkipDuplicateAction = (userId, action) => {
   const lockedUntil = actionLocks.get(key) || 0;
   if (lockedUntil > now) return true;
 
-  actionLocks.set(key, now + ACTION_LOCK_TTL_MS);
+  actionLocks.set(key, now + getActionLockTtlMs(action));
   return false;
 };
 
@@ -240,11 +248,12 @@ export const handleRichMenuPostback = async ({ event, postback, eventStart }) =>
   const action = postback.action;
 
   if (shouldSkipDuplicateAction(userId, action)) {
-    logTiming("richMenu:debounced", eventStart, `action=${action}`);
+    const label = SWITCH_RICH_MENU_ACTIONS.has(action) ? "richMenu:switchDebounced" : "richMenu:debounced";
+    logTiming(label, eventStart, `action=${action}`);
     return true;
   }
 
-  if (SILENT_RICH_MENU_ACTIONS.has(action)) {
+  if (SWITCH_RICH_MENU_ACTIONS.has(action) || SILENT_RICH_MENU_ACTIONS.has(action)) {
     logTiming("richMenu:silent", eventStart, `action=${action}`);
     return true;
   }
