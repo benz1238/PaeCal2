@@ -1,36 +1,36 @@
-import { DEFAULT_CALORIE_TARGET, isFemaleText } from "./helpers.js";
+import { DEFAULT_CALORIE_TARGET } from "./helpers.js";
 import { getLineDisplayName } from "../services/line.js";
 import { getProfile as getDbProfile, updateSession } from "../services/db.js";
 
-export const getTitle = (gender, age, name = "") => {
-  const ageNum = parseInt(age, 10) || 0;
-  const cleanName = String(name || "").trim();
-  const female = isFemaleText(gender);
+const BOT_ROLE_PREFIX_PATTERN = /^(แปะ|อาแปะ|เฮีย|เจ๊|ซ้อ|อาตี๋|ตี๋|หมวย)+/i;
 
-  if (ageNum >= 30) {
-    return female ? `ซ้อ${cleanName}สุดสวย` : `เฮีย${cleanName}`;
-  }
+const cleanUserName = (value = "") => String(value || "")
+  .trim()
+  .replace(BOT_ROLE_PREFIX_PATTERN, "")
+  .trim();
 
-  return female ? `หมวย${cleanName}` : `ตี๋${cleanName}`;
+const cleanDisplayTitle = (value = "") => {
+  const text = String(value || "").trim();
+  if (!text) return "ลื้อ";
+
+  const cleaned = cleanUserName(text);
+  if (!cleaned) return "ลื้อ";
+
+  return cleaned;
 };
+
+export const getTitle = (_gender, _age, name = "") => cleanDisplayTitle(name);
 
 export const getProfile = async (userId) => getDbProfile(userId);
 
-export const buildTitleFromProfile = ({ name, stats, fallbackTitle = "" }) => {
-  if (fallbackTitle && fallbackTitle !== "เฮีย") {
-    return fallbackTitle;
-  }
+export const buildTitleFromProfile = ({ name, stats: _stats, fallbackTitle = "" }) => {
+  const cleanedName = cleanUserName(name);
+  const cleanedFallback = cleanDisplayTitle(fallbackTitle);
 
-  if (name && stats) {
-    const parts = String(stats).trim().split(/\s+/);
-    return getTitle(parts[0], parts[1], name);
-  }
+  if (cleanedName) return cleanedName;
+  if (cleanedFallback && cleanedFallback !== "ลื้อ") return cleanedFallback;
 
-  if (name) {
-    return `เฮีย${name}`;
-  }
-
-  return "เฮีย";
+  return "ลื้อ";
 };
 
 export const syncSessionFromProfile = async ({
@@ -41,12 +41,12 @@ export const syncSessionFromProfile = async ({
   const sessionData = session?.data || {};
   const profile = await getProfile(userId);
 
-  let name = sessionData.name || profile.name || "";
+  let name = cleanUserName(sessionData.name || profile.name || "");
   let stats = sessionData.stats || profile.stats || "";
-  let title = sessionData.title || profile.title || "";
+  let title = cleanDisplayTitle(sessionData.title || profile.title || "");
 
   if (!name) {
-    name = await getLineDisplayName(userId);
+    name = cleanUserName(await getLineDisplayName(userId));
   }
 
   title = buildTitleFromProfile({
@@ -78,9 +78,9 @@ export const syncSessionFromProfile = async ({
 };
 
 export const getDisplayTitle = async ({ userId, session }) => {
-  const currentTitle = session?.data?.title;
+  const currentTitle = cleanDisplayTitle(session?.data?.title);
 
-  if (currentTitle && currentTitle !== "เฮีย") {
+  if (currentTitle && currentTitle !== "ลื้อ") {
     return currentTitle;
   }
 
@@ -89,5 +89,5 @@ export const getDisplayTitle = async ({ userId, session }) => {
     session,
   });
 
-  return synced.title || "เฮีย";
+  return cleanDisplayTitle(synced.title || synced.name || "ลื้อ");
 };
