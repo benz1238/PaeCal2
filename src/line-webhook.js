@@ -12,6 +12,7 @@ import {
   replyTypeFoodPrompt,
 } from "./services/line.js";
 import { postToSheet } from "./services/sheet.js";
+import { buildMealSuggestionCarouselFlexMessage } from "./utils/mealSuggestionFlex.js";
 import {
   buildCalorieSummaryFlexMessage,
   buildFoodAuraFlexMessage,
@@ -44,17 +45,9 @@ const parsePostbackData = (data) => {
 
   try {
     const params = new URLSearchParams(raw);
-    return {
-      raw,
-      action: params.get("action") || "",
-      params,
-    };
+    return { raw, action: params.get("action") || "", params };
   } catch (err) {
-    return {
-      raw,
-      action: "",
-      params: new URLSearchParams(),
-    };
+    return { raw, action: "", params: new URLSearchParams() };
   }
 };
 
@@ -85,11 +78,7 @@ const clearExpiredCaches = () => {
 
 const routeTextAction = async (event, text) => {
   const start = nowMs();
-  await handleTextMessage({
-    ...event,
-    type: "message",
-    message: { type: "text", text },
-  });
+  await handleTextMessage({ ...event, type: "message", message: { type: "text", text } });
   logTiming("richMenu:routeTextAction", start, `text=${text}`);
 };
 
@@ -106,7 +95,6 @@ const invalidateUserSummaryCache = (userId) => {
 
 const getDailySummaryForRichMenu = async (userId, action) => {
   clearExpiredCaches();
-
   const cached = summaryCache.get(userId);
   if (cached && cached.expiresAt > nowMs()) {
     console.log(`[PaeCalTiming] cache:GET_DAILY_SUMMARY 0ms action=${action} hit=true`);
@@ -114,10 +102,7 @@ const getDailySummaryForRichMenu = async (userId, action) => {
   }
 
   const summary = await sheetAction({ action: "GET_DAILY_SUMMARY", userId }, `GET_DAILY_SUMMARY action=${action}`);
-  summaryCache.set(userId, {
-    summary: summary || {},
-    expiresAt: nowMs() + SUMMARY_CACHE_TTL_MS,
-  });
+  summaryCache.set(userId, { summary: summary || {}, expiresAt: nowMs() + SUMMARY_CACHE_TTL_MS });
   return summary || {};
 };
 
@@ -127,7 +112,6 @@ const replyFoodWrapped = async ({ replyToken, userId, action }) => {
   const flex = action === "FOOD_AURA"
     ? buildFoodAuraFlexMessage({ summary })
     : buildFoodWrappedFlexMessage({ summary });
-
   await replyFlex(replyToken, flex);
   logTiming("richMenu:replyVibeFlex", start, `action=${action}`);
 };
@@ -144,6 +128,12 @@ const replyCalorieSummary = async ({ replyToken, userId }) => {
   const summary = await getDailySummaryForRichMenu(userId, "TODAY_CALORIES");
   await replyFlex(replyToken, buildCalorieSummaryFlexMessage({ summary }));
   logTiming("richMenu:replyCalorieSummaryFlex", start);
+};
+
+const replyMealSuggestionFast = async ({ replyToken }) => {
+  const start = nowMs();
+  await replyFlex(replyToken, buildMealSuggestionCarouselFlexMessage());
+  logTiming("richMenu:mealSuggestionCarousel", start);
 };
 
 const replySetGoalFast = async ({ replyToken, userId }) => {
@@ -223,7 +213,6 @@ const replyDeleteLastMealFast = async ({ replyToken, userId }) => {
   const start = nowMs();
   const deleted = await sheetAction({ action: "DELETE_LAST_MEAL", userId }, "DELETE_LAST_MEAL:richMenu");
   invalidateUserSummaryCache(userId);
-
   const notFound = deleted.status === "not_found";
   const total = deleted.todayCalories ?? deleted.totalToday ?? 0;
   const target = deleted.calorieTarget || 2050;
@@ -243,9 +232,7 @@ const replyDeleteLastMealFast = async ({ replyToken, userId }) => {
           { type: "text", text: notFound ? "ยังไม่มีมื้อให้ลบ 😅" : "ลบมื้อล่าสุดแล้ว 🗑️", size: "xl", weight: "bold", color: "#1F2937", wrap: true },
           {
             type: "text",
-            text: notFound
-              ? "แปะยังไม่เจอมื้อล่าสุดในระบบ ส่งรูปอาหารมาก่อน แล้วค่อยลบได้จ้า"
-              : `ลบ: ${deleted.deletedMeal?.menuName || "มื้อล่าสุด"}`,
+            text: notFound ? "แปะยังไม่เจอมื้อล่าสุดในระบบ ส่งรูปอาหารมาก่อน แล้วค่อยลบได้จ้า" : `ลบ: ${deleted.deletedMeal?.menuName || "มื้อล่าสุด"}`,
             size: "sm",
             color: "#7C2D12",
             wrap: true,
@@ -270,149 +257,118 @@ const replyDeleteLastMealFast = async ({ replyToken, userId }) => {
   logTiming("richMenu:deleteLastMealFast", start, notFound ? "status=not_found" : "status=deleted");
 };
 
-router.post(
-  "/webhook",
-  line.middleware({ channelSecret: process.env.LINE_CHANNEL_SECRET }),
-  async (req, res) => {
-    res.status(200).json({ ok: true });
+router.post("/webhook", line.middleware({ channelSecret: process.env.LINE_CHANNEL_SECRET }), async (req, res) => {
+  res.status(200).json({ ok: true });
+  const events = req.body.events || [];
 
-    const events = req.body.events || [];
+  for (const event of events) {
+    const eventStart = nowMs();
+    try {
+      if (!event.source?.userId) continue;
+      if (event.type === "follow") {
+        await routeTextAction(event, "__FOLLOW__");
+        logTiming("event:follow", eventStart);
+        continue;
+      }
 
-    for (const event of events) {
-      const eventStart = nowMs();
+      if (event.type === "postback") {
+        const postback = parsePostbackData(event.postback?.data);
+        const userId = event.source.userId;
+        console.log("LINE Postback received:", { userId, data: postback.raw, action: postback.action });
+
+        if (shouldSkipDuplicateAction(userId, postback.action)) {
+          logTiming("richMenu:debounced", eventStart, `action=${postback.action}`);
+          continue;
+        }
+        if (SILENT_RICH_MENU_ACTIONS.has(postback.action)) {
+          logTiming("richMenu:silent", eventStart, `action=${postback.action}`);
+          continue;
+        }
+        if (postback.action === "OPEN_PAELAEW_GUIDE") {
+          await replyPaeLaewGuideCard(event.replyToken);
+          logTiming("richMenu:guideCard", eventStart, `action=${postback.action}`);
+          continue;
+        }
+        if (postback.action === "TYPE_FOOD_PROMPT") {
+          await replyTypeFoodPrompt(event.replyToken);
+          logTiming("richMenu:typeFoodPrompt", eventStart);
+          continue;
+        }
+        if (postback.action === "SEND_PHOTO_GUIDE") {
+          await replySendPhotoGuide(event.replyToken);
+          logTiming("richMenu:sendPhotoGuide", eventStart);
+          continue;
+        }
+        if (postback.action === "DAILY_FOOD_WRAPPED" || postback.action === "FOOD_AURA" || postback.action === "DAILY_SUMMARY") {
+          await replyFoodWrapped({ replyToken: event.replyToken, userId, action: postback.action });
+          logTiming("richMenu:vibeAction", eventStart, `action=${postback.action}`);
+          continue;
+        }
+        if (postback.action === "TODAY_CALORIES") {
+          await replyCalorieSummary({ replyToken: event.replyToken, userId });
+          logTiming("richMenu:calorieAction", eventStart);
+          continue;
+        }
+        if (postback.action === "TODAY_NUTRITION") {
+          await replyNutrition({ replyToken: event.replyToken, userId });
+          logTiming("richMenu:nutritionAction", eventStart);
+          continue;
+        }
+        if (postback.action === "SET_GOAL") {
+          await replySetGoalFast({ replyToken: event.replyToken, userId });
+          logTiming("richMenu:setGoalAction", eventStart);
+          continue;
+        }
+        if (postback.action === "EDIT_LAST_MEAL") {
+          await replyEditMealFast({ replyToken: event.replyToken });
+          logTiming("richMenu:editMealAction", eventStart);
+          continue;
+        }
+        if (postback.action === "DELETE_LAST_MEAL") {
+          await replyDeleteLastMealFast({ replyToken: event.replyToken, userId });
+          logTiming("richMenu:deleteMealAction", eventStart);
+          continue;
+        }
+        if (postback.action === "MEAL_SUGGESTION") {
+          await replyMealSuggestionFast({ replyToken: event.replyToken });
+          logTiming("richMenu:mealSuggestionAction", eventStart);
+          continue;
+        }
+
+        console.log("Unhandled LINE postback:", postback.raw);
+        logTiming("richMenu:unhandled", eventStart, `action=${postback.action}`);
+        continue;
+      }
+
+      if (event.type !== "message") continue;
+      if (event.message?.type === "text") {
+        await handleTextMessage(event);
+        logTiming("event:text", eventStart);
+        continue;
+      }
+      if (event.message?.type === "image") {
+        await handleImageMessage(event);
+        logTiming("event:image", eventStart);
+      }
+    } catch (err) {
+      console.error("LINE Webhook Error:", err?.response?.data || err);
+      logTiming("event:error", eventStart);
       try {
-        if (!event.source?.userId) continue;
-
-        if (event.type === "follow") {
-          await routeTextAction(event, "__FOLLOW__");
-          logTiming("event:follow", eventStart);
-          continue;
-        }
-
-        if (event.type === "postback") {
-          const postback = parsePostbackData(event.postback?.data);
-          const userId = event.source.userId;
-
-          console.log("LINE Postback received:", { userId, data: postback.raw, action: postback.action });
-
-          if (shouldSkipDuplicateAction(userId, postback.action)) {
-            logTiming("richMenu:debounced", eventStart, `action=${postback.action}`);
-            continue;
-          }
-
-          if (SILENT_RICH_MENU_ACTIONS.has(postback.action)) {
-            logTiming("richMenu:silent", eventStart, `action=${postback.action}`);
-            continue;
-          }
-
-          if (postback.action === "OPEN_PAELAEW_GUIDE") {
-            await replyPaeLaewGuideCard(event.replyToken);
-            logTiming("richMenu:guideCard", eventStart, `action=${postback.action}`);
-            continue;
-          }
-
-          if (postback.action === "TYPE_FOOD_PROMPT") {
-            await replyTypeFoodPrompt(event.replyToken);
-            logTiming("richMenu:typeFoodPrompt", eventStart);
-            continue;
-          }
-
-          if (postback.action === "SEND_PHOTO_GUIDE") {
-            await replySendPhotoGuide(event.replyToken);
-            logTiming("richMenu:sendPhotoGuide", eventStart);
-            continue;
-          }
-
-          if (postback.action === "DAILY_FOOD_WRAPPED" || postback.action === "FOOD_AURA" || postback.action === "DAILY_SUMMARY") {
-            await replyFoodWrapped({ replyToken: event.replyToken, userId, action: postback.action });
-            logTiming("richMenu:vibeAction", eventStart, `action=${postback.action}`);
-            continue;
-          }
-
-          if (postback.action === "TODAY_CALORIES") {
-            await replyCalorieSummary({ replyToken: event.replyToken, userId });
-            logTiming("richMenu:calorieAction", eventStart);
-            continue;
-          }
-
-          if (postback.action === "TODAY_NUTRITION") {
-            await replyNutrition({ replyToken: event.replyToken, userId });
-            logTiming("richMenu:nutritionAction", eventStart);
-            continue;
-          }
-
-          if (postback.action === "SET_GOAL") {
-            await replySetGoalFast({ replyToken: event.replyToken, userId });
-            logTiming("richMenu:setGoalAction", eventStart);
-            continue;
-          }
-
-          if (postback.action === "EDIT_LAST_MEAL") {
-            await replyEditMealFast({ replyToken: event.replyToken });
-            logTiming("richMenu:editMealAction", eventStart);
-            continue;
-          }
-
-          if (postback.action === "DELETE_LAST_MEAL") {
-            await replyDeleteLastMealFast({ replyToken: event.replyToken, userId });
-            logTiming("richMenu:deleteMealAction", eventStart);
-            continue;
-          }
-
-          if (postback.action === "MEAL_SUGGESTION") {
-            await routeTextAction(event, "กินอะไรดี");
-            logTiming("richMenu:mealSuggestionAction", eventStart);
-            continue;
-          }
-
-          console.log("Unhandled LINE postback:", postback.raw);
-          logTiming("richMenu:unhandled", eventStart, `action=${postback.action}`);
-          continue;
-        }
-
-        if (event.type !== "message") continue;
-
-        if (event.message?.type === "text") {
-          await handleTextMessage(event);
-          logTiming("event:text", eventStart);
-          continue;
-        }
-
-        if (event.message?.type === "image") {
-          await handleImageMessage(event);
-          logTiming("event:image", eventStart);
-          continue;
-        }
-      } catch (err) {
-        console.error("LINE Webhook Error:", err?.response?.data || err);
-        logTiming("event:error", eventStart);
-
-        try {
-          if (event.replyToken) {
-            await replyText(event.replyToken, "แปะสะดุดนิดนึง ลองส่งใหม่อีกทีนะ 😅");
-          }
-        } catch (replyErr) {
-          console.error("Reply error:", replyErr?.response?.data || replyErr);
-        }
+        if (event.replyToken) await replyText(event.replyToken, "แปะสะดุดนิดนึง ลองส่งใหม่อีกทีนะ 😅");
+      } catch (replyErr) {
+        console.error("Reply error:", replyErr?.response?.data || replyErr);
       }
     }
   }
-);
+});
 
 app.use("/api/line", router);
-
-app.get("/", (req, res) => {
-  res.status(200).send("Pae Cal LINE Bot is running.");
-});
-
-app.get("/health", (req, res) => {
-  res.json({ ok: true, service: "pae-cal-line-bot", time: new Date().toISOString() });
-});
+app.get("/", (req, res) => res.status(200).send("Pae Cal LINE Bot is running."));
+app.get("/health", (req, res) => res.json({ ok: true, service: "pae-cal-line-bot", time: new Date().toISOString() }));
 
 app.get("/admin/setup-richmenus", async (req, res) => {
   const configuredKey = process.env.PAECAL_ADMIN_SETUP_KEY;
   const requestKey = String(req.query.key || "").trim();
-
   if (!configuredKey) return res.status(500).json({ ok: false, error: "Missing PAECAL_ADMIN_SETUP_KEY env." });
   if (!requestKey || requestKey !== configuredKey) return res.status(403).json({ ok: false, error: "Invalid setup key." });
 
@@ -428,7 +384,6 @@ app.get("/admin/setup-richmenus", async (req, res) => {
       },
     });
     logTiming("admin:setupRichMenus", setupStart);
-
     return res.json({ ok: true, result, logs });
   } catch (err) {
     console.error("Rich menu setup failed:", err?.response?.data || err);
