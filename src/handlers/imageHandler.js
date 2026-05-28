@@ -178,10 +178,7 @@ const buildImageDailyProgressMessage = ({ summary = {} }) => {
   const left = Math.max(target - total, 0);
   const progress = buildProgressBar(total, target);
   const status = over > 0 ? `🔴 เกินเป้าไปประมาณ ${Math.round(over)} kcal` : `🟢 เหลือประมาณ ${Math.round(left)} kcal`;
-  return `📊 วันนี้กินไปแล้ว
-${Math.round(total)} / ${Math.round(target)} kcal
-${status}
-(${progress})`;
+  return `📊 วันนี้กินไปแล้ว\n${Math.round(total)} / ${Math.round(target)} kcal\n${status}\n(${progress})`;
 };
 
 const buildImageInsight = ({ meal, summary, goalText }) => {
@@ -215,13 +212,7 @@ const buildImageFoodMessages = ({ meal, summary, title, session }) => {
   const sugarLine = includesSugarType ? buildDrinkSugarLine({ menuName: meal.menuName, kcal: meal.kcal, carb: meal.carb, allowAnyDrink: true }) : "";
   const nutritionLine = includesSolid ? buildNutritionLine({ carb: meal.carb, protein: meal.protein, fat: meal.fat }) : "";
   const detailLines = [nutritionLine, sugarLine].filter(Boolean).join("\n");
-  const firstMessage = `${meal.reaction} ${title} แปะดูให้แล้ว
-
-🍽️ เมนู
-${meal.menuName}
-🔥 ~${meal.kcal} kcal${detailLines ? `
-${detailLines}` : ""}
-📏 ปริมาณ: ${meal.portionLabel}`;
+  const firstMessage = `${meal.reaction} ${title} แปะดูให้แล้ว\n\n🍽️ เมนู\n${meal.menuName}\n🔥 ~${meal.kcal} kcal${detailLines ? `\n${detailLines}` : ""}\n📏 ปริมาณ: ${meal.portionLabel}`;
   const { macroLine, goalLine } = buildImageInsight({ meal, summary, goalText: session?.data?.goal || "" });
   const secondLines = [`💡 ${macroLine}`, goalLine];
   if (normalizeText(meal.confidence).toLowerCase() === "low") secondLines.push("👀 แปะประเมินจากรูปคร่าว ๆ นะ");
@@ -267,11 +258,11 @@ const analyzeImageEvent = async (event) => {
 };
 
 const buildMealFromAnalyzedImages = (foodResults = []) => {
-  const imageItems = foodResults.map((item) => ({ name: item.menuName, kcal: item.kcal, carb: item.carb, protein: item.protein, fat: item.fat }));
+  const imageItems = foodResults.map((item) => ({ name: item.menuName, kcal: item.kcal, carb: item.carb, protein: item.protein, fat: item.fat, portionLevel: item.portion?.level, portionLabel: item.portion?.label }));
   const totals = imageItems.reduce((acc, item) => ({ kcal: acc.kcal + safeNumber(item.kcal, 0), carb: acc.carb + safeNumber(item.carb, 0), protein: acc.protein + safeNumber(item.protein, 0), fat: acc.fat + safeNumber(item.fat, 0) }), { kcal: 0, carb: 0, protein: 0, fat: 0 });
   const menuName = imageItems.length === 1 ? imageItems[0].name : imageItems.map((item) => item.name).join(" + ");
   const portion = resolvePortion({ kcal: totals.kcal, portionLevel: totals.kcal >= 750 ? "heavy" : totals.kcal <= 320 ? "light" : "normal" });
-  return { ...totals, menuName, imageItems, portion, confidence: foodResults.some((item) => item.confidence === "low") ? "low" : "medium" };
+  return { ...totals, menuName, imageItems, portion, confidence: foodResults.some((item) => item.confidence === "low") ? "low" : "medium", imageSubject: foodResults.map((item) => item.imageSubject).filter(Boolean).join(" | "), imageCaption: foodResults.map((item) => item.imageCaption).filter(Boolean).join(" | ") };
 };
 
 const processImageBatch = async ({ userId, events }) => {
@@ -314,9 +305,27 @@ const processImageBatch = async ({ userId, events }) => {
   const requestId = `${firstMessageId}:image-batch-${events.length}`;
   const logFoodT = nowMs();
   invalidateRichMenuSummaryCache(userId);
-  const sheetData = await logFood({ action: "LOG_FOOD", userId, name: session.data?.name || "", kcal: mealDraft.kcal, carb: mealDraft.carb, protein: mealDraft.protein, fat: mealDraft.fat, menuName: mealDraft.menuName, requestId, itemsJson: JSON.stringify(mealDraft.imageItems), source: "image" });
+  const sheetData = await logFood({
+    action: "LOG_FOOD",
+    userId,
+    name: session.data?.name || "",
+    kcal: mealDraft.kcal,
+    carb: mealDraft.carb,
+    protein: mealDraft.protein,
+    fat: mealDraft.fat,
+    menuName: mealDraft.menuName,
+    requestId,
+    itemsJson: JSON.stringify(mealDraft.imageItems),
+    source: "image",
+    portionLevel: mealDraft.portion?.level || "normal",
+    portionLabel: mealDraft.portion?.label || "พอดี",
+    portionNote: mealDraft.portion?.note || "แปะประเมินจากรูปคร่าว ๆ นะ",
+    confidence: mealDraft.confidence,
+    imageSubject: mealDraft.imageSubject,
+    imageCaption: mealDraft.imageCaption,
+  });
   invalidateRichMenuSummaryCache(userId);
-  logTiming("image", "logFood", logFoodT, `imageCount=${foodResults.length} source=${sheetData.source || "unknown"} supabaseWrite=${sheetData.supabaseWrite || ""}`);
+  logTiming("image", "logFood", logFoodT, `imageCount=${foodResults.length} source=${sheetData.source || "unknown"} supabaseWrite=${sheetData.supabaseWrite || ""} portion=${mealDraft.portion?.level || "normal"}`);
   const buildT = nowMs();
   const beforeTotal = resolveCachedTodayCalories(session);
   const sheetTotal = safeNumber(sheetData.todayCalories ?? sheetData.totalToday, 0);
