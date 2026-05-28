@@ -21,21 +21,60 @@ const getLineAfter = (text = "", label = "") => {
   return lines[index + 1] || "";
 };
 
-const extractKcalLine = (text = "") => String(text || "").split("\n").find((line) => /kcal/i.test(line) && /🔥|~|ประมาณ/.test(line)) || "";
+const splitMacroLine = (line = "") => {
+  const carb = line.match(/คาร์บ\s*([0-9]+)g?/i)?.[1] || "-";
+  const protein = line.match(/โปรตีน\s*([0-9]+)g?/i)?.[1] || "-";
+  const fat = line.match(/ไขมัน\s*([0-9]+)g?/i)?.[1] || "-";
+  return { carb, protein, fat };
+};
+
+const extractKcalValue = (text = "") => {
+  const match = String(text || "").match(/~?\s*([0-9,]+)\s*kcal/i);
+  return match?.[1]?.replace(/,/g, "") || "-";
+};
+
 const extractMacroLine = (text = "") => String(text || "").split("\n").find((line) => /คาร์บ|โปรตีน|ไขมัน/.test(line)) || "";
 const extractPortionLine = (text = "") => String(text || "").split("\n").find((line) => /ปริมาณ/.test(line)) || "";
-const extractProgressLines = (text = "") => String(text || "").split("\n").filter((line) => line.trim()).slice(1, 4).join("\n");
+
+const buildProgressTextBubble = (progressText = "") => {
+  const lines = String(progressText || "").split("\n").map((line) => line.trim()).filter(Boolean);
+  const kcalLine = lines.find((line) => /\/|kcal/i.test(line)) || "";
+  const statusLine = lines.find((line) => /เกินเป้า|เหลือประมาณ|กินไปแล้ว/i.test(line) && line !== kcalLine) || "";
+
+  return [
+    "📊 วันนี้รวมแล้ว",
+    kcalLine || lines.find((line) => /[0-9]/.test(line)) || "ยังไม่มีตัวเลขชัด",
+    statusLine || "แปะจดรวมให้แล้ว",
+    "เดี๋ยวมื้อต่อไปค่อยคุมต่อได้ 👀",
+  ].filter(Boolean).join("\n");
+};
+
+const buildInsightTextBubble = (insightText = "") => {
+  const text = String(insightText || "").trim();
+  if (!text) return "ไอหยา แปะอ่านทรงให้แล้ว\nมื้อต่อไปค่อยบาลานซ์ต่อได้ 😄";
+
+  const normalized = text
+    .replace(/^💡\s*/, "")
+    .replace(/😮‍💨/g, "😅")
+    .trim();
+
+  if (/ของทอด|มัน|ไขมัน|หวาน|น้ำตาล|คาร์บ|เกิน|เต็ม/.test(normalized)) {
+    return `ไอหยา ${normalized}`;
+  }
+
+  if (/โปรตีน|โอเค|คุมได้|เบา/.test(normalized)) {
+    return `โอเค ${normalized}`;
+  }
+
+  return normalized;
+};
 
 const buildImageFoodResultFlex = (texts = []) => {
   const first = texts[0] || "";
-  const progress = texts[1] || "";
-  const insight = texts[2] || "";
   const menuName = getLineAfter(first, "เมนู") || "มื้อที่ส่งมา";
-  const kcalLine = extractKcalLine(first) || "🔥 แคลโดยประมาณ";
-  const macroLine = extractMacroLine(first);
-  const portionLine = extractPortionLine(first);
-  const progressText = extractProgressLines(progress) || progress;
-  const insightText = insight || "แปะอ่านทรงให้แล้ว มื้อต่อไปค่อยบาลานซ์ต่อได้ 😄";
+  const kcalValue = extractKcalValue(first);
+  const macro = splitMacroLine(extractMacroLine(first));
+  const portionLine = extractPortionLine(first).replace(/^📏\s*/, "") || "ปริมาณ: พอดี";
 
   return {
     type: "flex",
@@ -58,36 +97,42 @@ const buildImageFoodResultFlex = (texts = []) => {
             backgroundColor: "#FFFFFF",
             cornerRadius: "16px",
             paddingAll: "14px",
-            spacing: "sm",
+            spacing: "md",
             contents: [
-              { type: "text", text: kcalLine.replace(/^🔥\s*/, "🔥 "), size: "lg", weight: "bold", color: "#B91C1C", wrap: true },
-              ...(macroLine ? [{ type: "text", text: macroLine, size: "sm", color: "#374151", wrap: true }] : []),
-              ...(portionLine ? [{ type: "text", text: portionLine, size: "sm", color: "#374151", wrap: true }] : []),
+              { type: "text", text: `🔥 ~${kcalValue} kcal`, size: "xl", weight: "bold", color: "#B91C1C", wrap: true },
+              { type: "separator", margin: "sm" },
+              {
+                type: "box",
+                layout: "horizontal",
+                spacing: "sm",
+                contents: [
+                  { type: "text", text: "🍚 คาร์บ", size: "xs", color: "#6B7280", flex: 2 },
+                  { type: "text", text: `${macro.carb} g`, size: "sm", weight: "bold", color: "#1F2937", align: "end", flex: 1 },
+                ],
+              },
+              {
+                type: "box",
+                layout: "horizontal",
+                spacing: "sm",
+                contents: [
+                  { type: "text", text: "💪 โปรตีน", size: "xs", color: "#6B7280", flex: 2 },
+                  { type: "text", text: `${macro.protein} g`, size: "sm", weight: "bold", color: "#1F2937", align: "end", flex: 1 },
+                ],
+              },
+              {
+                type: "box",
+                layout: "horizontal",
+                spacing: "sm",
+                contents: [
+                  { type: "text", text: "🥑 ไขมัน", size: "xs", color: "#6B7280", flex: 2 },
+                  { type: "text", text: `${macro.fat} g`, size: "sm", weight: "bold", color: "#1F2937", align: "end", flex: 1 },
+                ],
+              },
+              { type: "separator", margin: "sm" },
+              { type: "text", text: `📏 ${portionLine}`, size: "sm", color: "#374151", wrap: true },
             ],
           },
-          {
-            type: "box",
-            layout: "vertical",
-            backgroundColor: "#F0FDF4",
-            cornerRadius: "16px",
-            paddingAll: "14px",
-            spacing: "xs",
-            contents: [
-              { type: "text", text: "📊 วันนี้รวมแล้ว", size: "sm", weight: "bold", color: "#166534", wrap: true },
-              { type: "text", text: progressText, size: "sm", color: "#166534", wrap: true },
-            ],
-          },
-          {
-            type: "box",
-            layout: "vertical",
-            backgroundColor: "#FEF3C7",
-            cornerRadius: "16px",
-            paddingAll: "14px",
-            contents: [
-              { type: "text", text: insightText, size: "sm", color: "#7C2D12", wrap: true },
-            ],
-          },
-          { type: "text", text: "แปะว่าอ่านทรงไว้ก่อน มื้อต่อไปค่อยคุมต่อ 😄", size: "sm", color: "#003C88", weight: "bold", align: "center", wrap: true },
+          { type: "text", text: "แปะจดมื้อนี้ไว้ให้แล้ว 👀", size: "sm", color: "#003C88", weight: "bold", align: "center", wrap: true },
         ],
       },
     },
@@ -103,7 +148,11 @@ const isImageFoodTextBatch = (texts = []) => {
 const toOutboundMessages = (texts) => {
   const sanitized = sanitizeTextList(texts);
   if (sanitized.length >= 2 && isImageFoodTextBatch(sanitized)) {
-    return [buildImageFoodResultFlex(sanitized)];
+    return [
+      buildImageFoodResultFlex(sanitized),
+      { type: "text", text: buildProgressTextBubble(sanitized[1] || "") },
+      { type: "text", text: buildInsightTextBubble(sanitized[2] || "") },
+    ].slice(0, 5);
   }
   return sanitized.map((text) => ({ type: "text", text }));
 };
@@ -176,22 +225,8 @@ const paeLaewGuideFlex = () => ({
       spacing: "md",
       backgroundColor: "#FFF7ED",
       contents: [
-        {
-          type: "text",
-          text: "📸 ส่งรูปให้แปะอ่าน",
-          weight: "bold",
-          size: "xl",
-          wrap: true,
-          color: "#1F2937",
-        },
-        {
-          type: "text",
-          text: "ถ่ายอาหารให้เห็นชัด ๆ แล้วส่งมาได้เลย เดี๋ยวแปะดูให้ว่าเมนูนี้ประมาณไหน 👀",
-          size: "sm",
-          wrap: true,
-          color: "#374151",
-          margin: "sm",
-        },
+        { type: "text", text: "📸 ส่งรูปให้แปะอ่าน", weight: "bold", size: "xl", wrap: true, color: "#1F2937" },
+        { type: "text", text: "ถ่ายอาหารให้เห็นชัด ๆ แล้วส่งมาได้เลย เดี๋ยวแปะดูให้ว่าเมนูนี้ประมาณไหน 👀", size: "sm", wrap: true, color: "#374151", margin: "sm" },
         {
           type: "box",
           layout: "vertical",
@@ -201,21 +236,8 @@ const paeLaewGuideFlex = () => ({
           cornerRadius: "lg",
           backgroundColor: "#FFFFFF",
           contents: [
-            {
-              type: "text",
-              text: "แปะจะช่วยดูให้",
-              size: "xs",
-              weight: "bold",
-              color: "#B45309",
-            },
-            {
-              type: "text",
-              text: ["🔥 แคลคร่าว ๆ", "🍚 คาร์บ / โปรตีน / ไขมัน", "👀 ทรงมื้อนี้หนักหรือเบา"].join("\n"),
-              size: "sm",
-              wrap: true,
-              color: "#374151",
-              margin: "xs",
-            },
+            { type: "text", text: "แปะจะช่วยดูให้", size: "xs", weight: "bold", color: "#B45309" },
+            { type: "text", text: ["🔥 แคลคร่าว ๆ", "🍚 คาร์บ / โปรตีน / ไขมัน", "👀 ทรงมื้อนี้หนักหรือเบา"].join("\n"), size: "sm", wrap: true, color: "#374151", margin: "xs" },
           ],
         },
         {
@@ -227,21 +249,8 @@ const paeLaewGuideFlex = () => ({
           cornerRadius: "lg",
           backgroundColor: "#F0FDF4",
           contents: [
-            {
-              type: "text",
-              text: "ทริคให้แปะอ่านแม่นขึ้น",
-              size: "xs",
-              weight: "bold",
-              color: "#166534",
-            },
-            {
-              type: "text",
-              text: "ถ้ามีหลายอย่างในจาน พิมพ์เพิ่มได้ เช่น “ข้าวมันไก่ + ชาไทยหวานน้อย”",
-              size: "sm",
-              wrap: true,
-              color: "#374151",
-              margin: "xs",
-            },
+            { type: "text", text: "ทริคให้แปะอ่านแม่นขึ้น", size: "xs", weight: "bold", color: "#166534" },
+            { type: "text", text: "ถ้ามีหลายอย่างในจาน พิมพ์เพิ่มได้ เช่น “ข้าวมันไก่ + ชาไทยหวานน้อย”", size: "sm", wrap: true, color: "#374151", margin: "xs" },
           ],
         },
       ],
@@ -255,12 +264,7 @@ const paeLaewGuideFlex = () => ({
           style: "primary",
           height: "sm",
           color: "#D97706",
-          action: {
-            type: "postback",
-            label: "เปิดกล้อง/อัลบั้มเลย",
-            data: "action=open_keyboard",
-            inputOption: "openKeyboard",
-          },
+          action: { type: "postback", label: "เปิดกล้อง/อัลบั้มเลย", data: "action=open_keyboard", inputOption: "openKeyboard" },
         },
       ],
     },
