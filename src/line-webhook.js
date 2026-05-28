@@ -13,6 +13,7 @@ import {
 } from "./services/line.js";
 import { postToSheet } from "./services/sheet.js";
 import {
+  buildCalorieSummaryFlexMessage,
   buildFoodAuraFlexMessage,
   buildFoodWrappedFlexMessage,
   buildNutritionFlexMessage,
@@ -21,14 +22,6 @@ import { setupRichMenus } from "../scripts/setup-richmenus.js";
 
 const app = express();
 const router = Router();
-
-const RICH_MENU_TEXT_ACTIONS = {
-  MEAL_SUGGESTION: "กินอะไรดี",
-  TODAY_CALORIES: "แคลวันนี้",
-  SET_GOAL: "ตั้งเป้าสุขภาพ",
-  EDIT_LAST_MEAL: "แก้มื้อล่าสุด",
-  DELETE_LAST_MEAL: "ลบมื้อล่าสุด",
-};
 
 const SILENT_RICH_MENU_ACTIONS = new Set([
   "SWITCH_TO_VIBE_MENU",
@@ -70,10 +63,15 @@ const routeTextAction = async (event, text) => {
   logTiming("richMenu:routeTextAction", start, `text=${text}`);
 };
 
-const getDailySummaryForRichMenu = async (userId, action) => {
+const sheetAction = async (payload, label) => {
   const start = nowMs();
-  const summary = await postToSheet({ action: "GET_DAILY_SUMMARY", userId });
-  logTiming("richMenu:getDailySummary", start, `action=${action}`);
+  const result = await postToSheet(payload);
+  logTiming(`sheet:${label || payload.action}`, start);
+  return result || {};
+};
+
+const getDailySummaryForRichMenu = async (userId, action) => {
+  const summary = await sheetAction({ action: "GET_DAILY_SUMMARY", userId }, `GET_DAILY_SUMMARY action=${action}`);
   return summary || {};
 };
 
@@ -93,6 +91,68 @@ const replyNutrition = async ({ replyToken, userId }) => {
   const summary = await getDailySummaryForRichMenu(userId, "TODAY_NUTRITION");
   await replyFlex(replyToken, buildNutritionFlexMessage({ summary }));
   logTiming("richMenu:replyNutritionFlex", start);
+};
+
+const replyCalorieSummary = async ({ replyToken, userId }) => {
+  const start = nowMs();
+  const summary = await getDailySummaryForRichMenu(userId, "TODAY_CALORIES");
+  await replyFlex(replyToken, buildCalorieSummaryFlexMessage({ summary }));
+  logTiming("richMenu:replyCalorieSummaryFlex", start);
+};
+
+const replySetGoalFast = async ({ replyToken, userId }) => {
+  const start = nowMs();
+  await sheetAction({ action: "UPDATE_SESSION", userId, step: "ASK_GOAL_UPDATE", sessionData: {} }, "UPDATE_SESSION:setGoal");
+  await replyText(
+    replyToken,
+    [
+      "ได้เลย แปะเปิดโหมดตั้งเป้าให้แล้ว 🎯",
+      "พิมพ์เป้าหมายมาได้เลย เช่น",
+      "• อยากลดไขมัน",
+      "• อยากคุมน้ำหนัก",
+      "• อยากกินสุขภาพดีขึ้น",
+    ].join("\n")
+  );
+  logTiming("richMenu:setGoalFast", start);
+};
+
+const replyEditMealFast = async ({ replyToken }) => {
+  const start = nowMs();
+  await replyText(
+    replyToken,
+    [
+      "อยากแก้มื้อล่าสุดใช่ไหม 🧾",
+      "พิมพ์แบบนี้ได้เลย:",
+      "• แก้มื้อล่าสุดเป็น ข้าวหมูกระเทียมไข่ดาว",
+      "• แก้เป็น 650 kcal",
+      "• ลบมื้อล่าสุด",
+    ].join("\n")
+  );
+  logTiming("richMenu:editMealFast", start);
+};
+
+const replyDeleteLastMealFast = async ({ replyToken, userId }) => {
+  const start = nowMs();
+  const deleted = await sheetAction({ action: "DELETE_LAST_MEAL", userId }, "DELETE_LAST_MEAL:richMenu");
+
+  if (deleted.status === "not_found") {
+    await replyText(replyToken, "แปะยังไม่เจอมื้อล่าสุดให้ลบน้า 😅\nส่งรูปอาหารมาก่อน แล้วค่อยลบได้จ้า");
+    logTiming("richMenu:deleteLastMealFast", start, "status=not_found");
+    return;
+  }
+
+  const total = deleted.todayCalories ?? deleted.totalToday ?? 0;
+  const target = deleted.calorieTarget || 2050;
+  await replyText(
+    replyToken,
+    [
+      "โอเค แปะลบมื้อล่าสุดให้แล้ว 🗑️",
+      `ลบ: ${deleted.deletedMeal?.menuName || "มื้อล่าสุด"}`,
+      "",
+      `วันนี้เหลือในระบบ: ${Math.round(total)} / ${Math.round(target)} kcal`,
+    ].join("\n")
+  );
+  logTiming("richMenu:deleteLastMealFast", start);
 };
 
 router.post(
@@ -118,9 +178,10 @@ router.post(
 
         if (event.type === "postback") {
           const postback = parsePostbackData(event.postback?.data);
+          const userId = event.source.userId;
 
           console.log("LINE Postback received:", {
-            userId: event.source.userId,
+            userId,
             data: postback.raw,
             action: postback.action,
           });
@@ -149,25 +210,44 @@ router.post(
           }
 
           if (postback.action === "DAILY_FOOD_WRAPPED" || postback.action === "FOOD_AURA" || postback.action === "DAILY_SUMMARY") {
-            await replyFoodWrapped({
-              replyToken: event.replyToken,
-              userId: event.source.userId,
-              action: postback.action,
-            });
+            await replyFoodWrapped({ replyToken: event.replyToken, userId, action: postback.action });
             logTiming("richMenu:vibeAction", eventStart, `action=${postback.action}`);
             continue;
           }
 
+          if (postback.action === "TODAY_CALORIES") {
+            await replyCalorieSummary({ replyToken: event.replyToken, userId });
+            logTiming("richMenu:calorieAction", eventStart);
+            continue;
+          }
+
           if (postback.action === "TODAY_NUTRITION") {
-            await replyNutrition({ replyToken: event.replyToken, userId: event.source.userId });
+            await replyNutrition({ replyToken: event.replyToken, userId });
             logTiming("richMenu:nutritionAction", eventStart);
             continue;
           }
 
-          const mappedText = RICH_MENU_TEXT_ACTIONS[postback.action];
-          if (mappedText) {
-            await routeTextAction(event, mappedText);
-            logTiming("richMenu:textAction", eventStart, `action=${postback.action}`);
+          if (postback.action === "SET_GOAL") {
+            await replySetGoalFast({ replyToken: event.replyToken, userId });
+            logTiming("richMenu:setGoalAction", eventStart);
+            continue;
+          }
+
+          if (postback.action === "EDIT_LAST_MEAL") {
+            await replyEditMealFast({ replyToken: event.replyToken });
+            logTiming("richMenu:editMealAction", eventStart);
+            continue;
+          }
+
+          if (postback.action === "DELETE_LAST_MEAL") {
+            await replyDeleteLastMealFast({ replyToken: event.replyToken, userId });
+            logTiming("richMenu:deleteMealAction", eventStart);
+            continue;
+          }
+
+          if (postback.action === "MEAL_SUGGESTION") {
+            await routeTextAction(event, "กินอะไรดี");
+            logTiming("richMenu:mealSuggestionAction", eventStart);
             continue;
           }
 
@@ -195,10 +275,7 @@ router.post(
 
         try {
           if (event.replyToken) {
-            await replyText(
-              event.replyToken,
-              "แปะสะดุดนิดนึง ลองส่งใหม่อีกทีนะ 😅"
-            );
+            await replyText(replyToken, "แปะสะดุดนิดนึง ลองส่งใหม่อีกทีนะ 😅");
           }
         } catch (replyErr) {
           console.error("Reply error:", replyErr?.response?.data || replyErr);
@@ -227,17 +304,11 @@ app.get("/admin/setup-richmenus", async (req, res) => {
   const requestKey = String(req.query.key || "").trim();
 
   if (!configuredKey) {
-    return res.status(500).json({
-      ok: false,
-      error: "Missing PAECAL_ADMIN_SETUP_KEY env.",
-    });
+    return res.status(500).json({ ok: false, error: "Missing PAECAL_ADMIN_SETUP_KEY env." });
   }
 
   if (!requestKey || requestKey !== configuredKey) {
-    return res.status(403).json({
-      ok: false,
-      error: "Invalid setup key.",
-    });
+    return res.status(403).json({ ok: false, error: "Invalid setup key." });
   }
 
   try {
@@ -253,11 +324,7 @@ app.get("/admin/setup-richmenus", async (req, res) => {
     });
     logTiming("admin:setupRichMenus", setupStart);
 
-    return res.json({
-      ok: true,
-      result,
-      logs,
-    });
+    return res.json({ ok: true, result, logs });
   } catch (err) {
     console.error("Rich menu setup failed:", err?.response?.data || err);
     return res.status(500).json({
