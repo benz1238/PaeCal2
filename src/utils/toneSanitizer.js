@@ -6,10 +6,16 @@ const DIALOGUE_REPLACEMENTS = [
   [/ครับ/g, ""],
   [/ค่ะ/g, ""],
   [/คะ/g, ""],
-  [/เฮีย/g, "แปะ"],
   [/เจ๊/g, "แปะ"],
-  [/อาตี๋/g, "ลื้อ"],
-  [/หมวย/g, "ลื้อ"],
+];
+
+const BODY_SHAME_REPLACEMENTS = [
+  [/ผอมจนกระดูกจะทิ่มอั๊วแล้ว/g, "กินให้อิ่มพอดีนะ เดี๋ยวแรงหมด"],
+  [/กินเยอะขนาดนี้อ้วนแน่/g, "วันนี้เจี๊ยะจ้างไปนิด 555 มื้อต่อไปเบาลงพอ"],
+  [/กินเยอะขนาดนี้แย่แล้ว/g, "วันนี้เจี๊ยะจ้างไปนิด 555 มื้อต่อไปเบาลงพอ"],
+  [/หมวยต้องลดน้ำหนักนะ/g, "มื้อนี้หนักไปนิด มื้อต่อไปเบาลงพอแหละ"],
+  [/อาตี๋ต้องลดน้ำหนักนะ/g, "มื้อนี้หนักไปนิด มื้อต่อไปเบาลงพอแหละ"],
+  [/เฮียต้องลดน้ำหนักนะ/g, "มื้อนี้หนักไปนิด มื้อต่อไปเบาลงพอแหละ"],
 ];
 
 const FLAVOR_PREFIX_RULES = [
@@ -27,7 +33,7 @@ const FLAVOR_PREFIX_RULES = [
   },
 ];
 
-const HAS_FLAVOR_PREFIX = /^(ไอหยา|เอ้า|โอ้โห|อือหือ|โอเค|หืม|อา\.{0,3}|แปะ|ลื้อ|555|เออ|ใช่|สุดหล่อ)\b/i;
+const HAS_FLAVOR_PREFIX = /^(ไอหยา|เอ้า|โอ้โห|อือหือ|โอเค|หืม|อา\.{0,3}|แปะ|ลื้อ|อั๊วะ|เฮีย|อาตี๋|หมวย|เจี๊ยะ|โฮ่วเจี๊ยะ|555|เออ|ใช่|สุดหล่อ)\b/i;
 const LINE_ENDING_CLEANUPS = [
   [/\s+([!?！？,.，。])/g, "$1"],
   / {2,}/g,
@@ -71,6 +77,14 @@ const addThaiChatParticles = (text = "") => {
     .replace(/ส่งรูปอาหารมา เดี๋ยวแปะนับให้(?!นะ|อะ|แหละ)/g, "ส่งรูปอาหารมา เดี๋ยวแปะนับให้เอง 👀");
 };
 
+const removeBodyShameLines = (text = "") => {
+  let output = text;
+  for (const [pattern, replacement] of BODY_SHAME_REPLACEMENTS) {
+    output = output.replace(pattern, replacement);
+  }
+  return output;
+};
+
 export const sanitizePaeCalTone = (input = "") => {
   let text = String(input || "");
 
@@ -78,6 +92,7 @@ export const sanitizePaeCalTone = (input = "") => {
     text = text.replace(pattern, replacement);
   }
 
+  text = removeBodyShameLines(text);
   text = addThaiChatParticles(text);
   text = addPrefixFlavor(text);
 
