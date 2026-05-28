@@ -13,6 +13,7 @@ const SUPABASE_DUAL_WRITE_ENABLED = String(process.env.SUPABASE_DUAL_WRITE_ENABL
 const SHEET_DUAL_WRITE_ENABLED = String(process.env.SHEET_DUAL_WRITE_ENABLED ?? "false").toLowerCase() === "true";
 const SHEET_READ_FALLBACK_ENABLED = String(process.env.SHEET_READ_FALLBACK_ENABLED ?? "true").toLowerCase() !== "false";
 const SHEET_DELETE_FALLBACK_ENABLED = String(process.env.SHEET_DELETE_FALLBACK_ENABLED ?? "false").toLowerCase() === "true";
+const FOOD_TERM_LEARNING_ENABLED = String(process.env.FOOD_TERM_LEARNING_ENABLED ?? "true").toLowerCase() !== "false";
 
 const isSupabaseConfigured = () => Boolean(SUPABASE_URL && SUPABASE_KEY);
 const isSupabaseReadReady = () => Boolean(SUPABASE_READ_ENABLED && isSupabaseConfigured());
@@ -51,6 +52,12 @@ const normalizeText = (value, fallback = "") => {
   const text = String(value ?? "").trim();
   return text || fallback;
 };
+
+const normalizeTerm = (value = "") => String(value || "")
+  .trim()
+  .toLowerCase()
+  .replace(/^กิน\s+/, "")
+  .replace(/\s+/g, " ");
 
 const parseJsonSafely = (value, fallback = null) => {
   if (!value) return fallback;
@@ -103,6 +110,7 @@ export const dbStatus = () => ({
   sheetDualWriteEnabled: SHEET_DUAL_WRITE_ENABLED,
   sheetReadFallbackEnabled: SHEET_READ_FALLBACK_ENABLED,
   sheetDeleteFallbackEnabled: SHEET_DELETE_FALLBACK_ENABLED,
+  foodTermLearningEnabled: FOOD_TERM_LEARNING_ENABLED,
 });
 
 const fetchMealsFull = async (userId, today) => supabase.get("/meals", {
@@ -307,6 +315,51 @@ export const logFood = async (payload = {}) => {
 
   const sheetResult = await sheetFallback({ action: "LOG_FOOD", ...payload });
   return { ...(sheetResult || {}), source: "sheet", supabaseWrite: "failed_or_skipped" };
+};
+
+export const logFoodTermCandidate = async ({ term, foodData = {}, source = "openai", example = "" } = {}) => {
+  if (!FOOD_TERM_LEARNING_ENABLED || !isSupabaseConfigured()) return { status: "skipped", source: "disabled" };
+
+  const normalized = normalizeTerm(term);
+  if (!normalized || normalized.length < 2) return { status: "skipped", source: "empty" };
+
+  try {
+    const existedRes = await supabase.get("/food_term_candidates", {
+      params: { term: `eq.${normalized}`, select: "term,hit_count,examples", limit: 1 },
+    });
+    const existed = Array.isArray(existedRes.data) ? existedRes.data[0] : null;
+    const previousExamples = Array.isArray(existed?.examples) ? existed.examples : [];
+    const nextExamples = [
+      ...previousExamples.slice(-4),
+      { text: example || term, at: new Date().toISOString() },
+    ];
+
+    const payload = {
+      term: normalized,
+      normalized_term: normalized,
+      hit_count: existed ? toNumber(existed.hit_count, 0) + 1 : 1,
+      last_menu_name: normalizeText(foodData.menuName, normalized),
+      last_kcal: toNumber(foodData.kcal, 0),
+      last_carb: toNumber(foodData.carb, 0),
+      last_protein: toNumber(foodData.protein, 0),
+      last_fat: toNumber(foodData.fat, 0),
+      last_sugar: toNumber(foodData.sugar, 0),
+      last_confidence: normalizeText(foodData.confidence, "medium"),
+      last_source: source,
+      examples: nextExamples,
+      last_seen_at: new Date().toISOString(),
+    };
+
+    await supabase.post("/food_term_candidates", [payload], {
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      params: { on_conflict: "term" },
+    });
+    console.log(`[PaeCalDB] foodTermCandidate logged term=${normalized} hits=${payload.hit_count}`);
+    return { status: "success", source: "supabase", hitCount: payload.hit_count };
+  } catch (err) {
+    console.warn("[PaeCalDB] foodTermCandidate failed", err?.response?.data || err.message || err);
+    return { status: "failed", source: "supabase" };
+  }
 };
 
 export const deleteLastMeal = async (userId) => {
