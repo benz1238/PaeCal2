@@ -5,7 +5,7 @@ import {
   replySendPhotoGuide,
   replyTypeFoodPrompt,
 } from "../services/line.js";
-import { postToSheet } from "../services/sheet.js";
+import { deleteLastMeal, getDailySummary, updateSession } from "../services/db.js";
 import { buildMealSuggestionCarouselFlexMessage } from "../utils/mealSuggestionFlex.js";
 import {
   buildCalorieSummaryFlexMessage,
@@ -68,10 +68,10 @@ const clearExpiredCaches = () => {
   }
 };
 
-const sheetAction = async (payload, label) => {
+const dbAction = async (label, fn) => {
   const start = nowMs();
-  const result = await postToSheet(payload);
-  logTiming(`sheet:${label || payload.action}`, start);
+  const result = await fn();
+  logTiming(`db:${label}`, start, result?.source ? `source=${result.source}` : "");
   return result || {};
 };
 
@@ -87,7 +87,7 @@ const getDailySummaryForRichMenu = async (userId, action) => {
     return cached.summary || {};
   }
 
-  const summary = await sheetAction({ action: "GET_DAILY_SUMMARY", userId }, `GET_DAILY_SUMMARY action=${action}`);
+  const summary = await dbAction(`GET_DAILY_SUMMARY action=${action}`, () => getDailySummary(userId));
   summaryCache.set(userId, { summary: summary || {}, expiresAt: nowMs() + SUMMARY_CACHE_TTL_MS });
   return summary || {};
 };
@@ -130,7 +130,7 @@ const replyMealSuggestionFast = async ({ replyToken }) => {
 
 const replySetGoalFast = async ({ replyToken, userId }) => {
   const start = nowMs();
-  await sheetAction({ action: "UPDATE_SESSION", userId, step: "ASK_GOAL_UPDATE", sessionData: {} }, "UPDATE_SESSION:setGoal");
+  await dbAction("UPDATE_SESSION:setGoal", () => updateSession({ userId, step: "ASK_GOAL_UPDATE", sessionData: {} }));
   await replyFlex(replyToken, buildSetGoalFlexMessage());
   logTiming("richMenu:setGoalFast", start);
 };
@@ -143,7 +143,7 @@ const replyEditMealFast = async ({ replyToken }) => {
 
 const replyDeleteLastMealFast = async ({ replyToken, userId }) => {
   const start = nowMs();
-  const deleted = await sheetAction({ action: "DELETE_LAST_MEAL", userId }, "DELETE_LAST_MEAL:richMenu");
+  const deleted = await dbAction("DELETE_LAST_MEAL:richMenu", () => deleteLastMeal(userId));
   invalidateUserSummaryCache(userId);
   const notFound = deleted.status === "not_found";
   await replyFlex(replyToken, buildDeleteMealFlexMessage({ deleted, notFound }));
