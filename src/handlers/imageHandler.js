@@ -1,5 +1,5 @@
 import { pushTexts, replyText, getLineImageBase64 } from "../services/line.js";
-import { getSession, logFood } from "../services/db.js";
+import { getSession, updateSession, logFood } from "../services/db.js";
 import { refreshSummaryCacheFromSheetResponse } from "../utils/summaryCache.js";
 import { getCachedSession, mergeCachedSession, setCachedSession } from "../utils/sessionCache.js";
 import { invalidateRichMenuSummaryCache } from "../utils/richMenuSummaryCache.js";
@@ -167,14 +167,27 @@ const getSessionForImage = async (userId) => {
   const sessionT = nowMs();
   const cachedSession = getCachedSession(userId);
   if (cachedSession) {
-    logTiming("image", "getSessionMemoryHit", sessionT);
+    logTiming("image", "getSessionMemoryHit", sessionT, `step=${cachedSession.step || "READY"}`);
     return cachedSession;
   }
   const session = await getSession(userId);
   const normalized = { step: session?.step || "READY", data: session?.data || {}, ...session };
   setCachedSession(userId, normalized);
-  logTiming("image", "getSession", sessionT, `source=${normalized.source || "unknown"}`);
+  logTiming("image", "getSession", sessionT, `source=${normalized.source || "unknown"} step=${normalized.step || "READY"}`);
   return normalized;
+};
+
+const recoverImageSessionIfNeeded = async (userId, session = {}) => {
+  const step = String(session?.step || "READY");
+  if (step === "READY") return { ...session, step: "READY", data: session?.data || {} };
+
+  const healed = { ...session, step: "READY", data: session?.data || {} };
+  setCachedSession(userId, healed);
+  updateSession({ userId, step: "READY", sessionData: healed.data || {} }).catch((err) => {
+    console.warn("[PaeCalTiming] image:autoHealSession failed", err?.message || err);
+  });
+  console.log(`[PaeCalTiming] image:autoHealSession step=${step} -> READY`);
+  return healed;
 };
 
 const analyzeImageEvent = async (event) => {
@@ -214,14 +227,10 @@ const processImageBatch = async ({ userId, events }) => {
     const ackT = nowMs();
     await replyText(firstEvent.replyToken, "ขอแปะดูแป๊ป 👀").then(() => { ackSent = true; logTiming("image", "replyAck", ackT); }).catch((err) => console.warn("[PaeCalTiming] image:replyAck failed", err?.message || err));
   }
-  const session = await getSessionForImage(userId);
-  if (session.step !== "READY") {
-    const pushT = nowMs();
-    await pushTexts(userId, [["แปะขอรู้จักลื้อก่อนน้า", "พิมพ์ชื่อมาก่อนเลยจ้า 😊"].join("\n")]);
-    logTiming("image", "pushNeedProfile", pushT);
-    logTiming("imageBatch", "total", totalT);
-    return;
-  }
+
+  const rawSession = await getSessionForImage(userId);
+  const session = await recoverImageSessionIfNeeded(userId, rawSession);
+
   if (!ackSent) {
     const ackT = nowMs();
     await replyText(firstEvent.replyToken, "ขอแปะดูแป๊ป 👀").then(() => { ackSent = true; logTiming("image", "replyAck", ackT); }).catch((err) => console.warn("[PaeCalTiming] image:replyAck failed", err?.message || err));
@@ -258,7 +267,7 @@ const processImageBatch = async ({ userId, events }) => {
   const meal = { menuName: mealDraft.menuName, kcal: mealDraft.kcal, carb: mealDraft.carb, protein: mealDraft.protein, fat: mealDraft.fat, requestId, items: mealDraft.imageItems, portionLevel: mealDraft.portion?.level || "normal", portionLabel: mealDraft.portion?.label || "พอดี", portionNote: mealDraft.portion?.note || "แปะประเมินจากรูปคร่าว ๆ นะ", reaction: mealDraft.portion?.reaction || "😋", confidence: mealDraft.confidence };
   logTiming("image", "buildSummaryObjects", buildT);
   const syncT = nowMs();
-  mergeCachedSession(userId, session, { calorieTarget: target, todayCalories: total, totalToday: total, lastMeal: meal });
+  mergeCachedSession(userId, session, { calorieTarget: target, todayCalories: total, totalToday: total, lastMeal: meal }, "READY");
   logTiming("image", "syncSessionMemoryOnly", syncT);
   const renderT = nowMs();
   const title = resolveFastTitle(session);
