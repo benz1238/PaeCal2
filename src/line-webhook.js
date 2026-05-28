@@ -10,6 +10,7 @@ import {
   replyText,
   replyTypeFoodPrompt,
 } from "./services/line.js";
+import { setupRichMenus } from "../scripts/setup-richmenus.js";
 
 const app = express();
 const router = Router();
@@ -167,6 +168,49 @@ app.get("/health", (req, res) => {
     service: "pae-cal-line-bot",
     time: new Date().toISOString(),
   });
+});
+
+app.get("/admin/setup-richmenus", async (req, res) => {
+  const configuredKey = process.env.PAECAL_ADMIN_SETUP_KEY;
+  const requestKey = String(req.query.key || "").trim();
+
+  if (!configuredKey) {
+    return res.status(500).json({
+      ok: false,
+      error: "Missing PAECAL_ADMIN_SETUP_KEY env.",
+    });
+  }
+
+  if (!requestKey || requestKey !== configuredKey) {
+    return res.status(403).json({
+      ok: false,
+      error: "Invalid setup key.",
+    });
+  }
+
+  try {
+    const logs = [];
+    const result = await setupRichMenus({
+      logger: {
+        log: (message) => {
+          logs.push(String(message));
+          console.log(`[RichMenuSetup] ${message}`);
+        },
+      },
+    });
+
+    return res.json({
+      ok: true,
+      result,
+      logs,
+    });
+  } catch (err) {
+    console.error("Rich menu setup failed:", err?.response?.data || err);
+    return res.status(500).json({
+      ok: false,
+      error: err?.response?.data || err.message || "Unknown setup error",
+    });
+  }
 });
 
 app.listen(process.env.PORT || 10000, () => {
