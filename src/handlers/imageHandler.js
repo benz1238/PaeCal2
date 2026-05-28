@@ -3,6 +3,7 @@ import { postToSheet } from "../services/sheet.js";
 import { logFood } from "../services/db.js";
 import { refreshSummaryCacheFromSheetResponse } from "../utils/summaryCache.js";
 import { getCachedSession, mergeCachedSession, setCachedSession } from "../utils/sessionCache.js";
+import { invalidateRichMenuSummaryCache } from "../utils/richMenuSummaryCache.js";
 import { estimateFoodFromImage } from "../services/openai.js";
 import { DEFAULT_CALORIE_TARGET, safeNumber } from "../utils/helpers.js";
 import { buildProgressBar } from "../utils/advice.js";
@@ -312,7 +313,9 @@ const processImageBatch = async ({ userId, events }) => {
   const firstMessageId = firstEvent.message?.id || "image";
   const requestId = `${firstMessageId}:image-batch-${events.length}`;
   const logFoodT = nowMs();
+  invalidateRichMenuSummaryCache(userId);
   const sheetData = await logFood({ action: "LOG_FOOD", userId, name: session.data?.name || "", kcal: mealDraft.kcal, carb: mealDraft.carb, protein: mealDraft.protein, fat: mealDraft.fat, menuName: mealDraft.menuName, requestId, itemsJson: JSON.stringify(mealDraft.imageItems), source: "image" });
+  invalidateRichMenuSummaryCache(userId);
   logTiming("image", "logFood", logFoodT, `imageCount=${foodResults.length} source=${sheetData.source || "unknown"} supabaseWrite=${sheetData.supabaseWrite || ""}`);
   const buildT = nowMs();
   const beforeTotal = resolveCachedTodayCalories(session);
