@@ -74,7 +74,7 @@ export const getLineImageBase64 = async (messageId) => {
 
 const paeLaewGuideFlex = () => ({
   type: "flex",
-  altText: "แปะเลย ลื้อกินอะไรมา?",
+  altText: "ส่งรูปอาหารให้แปะอ่าน",
   contents: {
     type: "bubble",
     size: "mega",
@@ -82,10 +82,11 @@ const paeLaewGuideFlex = () => ({
       type: "box",
       layout: "vertical",
       spacing: "md",
+      backgroundColor: "#FFF7ED",
       contents: [
         {
           type: "text",
-          text: "🍚 แปะเลย ลื้อกินอะไรมา?",
+          text: "📸 ส่งรูปให้แปะอ่าน",
           weight: "bold",
           size: "xl",
           wrap: true,
@@ -93,7 +94,7 @@ const paeLaewGuideFlex = () => ({
         },
         {
           type: "text",
-          text: "ส่งรูปอาหารหรือจะพิมพ์ก็ได้ เดี๋ยวแปะแปะให้ 😄",
+          text: "ถ่ายอาหารให้เห็นชัด ๆ แล้วส่งมาได้เลย เดี๋ยวแปะดูให้ว่าเมนูนี้ประมาณไหน 👀",
           size: "sm",
           wrap: true,
           color: "#374151",
@@ -106,18 +107,18 @@ const paeLaewGuideFlex = () => ({
           margin: "md",
           paddingAll: "md",
           cornerRadius: "lg",
-          backgroundColor: "#FFF7ED",
+          backgroundColor: "#FFFFFF",
           contents: [
             {
               type: "text",
-              text: "ตัวอย่าง",
+              text: "แปะจะช่วยดูให้",
               size: "xs",
               weight: "bold",
               color: "#B45309",
             },
             {
               type: "text",
-              text: ["ข้าวมันไก่ 1 จาน", "ชาไทยหวานน้อย", "ขนมเลย์ห่อนึง"].join("\n"),
+              text: ["🔥 แคลคร่าว ๆ", "🍚 คาร์บ / โปรตีน / ไขมัน", "👀 ทรงมื้อนี้หนักหรือเบา"].join("\n"),
               size: "sm",
               wrap: true,
               color: "#374151",
@@ -136,14 +137,14 @@ const paeLaewGuideFlex = () => ({
           contents: [
             {
               type: "text",
-              text: "ถ้ากินหลายอย่าง",
+              text: "ทริคให้แปะอ่านแม่นขึ้น",
               size: "xs",
               weight: "bold",
               color: "#166534",
             },
             {
               type: "text",
-              text: "พิมพ์เว้นด้วย , / และ\nหรือแยกบรรทัดได้เลย\nแปะจะแยกแคลให้ 👌",
+              text: "ถ้ามีหลายอย่างในจาน พิมพ์เพิ่มได้ เช่น “ข้าวมันไก่ + ชาไทยหวานน้อย”",
               size: "sm",
               wrap: true,
               color: "#374151",
@@ -161,10 +162,10 @@ const paeLaewGuideFlex = () => ({
           type: "button",
           style: "primary",
           height: "sm",
-          color: "#E11D1D",
+          color: "#D97706",
           action: {
             type: "postback",
-            label: "แปะเลย",
+            label: "เปิดกล้อง/อัลบั้มเลย",
             data: "action=open_keyboard",
             inputOption: "openKeyboard",
           },
@@ -195,15 +196,7 @@ export const replyTypeFoodPrompt = async (replyToken) => {
 };
 
 export const replySendPhotoGuide = async (replyToken) => {
-  await replyText(
-    replyToken,
-    ["ส่งรูปอาหารเข้ามาในแชตได้เลยนะ 👀", "กดรูป/อัลบั้มใน LINE แล้วส่งมาให้แปะดูจ้า"].join("\n")
-  );
-};
-
-const normalizeFlexText = (value, fallback = "-") => {
-  const text = String(value ?? "").trim();
-  return text || fallback;
+  await replyPaeLaewGuideCard(replyToken);
 };
 
 export const replyDailyRecapCardWithBubbles = async (replyToken, { title, card, bubbles = [], summary = {}, decision = null }) => {
