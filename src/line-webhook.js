@@ -29,6 +29,11 @@ const TEXT_ACTION_ALIASES = new Map([
   ["ลบมื้อ", "DELETE_LAST_MEAL"],
   ["ลบล่าสุด", "DELETE_LAST_MEAL"],
   ["ลบมื้อเมื่อกี้", "DELETE_LAST_MEAL"],
+  ["ลบมื้อก่อนหน้า", "DELETE_LAST_MEAL"],
+  ["ลบมื้อก่อน", "DELETE_LAST_MEAL"],
+  ["ลบอันก่อนหน้า", "DELETE_LAST_MEAL"],
+  ["ลบอันก่อน", "DELETE_LAST_MEAL"],
+  ["ลบรายการก่อนหน้า", "DELETE_LAST_MEAL"],
 
   ["แก้มื้อล่าสุด", "EDIT_LAST_MEAL"],
   ["แก้มื้อ", "EDIT_LAST_MEAL"],
