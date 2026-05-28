@@ -5,6 +5,7 @@ const SUPABASE_URL = String(process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SUPABASE_READ_ENABLED = String(process.env.SUPABASE_RICH_MENU_ENABLED || "false").toLowerCase() === "true";
 const SUPABASE_DUAL_WRITE_ENABLED = String(process.env.SUPABASE_DUAL_WRITE_ENABLED || "true").toLowerCase() !== "false";
+const SUPABASE_EMPTY_SUMMARY_FALLBACK_ENABLED = String(process.env.SUPABASE_EMPTY_SUMMARY_FALLBACK_ENABLED || "true").toLowerCase() !== "false";
 
 const isSupabaseConfigured = () => Boolean(SUPABASE_URL && SUPABASE_KEY);
 const isSupabaseReadReady = () => Boolean(SUPABASE_READ_ENABLED && isSupabaseConfigured());
@@ -68,6 +69,7 @@ export const dbStatus = () => ({
   supabaseConfigured: isSupabaseConfigured(),
   supabaseReadReady: isSupabaseReadReady(),
   supabaseWriteReady: isSupabaseWriteReady(),
+  supabaseEmptySummaryFallbackEnabled: SUPABASE_EMPTY_SUMMARY_FALLBACK_ENABLED,
 });
 
 export const getDailySummary = async (userId) => {
@@ -97,6 +99,16 @@ export const getDailySummary = async (userId) => {
 
   const user = Array.isArray(userRes.data) ? userRes.data[0] : null;
   const meals = Array.isArray(mealRes.data) ? mealRes.data : [];
+
+  if (SUPABASE_EMPTY_SUMMARY_FALLBACK_ENABLED && meals.length === 0) {
+    const sheet = await sheetFallback({ action: "GET_DAILY_SUMMARY", userId });
+    const sheetTotal = toNumber(sheet?.todayCalories ?? sheet?.totalToday, 0);
+    const sheetMealCount = toNumber(sheet?.mealCount, 0);
+    if (sheetTotal > 0 || sheetMealCount > 0) {
+      return { ...(sheet || {}), source: "supabase_empty_sheet_fallback" };
+    }
+  }
+
   const topMeal = [...meals].sort((a, b) => toNumber(b.kcal) - toNumber(a.kcal))[0] || null;
 
   return {
