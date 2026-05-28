@@ -1,3 +1,5 @@
+import { getRarityLabel, selectDailyTitle } from "./titleBank.js";
+
 const palette = {
   blue: "#003C88",
   yellow: "#FFD204",
@@ -49,9 +51,7 @@ const normalizeMealRow = (meal = {}) => ({
 const resolveMeals = (summary = {}) => {
   const candidates = [summary.meals, summary.todayMeals, summary.logs, summary.items, summary.foods];
   for (const list of candidates) {
-    if (Array.isArray(list) && list.length) {
-      return list.map(normalizeMealRow).filter((meal) => meal.name || meal.kcal > 0);
-    }
+    if (Array.isArray(list) && list.length) return list.map(normalizeMealRow).filter((meal) => meal.name || meal.kcal > 0);
   }
   return [];
 };
@@ -117,15 +117,15 @@ const getSummarySignals = (summary = {}) => {
   };
 };
 
-const pickFoodPersona = (signals) => {
-  if (signals.isEmpty) return "ยังไม่มีหลักฐาน 👀";
-  if (signals.isOver && signals.highFat) return "ตัวตึงของมัน 🔥";
-  if (signals.isOver) return "วันนี้จัดเต็มไปนิด 🫣";
-  if (signals.sweetSignal) return "หวานมีบทนำ 🧋";
-  if (signals.highFat) return "ของมันมีพิรุธ 🍗";
-  if (signals.lowProtein) return "โปรตีนยังแอบหลบ 💪";
-  if (signals.isNear) return "เกือบเต็มแต่ยังเอาอยู่ 👀";
-  return "ทรงนี้ใช้ได้ 😄";
+const getDailyTitle = (signals, summary = {}) => selectDailyTitle(signals, {
+  userId: summary.userId || summary.lineUserId || summary.line_user_id || "",
+  date: summary.date || "today",
+  topMeal: signals.topMeal,
+});
+
+const pickFoodPersona = (signals, summary = {}) => {
+  const dailyTitle = getDailyTitle(signals, summary);
+  return dailyTitle.name;
 };
 
 const pickAura = (signals) => {
@@ -138,8 +138,9 @@ const pickAura = (signals) => {
   return { title: "ออร่าคุมได้", color: palette.green, emoji: "✨", mascot: "😄" };
 };
 
-const paesRead = (signals) => {
+const paesRead = (signals, titleCard = null) => {
   if (signals.isEmpty) return "แปะยังอ่านทรงไม่ได้ ขอหลักฐานมื้อแรกก่อนจ้า 👀";
+  if (titleCard?.vibe) return `${titleCard.vibe} — แปะอ่านแล้วว่าใช่ 555`;
   if (signals.isOver) return "แปะว่าอิ่มจริง วันนี้พอแล้วนะ มื้อต่อไปเบา ๆ 😅";
   if (signals.sweetSignal) return "วันนี้หวานมีซีนอยู่นะ ไม่ดุ แต่แปะเห็นนะ 👀";
   if (signals.highFat) return "ของมันเริ่มออกหน้าแล้ว มื้อต่อไปตัดด้วยของเบาหน่อย 😄";
@@ -147,12 +148,11 @@ const paesRead = (signals) => {
   return "ทรงวันนี้ยังเอาอยู่ ไม่ต้องซีมาก แต่คุมต่ออีกนิด 😄";
 };
 
-const evidenceLines = (signals) => {
-  if (signals.isEmpty) {
-    return ["ยังไม่มีมื้อให้แปะอ่าน", "ส่งรูปอาหารมาก่อน 📸", "เดี๋ยวแปะอ่านทรงให้ 👀"];
-  }
+const evidenceLines = (signals, titleCard = null) => {
+  if (signals.isEmpty) return ["ยังไม่มีมื้อให้แปะอ่าน", "ส่งรูปอาหารมาก่อน 📸", "เดี๋ยวแปะอ่านทรงให้ 👀"];
 
   const lines = [];
+  if (titleCard) lines.push(`${titleCard.emoji} ปลดล็อก: ${getRarityLabel(titleCard.rarity)}`);
   if (signals.topMeal) {
     const kcalText = signals.topMealKcal > 0 ? ` ~${Math.round(signals.topMealKcal)} kcal` : "";
     lines.push(`⭐ มื้อเด่น: ${truncate(signals.topMeal, 19)}${kcalText}`);
@@ -162,8 +162,7 @@ const evidenceLines = (signals) => {
   if (signals.lowProtein) lines.push("💪 โปรตีนยังเบาไปนิด");
   if (signals.isOver) lines.push("🔥 วันนี้เกินเป้าแล้ว");
   if (!lines.length) lines.push("✅ แคลรวมยังพอคุมได้", "😄 ทรงวันนี้ไม่แย่", "📸 มื้อต่อไปคุมต่ออีกนิด");
-
-  return lines.slice(0, 3);
+  return lines.slice(0, 4);
 };
 
 const text = (props) => ({ type: "text", ...props });
@@ -191,15 +190,7 @@ const metricRow = (label, value, color = palette.text) => ({
   ],
 });
 
-const footerLine = (message, color = palette.blue) => text({
-  text: message,
-  size: "sm",
-  weight: "bold",
-  color,
-  wrap: true,
-  align: "center",
-  margin: "md",
-});
+const footerLine = (message, color = palette.blue) => text({ text: message, size: "sm", weight: "bold", color, wrap: true, align: "center", margin: "md" });
 
 const miniPill = ({ title, value, bg, color = palette.brown }) => ({
   type: "box",
@@ -216,9 +207,10 @@ const miniPill = ({ title, value, bg, color = palette.brown }) => ({
 
 export const buildFoodWrappedFlexMessage = ({ summary = {} } = {}) => {
   const signals = getSummarySignals(summary);
-  const persona = pickFoodPersona(signals);
+  const titleCard = getDailyTitle(signals, summary);
+  const persona = pickFoodPersona(signals, summary);
   const aura = pickAura(signals);
-  const lines = evidenceLines(signals);
+  const lines = evidenceLines(signals, titleCard);
 
   return {
     type: "flex",
@@ -233,17 +225,10 @@ export const buildFoodWrappedFlexMessage = ({ summary = {} } = {}) => {
         paddingAll: "18px",
         contents: [
           text({ text: "💡 วันนี้อาหารฟ้องว่า", size: "sm", weight: "bold", color: palette.orange }),
-          text({ text: persona, size: "xxl", weight: "bold", color: palette.brown, wrap: true, margin: "xs" }),
-          text({
-            text: signals.isEmpty ? "แปะยังไม่มีหลักฐานวันนี้นะ ส่งรูปมาก่อน เดี๋ยวแปะอ่านให้ 📸" : `Food Aura: ${aura.emoji} ${aura.title}`,
-            size: "sm",
-            color: aura.color,
-            weight: "bold",
-            wrap: true,
-            margin: "sm",
-          }),
+          text({ text: persona, size: "xxl", weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs" }),
+          text({ text: signals.isEmpty ? "แปะยังไม่มีหลักฐานวันนี้นะ ส่งรูปมาก่อน เดี๋ยวแปะอ่านให้ 📸" : `${getRarityLabel(titleCard.rarity)} · Food Aura: ${aura.emoji} ${aura.title}`, size: "sm", color: titleCard.color || aura.color, weight: "bold", wrap: true, margin: "sm" }),
           evidenceBox(lines, "🔍 หลักฐานที่แปะจับได้"),
-          evidenceBox([paesRead(signals)], "🧡 แปะอ่านว่า"),
+          evidenceBox([paesRead(signals, titleCard)], "🧡 แปะอ่านว่า"),
           footerLine(signals.isEmpty ? "ส่งรูปมา เดี๋ยวแปะอ่านทรงให้ 👀" : "ต่อไปคุมต่ออีกนิด ทรงนี้ยังไหว 😄"),
         ],
       },
@@ -253,8 +238,9 @@ export const buildFoodWrappedFlexMessage = ({ summary = {} } = {}) => {
 
 export const buildFoodAuraFlexMessage = ({ summary = {} } = {}) => {
   const signals = getSummarySignals(summary);
+  const titleCard = getDailyTitle(signals, summary);
   const aura = pickAura(signals);
-  const lines = evidenceLines(signals);
+  const lines = evidenceLines(signals, titleCard);
 
   return {
     type: "flex",
@@ -268,17 +254,11 @@ export const buildFoodAuraFlexMessage = ({ summary = {} } = {}) => {
         backgroundColor: palette.cream,
         paddingAll: "18px",
         contents: [
-          text({ text: "🏷️ ฉายาวันนี้", size: "sm", weight: "bold", color: palette.orange }),
-          text({ text: `${aura.emoji} ${aura.title}`, size: "xxl", weight: "bold", color: aura.color, wrap: true, margin: "xs" }),
-          text({
-            text: signals.isEmpty ? "ยังตั้งฉายาไม่ได้ แปะยังไม่มีมื้อให้จับทรง 👀" : "แปะตั้งให้จากทรงอาหารวันนี้นะ ไม่ต้องซีมาก 555",
-            size: "sm",
-            color: palette.brown,
-            wrap: true,
-            margin: "sm",
-          }),
+          text({ text: `🏷️ ฉายาวันนี้ · ${getRarityLabel(titleCard.rarity)}`, size: "sm", weight: "bold", color: titleCard.color || palette.orange, wrap: true }),
+          text({ text: `${titleCard.emoji} ${titleCard.name}`, size: "xxl", weight: "bold", color: titleCard.color || aura.color, wrap: true, margin: "xs" }),
+          text({ text: signals.isEmpty ? "ยังตั้งฉายาไม่ได้ แปะยังไม่มีมื้อให้จับทรง 👀" : titleCard.vibe || "แปะตั้งให้จากทรงอาหารวันนี้นะ ไม่ต้องซีมาก 555", size: "sm", color: palette.brown, wrap: true, margin: "sm" }),
           evidenceBox(lines, "🕵️ หลักฐานที่แปะจับได้"),
-          footerLine(signals.isEmpty ? "ส่งมื้อแรกมาก่อน เดี๋ยวฉายามา 📸" : "พรุ่งนี้ส่งอีก เดี๋ยวแปะอ่านต่อ 😄"),
+          footerLine(signals.isEmpty ? "ส่งมื้อแรกมาก่อน เดี๋ยวฉายามา 📸" : "พรุ่งนี้มาลุ้น title ใหม่ เดี๋ยวแปะอ่านต่อ 😄"),
         ],
       },
     },
@@ -287,17 +267,11 @@ export const buildFoodAuraFlexMessage = ({ summary = {} } = {}) => {
 
 export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
   const signals = getSummarySignals(summary);
-  const aura = pickAura(signals);
+  const titleCard = getDailyTitle(signals, summary);
   const left = Math.max(signals.target - signals.kcal, 0);
   const over = Math.max(signals.kcal - signals.target, 0);
-  const topMealText = signals.topMeal
-    ? `${truncate(signals.topMeal, 18)}${signals.topMealKcal > 0 ? ` · ~${Math.round(signals.topMealKcal)} kcal` : ""}`
-    : "ยังไม่มีมื้อเด่น";
-  const statusText = signals.isEmpty
-    ? "ยังไม่มีข้อมูลวันนี้ 👀"
-    : signals.isOver
-      ? `เกินเป้า ${Math.round(over)} kcal แล้วนะ 🫣`
-      : `เหลือ ${Math.round(left)} kcal อยู่ 😄`;
+  const topMealText = signals.topMeal ? `${truncate(signals.topMeal, 18)}${signals.topMealKcal > 0 ? ` · ~${Math.round(signals.topMealKcal)} kcal` : ""}` : "ยังไม่มีมื้อเด่น";
+  const statusText = signals.isEmpty ? "ยังไม่มีข้อมูลวันนี้ 👀" : signals.isOver ? `เกินเป้า ${Math.round(over)} kcal แล้วนะ 🫣` : `เหลือ ${Math.round(left)} kcal อยู่ 😄`;
   const mascotEmoji = signals.isEmpty ? "🧐" : signals.isOver ? "😤" : signals.isNear ? "👀" : "😄";
 
   return {
@@ -322,8 +296,8 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
                 flex: 5,
                 contents: [
                   text({ text: "TODAY RECAP", size: "sm", weight: "bold", color: "#A32922" }),
-                  text({ text: "ของแปะแคล", size: "sm", weight: "bold", color: palette.muted, margin: "xs" }),
-                  text({ text: pickFoodPersona(signals), size: "xxl", weight: "bold", color: palette.brown, wrap: true, margin: "xs" }),
+                  text({ text: `ของแปะแคล · ${getRarityLabel(titleCard.rarity)}`, size: "sm", weight: "bold", color: titleCard.color || palette.muted, margin: "xs", wrap: true }),
+                  text({ text: titleCard.name, size: "xxl", weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs" }),
                 ],
               },
               {
@@ -348,7 +322,7 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
             margin: "md",
             contents: [
               text({ text: "💡 วันนี้อาหารฟ้องว่า", size: "sm", weight: "bold", color: palette.text, wrap: true }),
-              text({ text: signals.topMeal ? topMealText : paesRead(signals), size: "lg", weight: "bold", color: palette.brown, wrap: true, margin: "xs" }),
+              text({ text: signals.topMeal ? topMealText : paesRead(signals, titleCard), size: "lg", weight: "bold", color: palette.brown, wrap: true, margin: "xs" }),
             ],
           },
           {
@@ -405,14 +379,7 @@ export const buildNutritionFlexMessage = ({ summary = {} } = {}) => {
         paddingAll: "18px",
         contents: [
           text({ text: "🥗 โภชนาการวันนี้", size: "xl", weight: "bold", color: palette.text }),
-          text({
-            text: signals.isEmpty ? "วันนี้ยังไม่มีมื้อที่แปะบันทึกไว้ 👀" : `${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal · เหลือ ${Math.round(left)} kcal`,
-            size: "sm",
-            color: signals.isOver ? palette.red : palette.green,
-            weight: "bold",
-            wrap: true,
-            margin: "sm",
-          }),
+          text({ text: signals.isEmpty ? "วันนี้ยังไม่มีมื้อที่แปะบันทึกไว้ 👀" : `${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal · เหลือ ${Math.round(left)} kcal`, size: "sm", color: signals.isOver ? palette.red : palette.green, weight: "bold", wrap: true, margin: "sm" }),
           evidenceBox([
             `🍚 คาร์บ ${Math.round(signals.carb)} g`,
             `💪 โปรตีน ${Math.round(signals.protein)} g`,
