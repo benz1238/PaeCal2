@@ -18,10 +18,14 @@ import {
   buildEditMealFlexMessage,
   buildSetGoalFlexMessage,
 } from "../utils/richMenuUtilityFlex.js";
+import {
+  clearExpiredRichMenuSummaryCache,
+  getCachedRichMenuSummary,
+  invalidateRichMenuSummaryCache,
+  setCachedRichMenuSummary,
+} from "../utils/richMenuSummaryCache.js";
 
-const SUMMARY_CACHE_TTL_MS = Number(process.env.RICH_MENU_SUMMARY_CACHE_TTL_MS || 60000);
 const ACTION_LOCK_TTL_MS = Number(process.env.RICH_MENU_ACTION_LOCK_TTL_MS || 3500);
-const summaryCache = new Map();
 const actionLocks = new Map();
 
 const SILENT_RICH_MENU_ACTIONS = new Set([
@@ -58,11 +62,8 @@ const shouldSkipDuplicateAction = (userId, action) => {
   return false;
 };
 
-const clearExpiredCaches = () => {
+const clearExpiredActionLocks = () => {
   const now = nowMs();
-  for (const [key, value] of summaryCache.entries()) {
-    if (!value || value.expiresAt <= now) summaryCache.delete(key);
-  }
   for (const [key, value] of actionLocks.entries()) {
     if (value <= now) actionLocks.delete(key);
   }
@@ -75,20 +76,18 @@ const dbAction = async (label, fn) => {
   return result || {};
 };
 
-const invalidateUserSummaryCache = (userId) => {
-  if (userId) summaryCache.delete(userId);
-};
-
 const getDailySummaryForRichMenu = async (userId, action) => {
-  clearExpiredCaches();
-  const cached = summaryCache.get(userId);
-  if (cached && cached.expiresAt > nowMs()) {
-    console.log(`[PaeCalTiming] cache:GET_DAILY_SUMMARY 0ms action=${action} hit=true`);
-    return cached.summary || {};
+  clearExpiredRichMenuSummaryCache();
+  clearExpiredActionLocks();
+
+  const cached = getCachedRichMenuSummary(userId);
+  if (cached) {
+    console.log(`[PaeCalTiming] cache:GET_DAILY_SUMMARY 0ms action=${action} hit=true source=${cached.source || "unknown"}`);
+    return cached;
   }
 
   const summary = await dbAction(`GET_DAILY_SUMMARY action=${action}`, () => getDailySummary(userId));
-  summaryCache.set(userId, { summary: summary || {}, expiresAt: nowMs() + SUMMARY_CACHE_TTL_MS });
+  setCachedRichMenuSummary(userId, summary || {});
   return summary || {};
 };
 
@@ -144,7 +143,7 @@ const replyEditMealFast = async ({ replyToken }) => {
 const replyDeleteLastMealFast = async ({ replyToken, userId }) => {
   const start = nowMs();
   const deleted = await dbAction("DELETE_LAST_MEAL:richMenu", () => deleteLastMeal(userId));
-  invalidateUserSummaryCache(userId);
+  invalidateRichMenuSummaryCache(userId);
   const notFound = deleted.status === "not_found";
   await replyFlex(replyToken, buildDeleteMealFlexMessage({ deleted, notFound }));
   logTiming("richMenu:deleteLastMealFast", start, notFound ? "status=not_found" : "status=deleted");
