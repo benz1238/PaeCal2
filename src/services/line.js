@@ -7,14 +7,105 @@ export const client = new line.messagingApi.MessagingApiClient({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
 });
 
-const toTextMessages = (texts) => {
+const sanitizeTextList = (texts) => {
   const list = Array.isArray(texts) ? texts : [texts];
+  return list.map((text) => sanitizePaeCalTone(text)).filter(Boolean).slice(0, 5);
+};
 
-  return list
-    .map((text) => sanitizePaeCalTone(text))
-    .filter(Boolean)
-    .slice(0, 5)
-    .map((text) => ({ type: "text", text }));
+const toTextMessages = (texts) => sanitizeTextList(texts).map((text) => ({ type: "text", text }));
+
+const getLineAfter = (text = "", label = "") => {
+  const lines = String(text || "").split("\n").map((line) => line.trim());
+  const index = lines.findIndex((line) => line.includes(label));
+  if (index < 0) return "";
+  return lines[index + 1] || "";
+};
+
+const extractKcalLine = (text = "") => String(text || "").split("\n").find((line) => /kcal/i.test(line) && /🔥|~|ประมาณ/.test(line)) || "";
+const extractMacroLine = (text = "") => String(text || "").split("\n").find((line) => /คาร์บ|โปรตีน|ไขมัน/.test(line)) || "";
+const extractPortionLine = (text = "") => String(text || "").split("\n").find((line) => /ปริมาณ/.test(line)) || "";
+const extractProgressLines = (text = "") => String(text || "").split("\n").filter((line) => line.trim()).slice(1, 4).join("\n");
+
+const buildImageFoodResultFlex = (texts = []) => {
+  const first = texts[0] || "";
+  const progress = texts[1] || "";
+  const insight = texts[2] || "";
+  const menuName = getLineAfter(first, "เมนู") || "มื้อที่ส่งมา";
+  const kcalLine = extractKcalLine(first) || "🔥 แคลโดยประมาณ";
+  const macroLine = extractMacroLine(first);
+  const portionLine = extractPortionLine(first);
+  const progressText = extractProgressLines(progress) || progress;
+  const insightText = insight || "แปะอ่านทรงให้แล้ว มื้อต่อไปค่อยบาลานซ์ต่อได้ 😄";
+
+  return {
+    type: "flex",
+    altText: "แปะอ่านทรงอาหารให้แล้ว",
+    contents: {
+      type: "bubble",
+      size: "mega",
+      body: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: "#FFF7ED",
+        paddingAll: "16px",
+        spacing: "md",
+        contents: [
+          { type: "text", text: "👀 แปะอ่านทรงให้แล้ว", size: "sm", weight: "bold", color: "#D97706", wrap: true },
+          { type: "text", text: menuName, size: "xl", weight: "bold", color: "#1F2937", wrap: true },
+          {
+            type: "box",
+            layout: "vertical",
+            backgroundColor: "#FFFFFF",
+            cornerRadius: "16px",
+            paddingAll: "14px",
+            spacing: "sm",
+            contents: [
+              { type: "text", text: kcalLine.replace(/^🔥\s*/, "🔥 "), size: "lg", weight: "bold", color: "#B91C1C", wrap: true },
+              ...(macroLine ? [{ type: "text", text: macroLine, size: "sm", color: "#374151", wrap: true }] : []),
+              ...(portionLine ? [{ type: "text", text: portionLine, size: "sm", color: "#374151", wrap: true }] : []),
+            ],
+          },
+          {
+            type: "box",
+            layout: "vertical",
+            backgroundColor: "#F0FDF4",
+            cornerRadius: "16px",
+            paddingAll: "14px",
+            spacing: "xs",
+            contents: [
+              { type: "text", text: "📊 วันนี้รวมแล้ว", size: "sm", weight: "bold", color: "#166534", wrap: true },
+              { type: "text", text: progressText, size: "sm", color: "#166534", wrap: true },
+            ],
+          },
+          {
+            type: "box",
+            layout: "vertical",
+            backgroundColor: "#FEF3C7",
+            cornerRadius: "16px",
+            paddingAll: "14px",
+            contents: [
+              { type: "text", text: insightText, size: "sm", color: "#7C2D12", wrap: true },
+            ],
+          },
+          { type: "text", text: "แปะว่าอ่านทรงไว้ก่อน มื้อต่อไปค่อยคุมต่อ 😄", size: "sm", color: "#003C88", weight: "bold", align: "center", wrap: true },
+        ],
+      },
+    },
+  };
+};
+
+const isImageFoodTextBatch = (texts = []) => {
+  const first = texts[0] || "";
+  const second = texts[1] || "";
+  return /🍽️\s*เมนู|เมนู\n/.test(first) && /kcal/i.test(first) && /วันนี้กินไปแล้ว|วันนี้รวมแล้ว|kcal/i.test(second);
+};
+
+const toOutboundMessages = (texts) => {
+  const sanitized = sanitizeTextList(texts);
+  if (sanitized.length >= 2 && isImageFoodTextBatch(sanitized)) {
+    return [buildImageFoodResultFlex(sanitized)];
+  }
+  return sanitized.map((text) => ({ type: "text", text }));
 };
 
 export const replyText = async (replyToken, text) => {
@@ -27,7 +118,7 @@ export const replyText = async (replyToken, text) => {
 export const replyTexts = async (replyToken, texts) => {
   await client.replyMessage({
     replyToken,
-    messages: toTextMessages(texts),
+    messages: toOutboundMessages(texts),
   });
 };
 
@@ -41,7 +132,7 @@ export const pushText = async (to, text) => {
 export const pushTexts = async (to, texts) => {
   await client.pushMessage({
     to,
-    messages: toTextMessages(texts),
+    messages: toOutboundMessages(texts),
   });
 };
 
