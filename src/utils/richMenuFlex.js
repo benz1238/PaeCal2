@@ -123,19 +123,19 @@ const footerText = (message = "") => String(message || "").replace(/\s+/g, " ").
 const speechBubbleFooter = (message, color = palette.blue, stickerUrl = "") => ({
   type: "box",
   layout: "horizontal",
-  spacing: "10px",
-  margin: "lg",
+  spacing: "8px",
+  margin: "sm",
   alignItems: "flex-end",
   contents: [
-    { type: "box", layout: "vertical", width: "54px", height: "54px", contents: [stickerImage(stickerUrl, "54px")] },
+    { type: "box", layout: "vertical", width: "46px", height: "46px", contents: [stickerImage(stickerUrl, "46px")] },
     {
       type: "box",
       layout: "vertical",
       flex: 1,
       backgroundColor: "#FFFFFF",
-      cornerRadius: "18px",
-      paddingAll: "12px",
-      contents: [text({ text: footerText(message), size: "sm", weight: "bold", color, wrap: true, align: "start", maxLines: 3 })],
+      cornerRadius: "16px",
+      paddingAll: "10px",
+      contents: [text({ text: footerText(message), size: "sm", weight: "bold", color, wrap: true, align: "start", maxLines: 2 })],
     },
   ],
 });
@@ -145,7 +145,7 @@ const heroStickerBackground = (stickerUrl = "") => ({
   layout: "vertical",
   position: "absolute",
   offsetTop: "0px",
-  offsetEnd: "14px",
+  offsetEnd: "0px",
   width: "142px",
   height: "142px",
   contents: [stickerImage(stickerUrl, "142px")],
@@ -154,7 +154,7 @@ const heroStickerBackground = (stickerUrl = "") => ({
 const recapHeroTitle = ({ userName, rarityLabel, titleCard, titleText, stickerUrl }) => ({
   type: "box",
   layout: "vertical",
-  height: "142px",
+  height: "132px",
   paddingTop: "0px",
   paddingEnd: "0px",
   contents: [
@@ -178,12 +178,12 @@ const fullInfoPill = ({ title, value, bg, color = palette.brown }) => ({
   type: "box",
   layout: "horizontal",
   backgroundColor: bg,
-  cornerRadius: "18px",
-  paddingAll: "12px",
-  margin: "md",
+  cornerRadius: "16px",
+  paddingAll: "10px",
+  margin: "sm",
   contents: [
     text({ text: title, size: "sm", weight: "bold", color: palette.text, wrap: true, flex: 4 }),
-    text({ text: value, size: "sm", weight: "bold", color, wrap: true, align: "end", flex: 5 }),
+    text({ text: value, size: "sm", weight: "bold", color, wrap: true, align: "end", flex: 6, maxLines: 2 }),
   ],
 });
 
@@ -205,12 +205,11 @@ const calorieFooter = (signals) => rotate(signals.isEmpty ? [
   "โต๊ะยังว่างอยู่ แปะรอมื้อแรกนะ",
   "เริ่มมื้อแรกเมื่อไหร่ แปะจะจดให้เอง",
 ] : signals.isOver ? [
-  "วันนี้ใจใหญ่ไปนิด พรุ่งนี้ค่อยตั้งหลักใหม่",
-  "เกินแล้วก็รู้ตัว อันนี้ดี เดี๋ยวแปะช่วยดึงกลับ",
-  "ไม่ต้องตกใจ เกมยังไม่แตก 555",
+  "วันนี้ใจใหญ่ไปนิด\nพรุ่งนี้ค่อยตั้งหลักใหม่",
+  "เกินแล้วรู้ตัวก็ดี\nพรุ่งนี้แปะช่วยดึงกลับ",
 ] : [
-  "ค่อย ๆ คุมต่อ ลื้อยังอยู่ในเกมอยู่ 555+",
-  "เหลือพื้นที่อยู่ แต่อย่าเจี๊ยะเพลินเกินนะ",
+  "คุมต่ออีกนิด แปะว่าเอาอยู่",
+  "เหลือพื้นที่อยู่ อย่าเจี๊ยะเพลินนะ",
 ]);
 
 const wrappedFooter = (signals) => rotate(signals.isEmpty ? [
@@ -321,18 +320,18 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
   const over = Math.max(signals.kcal - signals.target, 0);
   const stickerUrl = stickerUrlForSignals(signals);
   const footerStickerUrl = stickerUrlForSignals(signals, { flipped: true });
-  const topMealText = signals.topMeal ? `${truncate(signals.topMeal, 34)}${signals.topMealKcal > 0 ? ` · ~${Math.round(signals.topMealKcal)} kcal` : ""}` : "ยังไม่มีมื้อเด่น";
+  const topMealText = signals.topMeal ? `${truncate(signals.topMeal, 28)}${signals.topMealKcal > 0 ? ` · ~${Math.round(signals.topMealKcal)} kcal` : ""}` : "ยังไม่มีมื้อเด่น";
   const statusText = signals.isEmpty ? "เอ้า วันนี้ยังไม่มีข้อมูลเลย" : signals.isOver ? "ไอหยา วันนี้ถังเต็มแล้วนะ" : `โอเค เหลืออีก ${Math.round(left)} kcal`;
   const titleText = formatDailyTitle(titleCard.name);
 
   return {
     type: "flex",
     altText: "สรุปวันนี้",
-    contents: { type: "bubble", size: "mega", body: { type: "box", layout: "vertical", backgroundColor: palette.cream, paddingAll: "18px", contents: [
+    contents: { type: "bubble", size: "mega", body: { type: "box", layout: "vertical", backgroundColor: palette.cream, paddingAll: "12px", contents: [
       recapHeroTitle({ userName, rarityLabel: getRarityLabel(titleCard.rarity), titleCard, titleText, stickerUrl }),
-      { type: "box", layout: "vertical", backgroundColor: palette.card, cornerRadius: "20px", paddingAll: "16px", margin: "md", spacing: "sm", contents: [
-        text({ text: statusText, size: "xl", weight: "bold", color: signals.isOver ? palette.red : palette.green, wrap: true }),
-        { type: "separator", color: "#E5D3C8", margin: "sm" },
+      { type: "box", layout: "vertical", backgroundColor: palette.card, cornerRadius: "18px", paddingAll: "12px", margin: "sm", spacing: "xs", contents: [
+        text({ text: statusText, size: "xl", weight: "bold", color: signals.isOver ? palette.red : palette.green, wrap: true, maxLines: 2 }),
+        { type: "separator", color: "#E5D3C8", margin: "xs" },
         metricRow("กินไป", `${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal`, signals.isOver ? palette.red : palette.text),
         metricRow("คาร์บ", `${Math.round(signals.carb)} g`),
         metricRow("โปรตีน", `${Math.round(signals.protein)} g`, signals.lowProtein ? palette.orange : palette.green),
