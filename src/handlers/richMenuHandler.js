@@ -27,6 +27,7 @@ import {
 
 const ACTION_LOCK_TTL_MS = Number(process.env.RICH_MENU_ACTION_LOCK_TTL_MS || 3500);
 const SWITCH_MENU_ACTION_LOCK_TTL_MS = Number(process.env.RICH_MENU_SWITCH_LOCK_TTL_MS || 1000);
+const DELETE_LAST_MEAL_LOCK_TTL_MS = Number(process.env.RICH_MENU_DELETE_LOCK_TTL_MS || 1000);
 const actionLocks = new Map();
 
 const SWITCH_RICH_MENU_ACTIONS = new Set([
@@ -53,9 +54,11 @@ export const parsePostbackData = (data) => {
   }
 };
 
-const getActionLockTtlMs = (action) => (
-  SWITCH_RICH_MENU_ACTIONS.has(action) ? SWITCH_MENU_ACTION_LOCK_TTL_MS : ACTION_LOCK_TTL_MS
-);
+const getActionLockTtlMs = (action) => {
+  if (SWITCH_RICH_MENU_ACTIONS.has(action)) return SWITCH_MENU_ACTION_LOCK_TTL_MS;
+  if (action === "DELETE_LAST_MEAL") return DELETE_LAST_MEAL_LOCK_TTL_MS;
+  return ACTION_LOCK_TTL_MS;
+};
 
 const shouldSkipDuplicateAction = (userId, action) => {
   if (!userId || !action) return false;
