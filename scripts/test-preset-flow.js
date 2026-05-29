@@ -1,5 +1,6 @@
 import assert from "assert/strict";
 import { __testPresetFlow } from "../src/services/brandFoodPresets.js";
+import { __testFoodLogFlex } from "../src/utils/foodLogFlex.js";
 
 const {
   normalizeText,
@@ -8,6 +9,8 @@ const {
   getSweetnessLevel,
   resolveDrinkKey,
 } = __testPresetFlow;
+
+const { buildDailyEnergyGauge } = __testFoodLogFlex;
 
 const hasTerm = (text, expected) => {
   assert.ok(
@@ -37,5 +40,18 @@ assert.equal(resolveDrinkKey("ชาไทยหวานน้อย"), "thai_t
 assert.equal(resolveDrinkKey("ชาเขียวมัทฉะหวานน้อย"), "green_tea_milk");
 assert.equal(resolveDrinkKey("อเมริกาโน่ไม่หวาน"), "americano");
 assert.equal(resolveDrinkKey("โค้กซีโร่"), "");
+
+const greenGauge = buildDailyEnergyGauge({ total: 1200, target: 2050 });
+assert.equal(greenGauge.statusEmoji, "🟢");
+assert.equal(greenGauge.fillPercent < 75, true);
+
+const yellowGauge = buildDailyEnergyGauge({ total: 1800, target: 2050 });
+assert.equal(yellowGauge.statusEmoji, "🟡");
+assert.equal(yellowGauge.fillPercent >= 75, true);
+
+const redGauge = buildDailyEnergyGauge({ total: 2445, target: 2050 });
+assert.equal(redGauge.statusEmoji, "🔴");
+assert.equal(redGauge.fillPercent, 100);
+assert.equal(redGauge.overKcal, 395);
 
 console.log("Preset flow tests passed");
