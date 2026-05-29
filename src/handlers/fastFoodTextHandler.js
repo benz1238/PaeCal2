@@ -1,9 +1,10 @@
-import { replyTexts, replyText } from "../services/line.js";
+import { replyTexts, replyFlex } from "../services/line.js";
 import { getSession, updateSession, logFood, logFoodTermCandidate } from "../services/db.js";
 import { estimateFoodFromText } from "../services/openai.js";
 import { findFoodPreset } from "../services/brandFoodPresets.js";
 import { safeNumber, DEFAULT_CALORIE_TARGET } from "../utils/helpers.js";
 import { invalidateRichMenuSummaryCache } from "../utils/richMenuSummaryCache.js";
+import { buildFoodLogFlexMessage } from "../utils/foodLogFlex.js";
 
 const nowMs = () => Date.now();
 
@@ -19,7 +20,7 @@ const FOOD_KEYWORDS = [
   "ส้มตำ", "ลาบ", "น้ำตก", "ยำ", "ยำวุ้นเส้น", "สลัด", "สุกี้", "ชาบู", "หมูกระทะ", "หมูทะ", "ปิ้งย่าง", "บุฟเฟต์",
   "ไส้กรอก", "ลูกชิ้น", "ชีส", "ทอด", "ของทอด", "แซนด์วิช", "ขนมปัง", "ครัวซองต์",
   "ชาไทย", "ชานม", "ชาเขียว", "มัจฉะ", "มัทฉะ", "กาแฟ", "อเมริกาโน่", "ลาเต้", "คาปูชิโน่", "มอคค่า", "เอสเย็น", "โกโก้", "นม", "นมสด", "น้ำเต้าหู้", "น้ำหวาน", "น้ำผลไม้", "น้ำส้ม", "โค้ก", "โค๊ก", "เป๊ปซี่",
-  "เค้ก", "ขนม", "ขนมถุง", "ป๊อกกี้", "โอริโอ", "คิทแคท", "ช็อกโกแลต", "คุกกี้", "โดนัท", "ไอติม", "บิงซู", "เลย์", "lays", "ผลไม้", "กล้วย", "แตงโม", "มะม่วง", "แอปเปิล", "แอปเปิ้ล", "ส้ม", "ส้มโอ", "ฝรั่ง", "สับปะรด", "องุ่น", "แก้วมังกร",
+  "เค้ก", "ขนม", "ขนมถุง", "ป๊อกกี้", "โอริโอ", "โอริโอ้", "คิทแคท", "ช็อกโกแลต", "คุกกี้", "โดนัท", "ไอติม", "บิงซู", "เลย์", "lays", "ผลไม้", "กล้วย", "แตงโม", "มะม่วง", "แอปเปิล", "แอปเปิ้ล", "ส้ม", "ส้มโอ", "ฝรั่ง", "สับปะรด", "องุ่น", "แก้วมังกร",
 ];
 
 const BLOCKLIST = [
@@ -52,7 +53,7 @@ const LOCAL_FOOD_PRESETS = [
   { pattern: /ขนมถุง|ขนมกรุบกรอบ|snack/i, menuName: "ขนมถุง", kcal: 250, carb: 30, protein: 3, fat: 13, sugar: 4 },
   { pattern: /เลย์|lays?|มันฝรั่งทอด|โปเตโต้ชิป/i, menuName: "เลย์/มันฝรั่งทอด", kcal: 320, carb: 36, protein: 4, fat: 18, sugar: 2 },
   { pattern: /ป๊อกกี้|pocky/i, menuName: "ป๊อกกี้", kcal: 220, carb: 32, protein: 4, fat: 9, sugar: 18 },
-  { pattern: /โอริโอ|oreo/i, menuName: "โอริโอ", kcal: 260, carb: 38, protein: 3, fat: 11, sugar: 22 },
+  { pattern: /โอริโอ้|โอริโอ|oreo/i, menuName: "โอริโอ", kcal: 260, carb: 38, protein: 3, fat: 11, sugar: 22 },
   { pattern: /คิทแคท|kitkat/i, menuName: "คิทแคท", kcal: 220, carb: 28, protein: 3, fat: 11, sugar: 21 },
   { pattern: /ช็อกโกแลต|ช็อคโกแลต|chocolate/i, menuName: "ช็อกโกแลต", kcal: 250, carb: 28, protein: 3, fat: 14, sugar: 24 },
   { pattern: /อเมริกาโน่|อเมริกาโน|americano|กาแฟดำ/i, menuName: "อเมริกาโน่", kcal: 15, carb: 2, protein: 1, fat: 0, sugar: 0 },
@@ -72,9 +73,6 @@ const LOCAL_FOOD_PRESETS = [
   { pattern: /มะม่วง/i, menuName: "มะม่วง", kcal: 150, carb: 38, protein: 1, fat: 0, sugar: 30 },
   { pattern: /ฝรั่ง/i, menuName: "ฝรั่ง", kcal: 80, carb: 18, protein: 3, fat: 0, sugar: 10 },
   { pattern: /สับปะรด/i, menuName: "สับปะรด", kcal: 90, carb: 23, protein: 1, fat: 0, sugar: 17 },
-  { pattern: /องุ่น/i, menuName: "องุ่น", kcal: 110, carb: 28, protein: 1, fat: 0, sugar: 24 },
-  { pattern: /แก้วมังกร/i, menuName: "แก้วมังกร", kcal: 90, carb: 22, protein: 2, fat: 0, sugar: 14 },
-  { pattern: /ส้มโอ/i, menuName: "ส้มโอ", kcal: 90, carb: 22, protein: 1, fat: 0, sugar: 14 },
   { pattern: /(^|\s)ส้ม(\s|$)/i, menuName: "ส้ม", kcal: 70, carb: 17, protein: 1, fat: 0, sugar: 12 },
   { pattern: /ไส้กรอกชีส/i, menuName: "ไส้กรอกชีส", kcal: 260, carb: 10, protein: 10, fat: 20, sugar: 2 },
   { pattern: /ไส้กรอก/i, menuName: "ไส้กรอก", kcal: 180, carb: 7, protein: 8, fat: 13, sugar: 2 },
@@ -91,6 +89,11 @@ const LOCAL_FOOD_PRESETS = [
   { pattern: /กะเพรา|กระเพรา/i, menuName: "ข้าวกะเพรา", kcal: 650, carb: 70, protein: 30, fat: 28, sugar: 6 },
   { pattern: /มาม่า|บะหมี่|ก๋วยเตี๋ยว|ราเมง|เส้น/i, menuName: "เมนูเส้น", kcal: 480, carb: 65, protein: 20, fat: 14, sugar: 5 },
   { pattern: /เค้ก|คุกกี้|โดนัท|ไอติม|บิงซู/i, menuName: "ของหวาน", kcal: 350, carb: 50, protein: 5, fat: 14, sugar: 34 },
+];
+
+const PROTECTED_LOCAL_PRESETS = [
+  { pattern: /โอริโอ้|โอริโอ|oreo/i, menuName: "โอริโอ", kcal: 260, carb: 38, protein: 3, fat: 11, sugar: 22, confidence: "medium", estimateMode: "local" },
+  { pattern: /โค้ก\s*ซีโร่|โค๊ก\s*ซีโร่|coke\s*zero/i, menuName: "โค้กซีโร่", kcal: 0, carb: 0, protein: 0, fat: 0, sugar: 0, confidence: "high", estimateMode: "local" },
 ];
 
 const normalize = (text = "") => String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -127,28 +130,6 @@ const buildGoalFoodGuardReply = (foodText) => [
   ].join("\n"),
 ];
 
-const buildLoggedReply = ({ meal, total, target, estimateMode }) => {
-  const left = Math.max(target - total, 0);
-  const estimateNote = estimateMode === "local" || estimateMode === "brand_preset" || estimateMode === "drink_sweetness_preset"
-    ? "แปะนับแบบเร็วคร่าว ๆ ให้นะ 👀"
-    : "แปะประเมินให้แล้ว 😋";
-  return [
-    [
-      `โอเค แปะจดให้แล้ว 😋`,
-      `🍽️ ${meal.menuName}`,
-      `🔥 ~${Math.round(meal.kcal)} kcal`,
-      `🍚 คาร์บ ${Math.round(meal.carb)}g / 💪 โปรตีน ${Math.round(meal.protein)}g / 🥑 ไขมัน ${Math.round(meal.fat)}g`,
-      `📏 ปริมาณ: ${meal.portionLabel}`,
-      `🧾 ${estimateNote}`,
-    ].join("\n"),
-    [
-      `📊 วันนี้ ${Math.round(total)} / ${Math.round(target)} kcal`,
-      left > 0 ? `🟢 เหลือประมาณ ${Math.round(left)} kcal` : `🔴 วันนี้เกินเป้าแล้วนิดนึงนะ 👀`,
-      left > 0 ? "ยังมีพื้นที่อยู่ แต่อย่าเจี๊ยะเพลินเกินนะ" : "มื้อถัดไปเบาลงหน่อย แปะว่าเอากลับมาได้",
-    ].join("\n"),
-  ];
-};
-
 const resolveTextPortion = ({ kcal = 0 } = {}) => {
   if (kcal >= 750) return { level: "heavy", label: "ค่อนข้างเยอะ", note: "พิมพ์มาเป็นชื่อเมนู แปะนับเป็น 1 เสิร์ฟแบบร้านทั่วไปก่อนนะ" };
   if (kcal <= 320) return { level: "light", label: "ค่อนข้างเบา", note: "พิมพ์มาเป็นชื่อเมนู แปะนับเป็น 1 เสิร์ฟเบา ๆ ก่อนนะ" };
@@ -160,6 +141,11 @@ const splitFoodText = (text = "") => normalize(text)
   .split(/\s*(?:\+|,|และ|กับ|\n)\s*/i)
   .map((item) => item.trim())
   .filter(Boolean);
+
+const estimateProtectedLocal = (text = "") => {
+  const normalized = normalize(text).replace(/^กิน\s+/, "");
+  return PROTECTED_LOCAL_PRESETS.find((preset) => preset.pattern.test(normalized)) || null;
+};
 
 const estimateFoodLocally = (text = "") => {
   const normalized = normalize(text).replace(/^กิน\s+/, "");
@@ -178,6 +164,9 @@ const estimateFoodLocally = (text = "") => {
 };
 
 const estimateFood = async (text) => {
+  const protectedLocal = estimateProtectedLocal(text);
+  if (protectedLocal) return protectedLocal;
+
   const presetStart = nowMs();
   const preset = await findFoodPreset(text);
   if (preset) {
@@ -192,6 +181,18 @@ const estimateFood = async (text) => {
   logTiming("fastFoodText:estimateOpenAI", aiStart, `text=${text} menu=${foodData?.menuName || ""}`);
   return { ...foodData, estimateMode: "openai" };
 };
+
+const resolveCurrentTotal = ({ result = {}, session = {}, mealKcal = 0 } = {}) => {
+  const sheetTotal = safeNumber(result.todayCalories ?? result.totalToday, 0);
+  if (sheetTotal > 0) return sheetTotal;
+  const cachedTotal = safeNumber(session.todayCalories ?? session.totalToday ?? session.data?.todayCalories ?? session.data?.totalToday, 0);
+  if (cachedTotal > 0) return cachedTotal + safeNumber(mealKcal, 0);
+  return safeNumber(mealKcal, 0);
+};
+
+const isZeroCalorieFood = (foodData = {}, text = "") => (
+  safeNumber(foodData?.kcal, 0) === 0 && /(zero|ซีโร่|ไม่หวาน|ไม่มีน้ำตาล|กาแฟดำ|อเมริกาโน่)/i.test(`${foodData?.menuName || ""} ${text}`)
+);
 
 export const handleFastFoodText = async (event) => {
   const start = nowMs();
@@ -217,7 +218,7 @@ export const handleFastFoodText = async (event) => {
   const foodData = await estimateFood(text);
   logTiming("fastFoodText:estimate", estimateStart, `mode=${foodData?.estimateMode || "unknown"} text=${text} menu=${foodData?.menuName || ""}`);
   const kcal = safeNumber(foodData?.kcal, 0);
-  if (kcal <= 0) return false;
+  if (kcal <= 0 && !isZeroCalorieFood(foodData, text)) return false;
 
   if (foodData?.estimateMode === "openai") {
     logFoodTermCandidate({ term: text, foodData, source: "openai", example: text }).catch(() => {});
@@ -229,9 +230,9 @@ export const handleFastFoodText = async (event) => {
   invalidateRichMenuSummaryCache(userId);
   const result = await logFood({ userId, name: session.data?.name || "", menuName: meal.menuName, kcal: meal.kcal, carb: meal.carb, protein: meal.protein, fat: meal.fat, sugar: meal.sugar, requestId, source: foodData?.estimateMode === "local" ? "text_fast_local" : foodData?.estimateMode === "brand_preset" || foodData?.estimateMode === "drink_sweetness_preset" ? "text_fast_preset" : "text_fast_openai", portionLevel: portion.level, portionLabel: portion.label, portionNote: portion.note, confidence: foodData?.confidence || "medium" });
   invalidateRichMenuSummaryCache(userId);
-  const total = safeNumber(result.todayCalories ?? result.totalToday, meal.kcal);
-  const target = safeNumber(result.calorieTarget, DEFAULT_CALORIE_TARGET);
-  await replyTexts(replyToken, buildLoggedReply({ meal: { ...meal, portionLabel: portion.label }, total, target, estimateMode: foodData?.estimateMode }));
+  const total = resolveCurrentTotal({ result, session, mealKcal: meal.kcal });
+  const target = safeNumber(result.calorieTarget ?? session.calorieTarget ?? session.data?.calorieTarget, DEFAULT_CALORIE_TARGET);
+  await replyFlex(replyToken, buildFoodLogFlexMessage({ meal: { ...meal, portionLabel: portion.label }, total, target, estimateMode: foodData?.estimateMode }));
   logTiming("event:fastFoodText", start, `estimateMode=${foodData?.estimateMode || "unknown"} source=${result.source || "unknown"} supabaseWrite=${result.supabaseWrite || ""} portion=${portion.level}`);
   return true;
 };
