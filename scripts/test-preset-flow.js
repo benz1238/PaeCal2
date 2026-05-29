@@ -54,4 +54,8 @@ assert.equal(redGauge.statusEmoji, "🔴");
 assert.equal(redGauge.fillPercent, 100);
 assert.equal(redGauge.overKcal, 395);
 
+const blizzardGauge = buildDailyEnergyGauge({ total: 300, target: 2050 });
+assert.equal(blizzardGauge.statusEmoji, "🟢");
+assert.equal(blizzardGauge.leftKcal, 1750);
+
 console.log("Preset flow tests passed");
