@@ -8,6 +8,7 @@ export const buildDailyEnergyGauge = ({ total = 0, target = DEFAULT_CALORIE_TARG
   const totalKcal = nonNegative(total);
   const targetKcal = Math.max(safeNumber(target, DEFAULT_CALORIE_TARGET), 1);
   const percent = Math.round((totalKcal / targetKcal) * 100);
+  const displayPercent = clamp(percent, 0, 100);
   const fillPercent = clamp(percent, 1, 100);
   const overKcal = Math.max(totalKcal - targetKcal, 0);
   const leftKcal = Math.max(targetKcal - totalKcal, 0);
@@ -15,12 +16,13 @@ export const buildDailyEnergyGauge = ({ total = 0, target = DEFAULT_CALORIE_TARG
   if (percent >= 100) {
     return {
       percent,
+      displayPercent,
       fillPercent,
       color: "#DC2626",
       statusEmoji: "🔴",
-      statusText: overKcal > 0 ? `เลยเพดานมาราว ${round(overKcal)} kcal` : "แตะเพดานวันนี้พอดี",
+      statusText: overKcal > 0 ? "ถังวันนี้เต็มแล้ว แปะรับทราบให้แล้ว" : "แตะเพดานวันนี้พอดี",
       adviceText: "มื้อต่อไปเบา ๆ หน่อย แปะว่าเอากลับมาได้",
-      meterText: `ถังวันนี้เต็มแล้ว ${percent}%`,
+      meterText: "เกจแตะเต็มแล้ว ไม่ต้องตกใจ ค่อยมื้อต่อไป",
       totalKcal,
       targetKcal,
       leftKcal,
@@ -31,12 +33,13 @@ export const buildDailyEnergyGauge = ({ total = 0, target = DEFAULT_CALORIE_TARG
   if (percent >= 75) {
     return {
       percent,
+      displayPercent,
       fillPercent,
       color: "#F59E0B",
       statusEmoji: "🟡",
       statusText: `ถังเริ่มใกล้เต็ม เหลือราว ${round(leftKcal)} kcal`,
       adviceText: "ยังพอมีพื้นที่ แต่อย่าเจี๊ยะเพลินเกินนะ",
-      meterText: `ใช้พลังวันนี้ไปประมาณ ${percent}%`,
+      meterText: `ใช้พลังวันนี้ไปประมาณ ${displayPercent}%`,
       totalKcal,
       targetKcal,
       leftKcal,
@@ -46,12 +49,13 @@ export const buildDailyEnergyGauge = ({ total = 0, target = DEFAULT_CALORIE_TARG
 
   return {
     percent,
+    displayPercent,
     fillPercent,
     color: "#16A34A",
     statusEmoji: "🟢",
     statusText: `ยังมีพื้นที่อยู่ ราว ${round(leftKcal)} kcal`,
     adviceText: "เดี๋ยวมื้อต่อไปค่อยคุมต่อได้",
-    meterText: `ใช้พลังวันนี้ไปประมาณ ${percent}%`,
+    meterText: `ใช้พลังวันนี้ไปประมาณ ${displayPercent}%`,
     totalKcal,
     targetKcal,
     leftKcal,
