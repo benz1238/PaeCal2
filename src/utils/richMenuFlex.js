@@ -140,6 +140,31 @@ const speechBubbleFooter = (message, color = palette.blue, stickerUrl = "") => (
   ],
 });
 
+const heroStickerBackground = (stickerUrl = "") => ({
+  type: "box",
+  layout: "vertical",
+  position: "absolute",
+  offsetTop: "0px",
+  offsetEnd: "0px",
+  width: "142px",
+  height: "142px",
+  contents: [stickerImage(stickerUrl, "142px")],
+});
+
+const recapHeroTitle = ({ userName, rarityLabel, titleCard, titleText, stickerUrl }) => ({
+  type: "box",
+  layout: "vertical",
+  height: "142px",
+  paddingTop: "0px",
+  paddingEnd: "0px",
+  contents: [
+    heroStickerBackground(stickerUrl),
+    text({ text: "TODAY RECAP BY แปะ", size: "sm", weight: "bold", color: "#A32922", wrap: false, maxLines: 1 }),
+    text({ text: `${userName} · ${rarityLabel}`, size: "sm", weight: "bold", color: titleCard.color || palette.muted, margin: "xs", wrap: true, maxLines: 1 }),
+    text({ text: titleText, size: "xxl", weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs", maxLines: 3 }),
+  ],
+});
+
 const metricRow = (label, value, color = palette.text) => ({
   type: "box",
   layout: "horizontal",
@@ -241,7 +266,7 @@ const characterPanel = ({ titleCard, signals, stickerUrl }) => ({
     { type: "box", layout: "vertical", width: "76px", height: "76px", contents: [stickerImage(stickerUrl, "76px")] },
     { type: "box", layout: "vertical", flex: 1, contents: [
       text({ text: "ฉายาลื้อจากแปะ", size: "xs", weight: "bold", color: palette.muted, wrap: true }),
-      text({ text: titleCard.name, size: "lg", weight: "bold", color: titleCard.color || palette.brown, wrap: true }),
+      text({ text: formatDailyTitle(titleCard.name), size: "lg", weight: "bold", color: titleCard.color || palette.brown, wrap: true, maxLines: 3 }),
     ]},
   ],
 });
@@ -304,14 +329,7 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
     type: "flex",
     altText: "สรุปวันนี้",
     contents: { type: "bubble", size: "mega", body: { type: "box", layout: "vertical", backgroundColor: palette.cream, paddingAll: "18px", contents: [
-      { type: "box", layout: "horizontal", spacing: "6px", alignItems: "flex-start", contents: [
-        { type: "box", layout: "vertical", flex: 1, contents: [
-          text({ text: "TODAY RECAP BY แปะ", size: "sm", weight: "bold", color: "#A32922", wrap: false, maxLines: 1 }),
-          text({ text: `${userName} · ${getRarityLabel(titleCard.rarity)}`, size: "sm", weight: "bold", color: titleCard.color || palette.muted, margin: "xs", wrap: true, maxLines: 1 }),
-          text({ text: titleText, size: "xxl", weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs", maxLines: 3 }),
-        ]},
-        { type: "box", layout: "vertical", flex: 0, width: "118px", height: "118px", paddingAll: "0px", contents: [stickerImage(stickerUrl, "112px")] },
-      ]},
+      recapHeroTitle({ userName, rarityLabel: getRarityLabel(titleCard.rarity), titleCard, titleText, stickerUrl }),
       { type: "box", layout: "vertical", backgroundColor: palette.card, cornerRadius: "20px", paddingAll: "16px", margin: "md", spacing: "sm", contents: [
         text({ text: statusText, size: "xl", weight: "bold", color: signals.isOver ? palette.red : palette.green, wrap: true }),
         { type: "separator", color: "#E5D3C8", margin: "sm" },
