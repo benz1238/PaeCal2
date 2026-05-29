@@ -102,20 +102,67 @@ const getDailyTitle = (signals, summary = {}) => selectDailyTitle(signals, {
 
 const stickerUrlForSignals = (signals = {}, options = {}) => chooseDailyRecapStickerUrl({ day: signals, memory: signals }, options);
 
+const buildTwoLineTitle = (left, right, leftSuffix = "") => {
+  const a = String(left || "").trim();
+  const b = String(right || "").trim();
+  if (!a || !b) return `${a}${b}`;
+  return `${a}${leftSuffix}\n${b}`;
+};
+
 const formatDailyTitle = (name = "") => {
   const title = String(name || "").trim();
-  const fixed = {
-    "น้ำมันคือพลังงานชีวิต": "น้ำมันคือ…\nพลังงานชีวิต",
-    "คาร์บไม่เคยทำร้ายใคร": "คาร์บไม่เคย\nทำร้ายใคร",
-    "ไขมันไม่เข้าใครออกใคร": "ไขมันไม่เข้า\nใครออกใคร",
-    "แป้งก่อน โปรตีนทีหลัง": "แป้งก่อน\nโปรตีนทีหลัง",
-    "มาม่าตอนเที่ยงคืน Ambassador": "มาม่าตอนเที่ยงคืน\nAmbassador",
+  if (!title) return "-";
+
+  const exact = {
+    "น้ำมันคือพลังงานชีวิต": buildTwoLineTitle("น้ำมันคือ", "พลังงานชีวิต", "..."),
+    "หมูกระทะเยียวยาทุกสิ่ง": buildTwoLineTitle("หมูกระทะจะ", "เยียวยาทุกสิ่ง", "..."),
+    "คาร์บไม่เคยทำร้ายใคร": buildTwoLineTitle("คาร์บไม่เคย", "ทำร้ายใคร"),
+    "ไขมันไม่เข้าใครออกใคร": buildTwoLineTitle("ไขมันไม่เข้า", "ใครออกใคร"),
+    "แป้งก่อน โปรตีนทีหลัง": buildTwoLineTitle("แป้งก่อน", "โปรตีนทีหลัง"),
+    "มาม่าตอนเที่ยงคืน Ambassador": buildTwoLineTitle("มาม่าตอนเที่ยงคืน", "Ambassador"),
   };
-  if (fixed[title]) return fixed[title];
-  if (title.length > 13 && title.includes("คือ")) return title.replace("คือ", "คือ…\n");
-  if (title.length > 14 && title.includes("แห่ง")) return title.replace("แห่ง", "\nแห่ง");
-  if (title.length > 16 && title.includes(" ")) return title.replace(/\s+([^\s]+)$/, "\n$1");
-  return title;
+  if (exact[title]) return exact[title];
+
+  const splitBeforeWord = (word, leftSuffix = "") => {
+    const idx = title.indexOf(word);
+    if (idx <= 0) return null;
+    const left = title.slice(0, idx).trim();
+    const right = title.slice(idx).trim();
+    if (!left || !right) return null;
+    return buildTwoLineTitle(left, right, leftSuffix);
+  };
+
+  if (title.includes("เยียวยา")) {
+    const idx = title.indexOf("เยียวยา");
+    const left = title.slice(0, idx).trim();
+    const right = title.slice(idx).trim();
+    if (left && right) return buildTwoLineTitle(`${left}จะ`, right, "...");
+  }
+
+  if (title.includes("คือ") && title.includes("พลังงาน")) {
+    const idx = title.indexOf("พลังงาน");
+    const left = title.slice(0, idx).trim();
+    const right = title.slice(idx).trim();
+    if (left && right) return buildTwoLineTitle(left, right, "...");
+  }
+
+  if (title.includes("กับ")) {
+    const idx = title.indexOf("กับ");
+    const left = title.slice(0, idx).trim();
+    const right = title.slice(idx).trim();
+    if (left.length >= 6 && right) return buildTwoLineTitle(left, right);
+  }
+
+  return (
+    splitBeforeWord("ไม่เคย") ||
+    splitBeforeWord("ทำร้าย") ||
+    splitBeforeWord("ทำให้") ||
+    splitBeforeWord("พลังงาน", "...") ||
+    splitBeforeWord("แห่ง") ||
+    (title.length > 16 && title.includes(" ")
+      ? title.replace(/\s+([^\s]+)$/, "\n$1")
+      : title)
+  );
 };
 
 const footerText = (message = "") => String(message || "").replace(/\s+/g, " ").replace(/(.{18,26})\s+/g, "$1\n").trim();
