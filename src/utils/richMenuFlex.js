@@ -102,90 +102,67 @@ const getDailyTitle = (signals, summary = {}) => selectDailyTitle(signals, {
 
 const stickerUrlForSignals = (signals = {}, options = {}) => chooseDailyRecapStickerUrl({ day: signals, memory: signals }, options);
 
-const buildTwoLineTitle = (left, right, leftSuffix = "") => {
-  const a = String(left || "").trim();
-  const b = String(right || "").trim();
-  if (!a || !b) return `${a}${b}`;
-  return `${a}${leftSuffix}\n${b}`;
-};
-
 const isEnglishOnlyTitle = (title = "") => /[A-Za-z]/.test(title) && !/[ก-๙]/.test(title);
 const splitEnglishTitle = (title = "") => {
-  const cleaned = String(title || "").trim().replace(/\s+/g, " ");
-  const exact = {
-    "Cream Overload Aura": ["Cream Overload", "Aura"],
-    "Chicken Breast Left the Chat": ["Chicken", "Breast", "Left the Chat"],
-    "Dessert Main Character": ["Dessert", "Main Character"],
-    "Protein DLC ยังไม่โหลด": ["Protein DLC", "ยังไม่โหลด"],
-  };
-  if (exact[cleaned]) return exact[cleaned];
-  const words = cleaned.split(" ").filter(Boolean);
-  if (words.length <= 2) return [cleaned];
+  const words = String(title || "").trim().replace(/\s+/g, " ").split(" ").filter(Boolean);
+  if (words.length <= 2) return [words.join(" ")];
   if (words.length === 3) return [words.slice(0, 2).join(" "), words[2]];
   if (words.length >= 5) return [words[0], words[1], words.slice(2).join(" ")];
   return [words.slice(0, 2).join(" "), words.slice(2).join(" ")];
+};
+
+const splitThaiTitle = (title = "") => {
+  const cleaned = String(title || "").trim().replace(/\s+/g, " ");
+  const exact = {
+    "น้ำมันคือพลังงานชีวิต": ["น้ำมันคือ...", "พลังงานชีวิต"],
+    "หมูกระทะเยียวยาทุกสิ่ง": ["หมูกระทะจะ...", "เยียวยาทุกสิ่ง"],
+    "หวานนำ ชีวิตตาม": ["หวานนำ", "ชีวิตตาม"],
+    "โปรตีนหายเข้ากลีบเมฆ": ["โปรตีนหาย", "เข้ากลีบเมฆ"],
+    "วิญญาณของหวานล่องลอย": ["วิญญาณของหวาน", "ล่องลอย"],
+    "คาร์บไม่เคยทำร้ายใคร": ["คาร์บไม่เคย", "ทำร้ายใคร"],
+    "ไขมันไม่เข้าใครออกใคร": ["ไขมันไม่เข้า", "ใครออกใคร"],
+    "แป้งก่อน โปรตีนทีหลัง": ["แป้งก่อน", "โปรตีนทีหลัง"],
+    "มาม่าตอนเที่ยงคืน Ambassador": ["มาม่าตอนเที่ยงคืน", "Ambassador"],
+    "Noodle Energy สูงมาก": ["Noodle Energy", "สูงมาก"],
+  };
+  if (exact[cleaned]) return exact[cleaned];
+  if (cleaned.includes(" ")) {
+    const parts = cleaned.split(" ").filter(Boolean);
+    if (parts.length >= 2 && parts.every((part) => part.length <= 13)) return parts;
+  }
+  const before = ["เข้ากลีบ", "ล่องลอย", "ชีวิต", "ทำร้าย", "ทำให้", "พลังงาน", "แห่ง", "ไม่เคย"];
+  for (const word of before) {
+    const idx = cleaned.indexOf(word);
+    if (idx > 0) {
+      const left = cleaned.slice(0, idx).trim();
+      const right = cleaned.slice(idx).trim();
+      if (left && right) return [word === "พลังงาน" ? `${left}...` : left, right];
+    }
+  }
+  const after = ["หาย", "นำ", "คือ", "จะ"];
+  for (const word of after) {
+    const idx = cleaned.indexOf(word);
+    if (idx >= 0 && idx + word.length < cleaned.length) {
+      const left = cleaned.slice(0, idx + word.length).trim();
+      const right = cleaned.slice(idx + word.length).trim();
+      if (left.length >= 4 && right.length >= 3) return [word === "คือ" || word === "จะ" ? `${left}...` : left, right];
+    }
+  }
+  const max = 10;
+  const lines = [];
+  for (let i = 0; i < cleaned.length; i += max) lines.push(cleaned.slice(i, i + max));
+  return lines.slice(0, 3);
 };
 
 const formatDailyTitle = (name = "") => {
   const title = String(name || "").trim();
   if (!title) return "-";
   if (isEnglishOnlyTitle(title)) return splitEnglishTitle(title).join("\n");
-
-  const exact = {
-    "น้ำมันคือพลังงานชีวิต": buildTwoLineTitle("น้ำมันคือ", "พลังงานชีวิต", "..."),
-    "หมูกระทะเยียวยาทุกสิ่ง": buildTwoLineTitle("หมูกระทะจะ", "เยียวยาทุกสิ่ง", "..."),
-    "หวานนำ ชีวิตตาม": buildTwoLineTitle("หวานนำ", "ชีวิตตาม"),
-    "คาร์บไม่เคยทำร้ายใคร": buildTwoLineTitle("คาร์บไม่เคย", "ทำร้ายใคร"),
-    "ไขมันไม่เข้าใครออกใคร": buildTwoLineTitle("ไขมันไม่เข้า", "ใครออกใคร"),
-    "แป้งก่อน โปรตีนทีหลัง": buildTwoLineTitle("แป้งก่อน", "โปรตีนทีหลัง"),
-    "มาม่าตอนเที่ยงคืน Ambassador": buildTwoLineTitle("มาม่าตอนเที่ยงคืน", "Ambassador"),
-    "Noodle Energy สูงมาก": buildTwoLineTitle("Noodle Energy", "สูงมาก"),
-  };
-  if (exact[title]) return exact[title];
-
-  const splitBeforeWord = (word, leftSuffix = "") => {
-    const idx = title.indexOf(word);
-    if (idx <= 0) return null;
-    const left = title.slice(0, idx).trim();
-    const right = title.slice(idx).trim();
-    if (!left || !right) return null;
-    return buildTwoLineTitle(left, right, leftSuffix);
-  };
-
-  if (title.includes("เยียวยา")) {
-    const idx = title.indexOf("เยียวยา");
-    const left = title.slice(0, idx).trim();
-    const right = title.slice(idx).trim();
-    if (left && right) return buildTwoLineTitle(`${left}จะ`, right, "...");
-  }
-
-  if (title.includes("คือ") && title.includes("พลังงาน")) {
-    const idx = title.indexOf("พลังงาน");
-    const left = title.slice(0, idx).trim();
-    const right = title.slice(idx).trim();
-    if (left && right) return buildTwoLineTitle(left, right, "...");
-  }
-
-  if (title.includes("กับ")) {
-    const idx = title.indexOf("กับ");
-    const left = title.slice(0, idx).trim();
-    const right = title.slice(idx).trim();
-    if (left.length >= 6 && right) return buildTwoLineTitle(left, right);
-  }
-
-  return (
-    splitBeforeWord("ไม่เคย") ||
-    splitBeforeWord("ทำร้าย") ||
-    splitBeforeWord("ทำให้") ||
-    splitBeforeWord("พลังงาน", "...") ||
-    splitBeforeWord("แห่ง") ||
-    (title.length > 16 && title.includes(" ")
-      ? title.replace(/\s+([^\s]+)$/, "\n$1")
-      : title)
-  );
+  return splitThaiTitle(title).join("\n");
 };
 
 const titleChipWidth = (line = "") => `${Math.min(270, Math.max(104, String(line).length * 16 + 34))}px`;
+const titleLineCount = (title = "") => formatDailyTitle(title).split("\n").length;
 const shouldUseTitleChips = (title = "") => isEnglishOnlyTitle(title) && splitEnglishTitle(title).length >= 3;
 const dailyTitleNodes = ({ titleCard, titleText, size = "xxl" }) => {
   if (shouldUseTitleChips(titleCard.name)) {
@@ -201,8 +178,7 @@ const dailyTitleNodes = ({ titleCard, titleText, size = "xxl" }) => {
       contents: [text({ text: line, size: "xl", weight: "bold", color: titleCard.color || palette.muted, wrap: false, maxLines: 1 })],
     }));
   }
-
-  return [text({ text: titleText, size, weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs", maxLines: 3 })];
+  return [text({ text: titleText, size, weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs", maxLines: 4 })];
 };
 
 const footerText = (message = "") => String(message || "").replace(/\s+/g, " ").replace(/(.{18,26})\s+/g, "$1\n").trim();
@@ -215,36 +191,16 @@ const speechBubbleFooter = (message, color = palette.blue, stickerUrl = "") => (
   alignItems: "flex-end",
   contents: [
     { type: "box", layout: "vertical", width: "46px", height: "46px", contents: [stickerImage(stickerUrl, "46px")] },
-    {
-      type: "box",
-      layout: "vertical",
-      flex: 1,
-      backgroundColor: "#FFFFFF",
-      cornerRadius: "16px",
-      paddingAll: "10px",
-      contents: [text({ text: footerText(message), size: "sm", weight: "bold", color, wrap: true, align: "start", maxLines: 2 })],
-    },
+    { type: "box", layout: "vertical", flex: 1, backgroundColor: "#FFFFFF", cornerRadius: "16px", paddingAll: "10px", contents: [text({ text: footerText(message), size: "sm", weight: "bold", color, wrap: true, align: "start", maxLines: 2 })] },
   ],
 });
 
 const heroStickerBackground = (stickerUrl = "") => ({
-  type: "box",
-  layout: "vertical",
-  position: "absolute",
-  offsetTop: "0px",
-  offsetEnd: "0px",
-  width: "142px",
-  height: "142px",
-  contents: [stickerImage(stickerUrl, "142px")],
+  type: "box", layout: "vertical", position: "absolute", offsetTop: "0px", offsetEnd: "0px", width: "142px", height: "142px", contents: [stickerImage(stickerUrl, "142px")],
 });
 
 const recapHeroTitle = ({ userName, rarityLabel, titleCard, titleText, stickerUrl }) => ({
-  type: "box",
-  layout: "vertical",
-  height: shouldUseTitleChips(titleCard.name) ? "142px" : "132px",
-  paddingTop: "0px",
-  paddingEnd: "0px",
-  contents: [
+  type: "box", layout: "vertical", height: titleLineCount(titleCard.name) >= 3 ? "150px" : "132px", paddingTop: "0px", paddingEnd: "0px", contents: [
     heroStickerBackground(stickerUrl),
     text({ text: "TODAY RECAP BY แปะ", size: "sm", weight: "bold", color: "#A32922", wrap: false, maxLines: 1 }),
     text({ text: `${userName} · ${rarityLabel}`, size: "sm", weight: "bold", color: titleCard.color || palette.muted, margin: "xs", wrap: true, maxLines: 1 }),
@@ -252,82 +208,14 @@ const recapHeroTitle = ({ userName, rarityLabel, titleCard, titleText, stickerUr
   ],
 });
 
-const metricRow = (label, value, color = palette.text) => ({
-  type: "box",
-  layout: "horizontal",
-  contents: [
-    text({ text: label, size: "sm", color: palette.muted, flex: 5, wrap: true }),
-    text({ text: value, size: "sm", color, weight: "bold", align: "end", flex: 5, wrap: true }),
-  ],
-});
+const metricRow = (label, value, color = palette.text) => ({ type: "box", layout: "horizontal", contents: [text({ text: label, size: "sm", color: palette.muted, flex: 5, wrap: true }), text({ text: value, size: "sm", color, weight: "bold", align: "end", flex: 5, wrap: true })] });
+const fullInfoPill = ({ title, value, bg, color = palette.brown }) => ({ type: "box", layout: "horizontal", backgroundColor: bg, cornerRadius: "16px", paddingAll: "10px", margin: "sm", contents: [text({ text: title, size: "sm", weight: "bold", color: palette.text, wrap: true, flex: 4 }), text({ text: value, size: "sm", weight: "bold", color, wrap: true, align: "end", flex: 6, maxLines: 2 })] });
+const evidenceBox = (lines, title = "หลักฐานที่แปะจับได้") => ({ type: "box", layout: "vertical", backgroundColor: palette.card, cornerRadius: "18px", paddingAll: "14px", spacing: "sm", margin: "md", contents: [text({ text: title, size: "sm", weight: "bold", color: palette.text, wrap: true }), ...lines.map((line) => text({ text: `• ${line}`, size: "sm", color: palette.brown, wrap: true }))] });
 
-const fullInfoPill = ({ title, value, bg, color = palette.brown }) => ({
-  type: "box",
-  layout: "horizontal",
-  backgroundColor: bg,
-  cornerRadius: "16px",
-  paddingAll: "10px",
-  margin: "sm",
-  contents: [
-    text({ text: title, size: "sm", weight: "bold", color: palette.text, wrap: true, flex: 4 }),
-    text({ text: value, size: "sm", weight: "bold", color, wrap: true, align: "end", flex: 6, maxLines: 2 }),
-  ],
-});
-
-const evidenceBox = (lines, title = "หลักฐานที่แปะจับได้") => ({
-  type: "box",
-  layout: "vertical",
-  backgroundColor: palette.card,
-  cornerRadius: "18px",
-  paddingAll: "14px",
-  spacing: "sm",
-  margin: "md",
-  contents: [
-    text({ text: title, size: "sm", weight: "bold", color: palette.text, wrap: true }),
-    ...lines.map((line) => text({ text: `• ${line}`, size: "sm", color: palette.brown, wrap: true })),
-  ],
-});
-
-const calorieFooter = (signals) => rotate(signals.isEmpty ? [
-  "โต๊ะยังว่างอยู่ แปะรอมื้อแรกนะ",
-  "เริ่มมื้อแรกเมื่อไหร่ แปะจะจดให้เอง",
-] : signals.isOver ? [
-  "วันนี้ใจใหญ่ไปนิด\nพรุ่งนี้ค่อยตั้งหลักใหม่",
-  "เกินแล้วรู้ตัวก็ดี\nพรุ่งนี้แปะช่วยดึงกลับ",
-] : [
-  "คุมต่ออีกนิด แปะว่าเอาอยู่",
-  "เหลือพื้นที่อยู่ อย่าเจี๊ยะเพลินนะ",
-]);
-
-const wrappedFooter = (signals) => rotate(signals.isEmpty ? [
-  "โต๊ะยังว่างอยู่ แปะรอหลักฐานก่อน",
-  "ส่งมื้อแรกมาเมื่อไหร่ เดี๋ยวแปะอ่านทรงให้",
-] : signals.isOver ? [
-  "ไอหยา วันนี้มีหลุด แต่ยังไม่พัง พรุ่งนี้ค่อยตัดเกมใหม่",
-  "วันนี้ใจใหญ่ไปนิด พรุ่งนี้แปะช่วยดึงกลับ",
-] : [
-  "คุมต่ออีกนิด แปะว่าเอาอยู่",
-  "อั๊วะให้ผ่านก่อน แต่พรุ่งนี้ยังต้องดูต่อ",
-]);
-
-const titleFooter = (signals) => rotate(signals.isEmpty ? [
-  "ยังไม่มีหลักฐาน แปะยังไม่ตั้งฉายามั่ว 555",
-  "มื้อแรกมาเมื่อไหร่ เดี๋ยวแปะตั้งให้แบบมีชั้นเชิง",
-] : [
-  "พรุ่งนี้มาดูกันใหม่ แปะรออยู่ 555+",
-  "อั๊วะจดไว้แล้ว พรุ่งนี้มาดูว่าอีโวไหม",
-]);
-
-const nutritionFooter = (signals) => rotate(signals.isEmpty ? [
-  "ส่งมื้อแรกมา เดี๋ยวแปะเปิดโพยให้",
-  "ยังไม่มีโพยให้เปิด แปะรอมื้อแรกอยู่",
-] : signals.lowProtein ? [
-  "โปรตีนยังบางไปนิด มื้อต่อไปเติมหน่อย แปะว่าเวิร์ก",
-  "เติมไข่/ปลา/ไก่หน่อย โพยจะสวยขึ้นทันที",
-] : [
-  "ตัวเลขไม่ตีกันมาก อั๊วะว่าโอเคอยู่",
-  "คุมแบบนี้ต่อได้ แต่อย่าชะล่าใจนะลื้อ",
-]);
+const calorieFooter = (signals) => rotate(signals.isEmpty ? ["โต๊ะยังว่างอยู่ แปะรอมื้อแรกนะ", "เริ่มมื้อแรกเมื่อไหร่ แปะจะจดให้เอง"] : signals.isOver ? ["วันนี้ใจใหญ่ไปนิด\nพรุ่งนี้ค่อยตั้งหลักใหม่", "เกินแล้วรู้ตัวก็ดี\nพรุ่งนี้แปะช่วยดึงกลับ"] : ["คุมต่ออีกนิด แปะว่าเอาอยู่", "เหลือพื้นที่อยู่ อย่าเจี๊ยะเพลินนะ"]);
+const wrappedFooter = (signals) => rotate(signals.isEmpty ? ["โต๊ะยังว่างอยู่ แปะรอหลักฐานก่อน", "ส่งมื้อแรกมาเมื่อไหร่ เดี๋ยวแปะอ่านทรงให้"] : signals.isOver ? ["ไอหยา วันนี้มีหลุด แต่ยังไม่พัง พรุ่งนี้ค่อยตัดเกมใหม่", "วันนี้ใจใหญ่ไปนิด พรุ่งนี้แปะช่วยดึงกลับ"] : ["คุมต่ออีกนิด แปะว่าเอาอยู่", "อั๊วะให้ผ่านก่อน แต่พรุ่งนี้ยังต้องดูต่อ"]);
+const titleFooter = (signals) => rotate(signals.isEmpty ? ["ยังไม่มีหลักฐาน แปะยังไม่ตั้งฉายามั่ว 555", "มื้อแรกมาเมื่อไหร่ เดี๋ยวแปะตั้งให้แบบมีชั้นเชิง"] : ["พรุ่งนี้มาดูกันใหม่ แปะรออยู่ 555+", "อั๊วะจดไว้แล้ว พรุ่งนี้มาดูว่าอีโวไหม"]);
+const nutritionFooter = (signals) => rotate(signals.isEmpty ? ["ส่งมื้อแรกมา เดี๋ยวแปะเปิดโพยให้", "ยังไม่มีโพยให้เปิด แปะรอมื้อแรกอยู่"] : signals.lowProtein ? ["โปรตีนยังบางไปนิด มื้อต่อไปเติมหน่อย แปะว่าเวิร์ก", "เติมไข่/ปลา/ไก่หน่อย โพยจะสวยขึ้นทันที"] : ["ตัวเลขไม่ตีกันมาก อั๊วะว่าโอเคอยู่", "คุมแบบนี้ต่อได้ แต่อย่าชะล่าใจนะลื้อ"]);
 
 const diagnoseMainCulprit = (signals) => {
   if (signals.isEmpty) return { label: "ยังไม่มีหลักฐาน", detail: "วันนี้โต๊ะยังโล่ง แปะรอดูมื้อแรกอยู่" };
@@ -340,117 +228,24 @@ const diagnoseMainCulprit = (signals) => {
   return { label: "ทรงยังนิ่ง", detail: "วันนี้ดูเรียบร้อย แปะให้ผ่านแบบยิ้ม ๆ" };
 };
 
-const characterPanel = ({ titleCard, signals, stickerUrl }) => ({
-  type: "box",
-  layout: "horizontal",
-  backgroundColor: signals.isOver ? palette.softRed : palette.sky,
-  cornerRadius: "22px",
-  paddingAll: "14px",
-  margin: "md",
-  spacing: "10px",
-  contents: [
-    { type: "box", layout: "vertical", width: "76px", height: "76px", contents: [stickerImage(stickerUrl, "76px")] },
-    { type: "box", layout: "vertical", flex: 1, contents: [
-      text({ text: "ฉายาลื้อจากแปะ", size: "xs", weight: "bold", color: palette.muted, wrap: true }),
-      ...dailyTitleNodes({ titleCard, titleText: formatDailyTitle(titleCard.name), size: "lg" }),
-    ]},
-  ],
-});
+const characterPanel = ({ titleCard, signals, stickerUrl }) => ({ type: "box", layout: "horizontal", backgroundColor: signals.isOver ? palette.softRed : palette.sky, cornerRadius: "22px", paddingAll: "14px", margin: "md", spacing: "10px", contents: [{ type: "box", layout: "vertical", width: "76px", height: "76px", contents: [stickerImage(stickerUrl, "76px")] }, { type: "box", layout: "vertical", flex: 1, contents: [text({ text: "ฉายาลื้อจากแปะ", size: "xs", weight: "bold", color: palette.muted, wrap: true }), ...dailyTitleNodes({ titleCard, titleText: formatDailyTitle(titleCard.name), size: "lg" })] }] });
 
 export const buildFoodAuraFlexMessage = ({ summary = {} } = {}) => {
-  const signals = getSummarySignals(summary);
-  const titleCard = getDailyTitle(signals, summary);
-  const stickerUrl = stickerUrlForSignals(signals);
-  const footerStickerUrl = stickerUrlForSignals(signals, { flipped: true });
-  return {
-    type: "flex",
-    altText: "ฉายาวันนี้",
-    contents: { type: "bubble", size: "mega", body: { type: "box", layout: "vertical", backgroundColor: palette.cream, paddingAll: "18px", contents: [
-      text({ text: `ฉายาลื้อจากแปะ · ${getRarityLabel(titleCard.rarity)}`, size: "sm", weight: "bold", color: titleCard.color || palette.orange, wrap: true }),
-      ...dailyTitleNodes({ titleCard, titleText: formatDailyTitle(titleCard.name) }),
-      characterPanel({ titleCard, signals, stickerUrl }),
-      text({ text: signals.isEmpty ? "ส่งมื้อแรกมาก่อน เดี๋ยวแปะตั้งฉายาให้" : "อั๊วะพูดจริงไม่ได้โม้~", size: "md", color: palette.brown, weight: "bold", wrap: true, margin: "md" }),
-      speechBubbleFooter(titleFooter(signals), palette.blue, footerStickerUrl),
-    ] } },
-  };
+  const signals = getSummarySignals(summary); const titleCard = getDailyTitle(signals, summary); const stickerUrl = stickerUrlForSignals(signals); const footerStickerUrl = stickerUrlForSignals(signals, { flipped: true });
+  return { type: "flex", altText: "ฉายาวันนี้", contents: { type: "bubble", size: "mega", body: { type: "box", layout: "vertical", backgroundColor: palette.cream, paddingAll: "18px", contents: [text({ text: `ฉายาลื้อจากแปะ · ${getRarityLabel(titleCard.rarity)}`, size: "sm", weight: "bold", color: titleCard.color || palette.orange, wrap: true }), ...dailyTitleNodes({ titleCard, titleText: formatDailyTitle(titleCard.name) }), characterPanel({ titleCard, signals, stickerUrl }), text({ text: signals.isEmpty ? "ส่งมื้อแรกมาก่อน เดี๋ยวแปะตั้งฉายาให้" : "อั๊วะพูดจริงไม่ได้โม้~", size: "md", color: palette.brown, weight: "bold", wrap: true, margin: "md" }), speechBubbleFooter(titleFooter(signals), palette.blue, footerStickerUrl)] } } };
 };
 
 export const buildFoodWrappedFlexMessage = ({ summary = {} } = {}) => {
-  const signals = getSummarySignals(summary);
-  const culprit = diagnoseMainCulprit(signals);
-  const stickerUrl = stickerUrlForSignals(signals);
-  const footerStickerUrl = stickerUrlForSignals(signals, { flipped: true });
-  const topMealText = signals.topMeal ? `${truncate(signals.topMeal, 28)}${signals.topMealKcal > 0 ? ` · ~${Math.round(signals.topMealKcal)} kcal` : ""}` : "ยังไม่มีมื้อเด่น";
-  return {
-    type: "flex",
-    altText: "วันนี้อาหารฟ้องว่า…",
-    contents: { type: "bubble", size: "mega", body: { type: "box", layout: "vertical", backgroundColor: palette.cream, paddingAll: "18px", contents: [
-      { type: "box", layout: "horizontal", spacing: "10px", contents: [
-        { type: "box", layout: "vertical", width: "64px", height: "64px", contents: [stickerImage(stickerUrl, "64px")] },
-        { type: "box", layout: "vertical", flex: 1, contents: [
-          text({ text: "วันนี้อาหารฟ้องว่า…", size: "sm", weight: "bold", color: palette.orange }),
-          text({ text: culprit.label, size: "xl", weight: "bold", color: signals.isOver ? palette.red : palette.brown, wrap: true }),
-        ]},
-      ]},
-      evidenceBox([`มื้อเด่น: ${topMealText}`, `รวมวันนี้: ${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal`], "หลักฐานบนโต๊ะ"),
-      text({ text: culprit.detail, size: "md", color: palette.brown, weight: "bold", wrap: true, margin: "md" }),
-      speechBubbleFooter(wrappedFooter(signals), palette.blue, footerStickerUrl),
-    ] } },
-  };
+  const signals = getSummarySignals(summary); const culprit = diagnoseMainCulprit(signals); const stickerUrl = stickerUrlForSignals(signals); const footerStickerUrl = stickerUrlForSignals(signals, { flipped: true }); const topMealText = signals.topMeal ? `${truncate(signals.topMeal, 28)}${signals.topMealKcal > 0 ? ` · ~${Math.round(signals.topMealKcal)} kcal` : ""}` : "ยังไม่มีมื้อเด่น";
+  return { type: "flex", altText: "วันนี้อาหารฟ้องว่า…", contents: { type: "bubble", size: "mega", body: { type: "box", layout: "vertical", backgroundColor: palette.cream, paddingAll: "18px", contents: [{ type: "box", layout: "horizontal", spacing: "10px", contents: [{ type: "box", layout: "vertical", width: "64px", height: "64px", contents: [stickerImage(stickerUrl, "64px")] }, { type: "box", layout: "vertical", flex: 1, contents: [text({ text: "วันนี้อาหารฟ้องว่า…", size: "sm", weight: "bold", color: palette.orange }), text({ text: culprit.label, size: "xl", weight: "bold", color: signals.isOver ? palette.red : palette.brown, wrap: true })] }] }, evidenceBox([`มื้อเด่น: ${topMealText}`, `รวมวันนี้: ${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal`], "หลักฐานบนโต๊ะ"), text({ text: culprit.detail, size: "md", color: palette.brown, weight: "bold", wrap: true, margin: "md" }), speechBubbleFooter(wrappedFooter(signals), palette.blue, footerStickerUrl)] } } };
 };
 
 export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
-  const signals = getSummarySignals(summary);
-  const titleCard = getDailyTitle(signals, summary);
-  const userName = resolveUserName(summary);
-  const left = Math.max(signals.target - signals.kcal, 0);
-  const over = Math.max(signals.kcal - signals.target, 0);
-  const stickerUrl = stickerUrlForSignals(signals);
-  const footerStickerUrl = stickerUrlForSignals(signals, { flipped: true });
-  const topMealText = signals.topMeal ? `${truncate(signals.topMeal, 28)}${signals.topMealKcal > 0 ? ` · ~${Math.round(signals.topMealKcal)} kcal` : ""}` : "ยังไม่มีมื้อเด่น";
-  const statusText = signals.isEmpty ? "เอ้า วันนี้ยังไม่มีข้อมูลเลย" : signals.isOver ? "ไอหยา วันนี้ถังเต็มแล้วนะ" : `โอเค เหลืออีก ${Math.round(left)} kcal`;
-  const titleText = formatDailyTitle(titleCard.name);
-
-  return {
-    type: "flex",
-    altText: "สรุปวันนี้",
-    contents: { type: "bubble", size: "mega", body: { type: "box", layout: "vertical", backgroundColor: palette.cream, paddingAll: "12px", contents: [
-      recapHeroTitle({ userName, rarityLabel: getRarityLabel(titleCard.rarity), titleCard, titleText, stickerUrl }),
-      { type: "box", layout: "vertical", backgroundColor: palette.card, cornerRadius: "18px", paddingAll: "12px", margin: "sm", spacing: "xs", contents: [
-        text({ text: statusText, size: "xl", weight: "bold", color: signals.isOver ? palette.red : palette.green, wrap: true, maxLines: 2 }),
-        { type: "separator", color: "#E5D3C8", margin: "xs" },
-        metricRow("กินไป", `${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal`, signals.isOver ? palette.red : palette.text),
-        metricRow("คาร์บ", `${Math.round(signals.carb)} g`),
-        metricRow("โปรตีน", `${Math.round(signals.protein)} g`, signals.lowProtein ? palette.orange : palette.green),
-        metricRow("ไขมัน", `${Math.round(signals.fat)} g`, signals.highFat ? palette.orange : palette.text),
-        metricRow("น้ำตาล", `${Math.round(signals.sugar)} g`, signals.sweetSignal ? palette.orange : palette.text),
-        metricRow("จำนวนมื้อ", `${Math.round(signals.mealCount)} มื้อ`),
-      ]},
-      fullInfoPill({ title: "เป้าหมาย", value: signals.isEmpty ? "ยังไม่มีข้อมูลวันนี้" : signals.isOver ? `เกิน ${Math.round(over)} kcal` : `เหลือ ${Math.round(left)} kcal`, bg: signals.isOver ? palette.softRed : palette.mint, color: signals.isOver ? palette.red : palette.brown }),
-      fullInfoPill({ title: "มื้อเด่น", value: topMealText, bg: palette.sky, color: palette.brown }),
-      speechBubbleFooter(calorieFooter(signals), signals.isOver ? palette.red : palette.blue, footerStickerUrl),
-    ] } },
-  };
+  const signals = getSummarySignals(summary); const titleCard = getDailyTitle(signals, summary); const userName = resolveUserName(summary); const left = Math.max(signals.target - signals.kcal, 0); const over = Math.max(signals.kcal - signals.target, 0); const stickerUrl = stickerUrlForSignals(signals); const footerStickerUrl = stickerUrlForSignals(signals, { flipped: true }); const topMealText = signals.topMeal ? `${truncate(signals.topMeal, 28)}${signals.topMealKcal > 0 ? ` · ~${Math.round(signals.topMealKcal)} kcal` : ""}` : "ยังไม่มีมื้อเด่น"; const statusText = signals.isEmpty ? "เอ้า วันนี้ยังไม่มีข้อมูลเลย" : signals.isOver ? "ไอหยา วันนี้ถังเต็มแล้วนะ" : `โอเค เหลืออีก ${Math.round(left)} kcal`; const titleText = formatDailyTitle(titleCard.name);
+  return { type: "flex", altText: "สรุปวันนี้", contents: { type: "bubble", size: "mega", body: { type: "box", layout: "vertical", backgroundColor: palette.cream, paddingAll: "12px", contents: [recapHeroTitle({ userName, rarityLabel: getRarityLabel(titleCard.rarity), titleCard, titleText, stickerUrl }), { type: "box", layout: "vertical", backgroundColor: palette.card, cornerRadius: "18px", paddingAll: "12px", margin: "sm", spacing: "xs", contents: [text({ text: statusText, size: "xl", weight: "bold", color: signals.isOver ? palette.red : palette.green, wrap: true, maxLines: 2 }), { type: "separator", color: "#E5D3C8", margin: "xs" }, metricRow("กินไป", `${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal`, signals.isOver ? palette.red : palette.text), metricRow("คาร์บ", `${Math.round(signals.carb)} g`), metricRow("โปรตีน", `${Math.round(signals.protein)} g`, signals.lowProtein ? palette.orange : palette.green), metricRow("ไขมัน", `${Math.round(signals.fat)} g`, signals.highFat ? palette.orange : palette.text), metricRow("น้ำตาล", `${Math.round(signals.sugar)} g`, signals.sweetSignal ? palette.orange : palette.text), metricRow("จำนวนมื้อ", `${Math.round(signals.mealCount)} มื้อ`)] }, fullInfoPill({ title: "เป้าหมาย", value: signals.isEmpty ? "ยังไม่มีข้อมูลวันนี้" : signals.isOver ? `เกิน ${Math.round(over)} kcal` : `เหลือ ${Math.round(left)} kcal`, bg: signals.isOver ? palette.softRed : palette.mint, color: signals.isOver ? palette.red : palette.brown }), fullInfoPill({ title: "มื้อเด่น", value: topMealText, bg: palette.sky, color: palette.brown }), speechBubbleFooter(calorieFooter(signals), signals.isOver ? palette.red : palette.blue, footerStickerUrl)] } } };
 };
 
 export const buildNutritionFlexMessage = ({ summary = {} } = {}) => {
-  const signals = getSummarySignals(summary);
-  const left = Math.max(signals.target - signals.kcal, 0);
-  const stickerUrl = stickerUrlForSignals(signals);
-  const footerStickerUrl = stickerUrlForSignals(signals, { flipped: true });
-  return {
-    type: "flex",
-    altText: "โภชนาการวันนี้",
-    contents: { type: "bubble", size: "mega", body: { type: "box", layout: "vertical", backgroundColor: palette.cream, paddingAll: "18px", contents: [
-      { type: "box", layout: "horizontal", spacing: "10px", contents: [
-        { type: "box", layout: "vertical", width: "64px", height: "64px", contents: [stickerImage(stickerUrl, "64px")] },
-        { type: "box", layout: "vertical", flex: 1, contents: [
-          text({ text: "แปะเปิดโพยโภชนาการให้", size: "xl", weight: "bold", color: palette.text, wrap: true }),
-          text({ text: signals.isEmpty ? "วันนี้ยังไม่มีมื้อที่แปะจดไว้เลย" : `${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal · เหลือ ${Math.round(left)} kcal`, size: "sm", color: signals.isOver ? palette.red : palette.green, weight: "bold", wrap: true, margin: "sm" }),
-        ]},
-      ]},
-      evidenceBox([`คาร์บ ${Math.round(signals.carb)} g`, `โปรตีน ${Math.round(signals.protein)} g`, `ไขมัน ${Math.round(signals.fat)} g`, `น้ำตาล ${Math.round(signals.sugar)} g`, signals.topMeal ? `มื้อเด่น: ${truncate(signals.topMeal, 28)}` : "มื้อเด่นยังไม่มี"], "แปะจับตัวเลขมาให้"),
-      speechBubbleFooter(nutritionFooter(signals), palette.blue, footerStickerUrl),
-    ] } },
-  };
+  const signals = getSummarySignals(summary); const left = Math.max(signals.target - signals.kcal, 0); const stickerUrl = stickerUrlForSignals(signals); const footerStickerUrl = stickerUrlForSignals(signals, { flipped: true });
+  return { type: "flex", altText: "โภชนาการวันนี้", contents: { type: "bubble", size: "mega", body: { type: "box", layout: "vertical", backgroundColor: palette.cream, paddingAll: "18px", contents: [{ type: "box", layout: "horizontal", spacing: "10px", contents: [{ type: "box", layout: "vertical", width: "64px", height: "64px", contents: [stickerImage(stickerUrl, "64px")] }, { type: "box", layout: "vertical", flex: 1, contents: [text({ text: "แปะเปิดโพยโภชนาการให้", size: "xl", weight: "bold", color: palette.text, wrap: true }), text({ text: signals.isEmpty ? "วันนี้ยังไม่มีมื้อที่แปะจดไว้เลย" : `${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal · เหลือ ${Math.round(left)} kcal`, size: "sm", color: signals.isOver ? palette.red : palette.green, weight: "bold", wrap: true, margin: "sm" })] }] }, evidenceBox([`คาร์บ ${Math.round(signals.carb)} g`, `โปรตีน ${Math.round(signals.protein)} g`, `ไขมัน ${Math.round(signals.fat)} g`, `น้ำตาล ${Math.round(signals.sugar)} g`, signals.topMeal ? `มื้อเด่น: ${truncate(signals.topMeal, 28)}` : "มื้อเด่นยังไม่มี"], "แปะจับตัวเลขมาให้"), speechBubbleFooter(nutritionFooter(signals), palette.blue, footerStickerUrl)] } } };
 };
