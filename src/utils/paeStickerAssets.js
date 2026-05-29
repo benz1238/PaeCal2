@@ -12,6 +12,17 @@ export const PAE_STICKERS = {
   KHAO_JAI_YU_NA: "08_khao_jai_yu_na.png",
 };
 
+export const PAE_STICKERS_FLIPPED = {
+  GU_WA_LAEW: "01_gu_wa_laew_flip.png",
+  LUE_EK_LAEW: "02_lue_ek_laew_flip.png",
+  YA_MA_NIAN: "03_ya_ma_nian_flip.png",
+  AO_WAN_NEE_THAM_DEE: "04_ao_wan_nee_tham_dee_flip.png",
+  PAE_ANUYAT_WAN_NUENG: "05_pae_anuyat_wan_nueng_flip.png",
+  PAE_HEN_NA: "06_pae_hen_na_flip.png",
+  WO_MUE_NEE_MI_PHIRUT: "07_wo_mue_nee_mi_phirut_flip.png",
+  KHAO_JAI_YU_NA: "08_khao_jai_yu_na_flip.png",
+};
+
 const normalizeBaseUrl = (value = "") => String(value || "").trim().replace(/\/+$/, "");
 
 const resolveStickerBaseUrl = () => {
@@ -30,14 +41,13 @@ export const getPaeStickerUrl = (fileName = "") => {
   return `${baseUrl}/${encodeURIComponent(file)}`;
 };
 
-export const getPaeStickerByMood = (mood = "") => {
+export const getPaeStickerByMood = (mood = "", options = {}) => {
   const key = String(mood || "").trim().toUpperCase();
-  return getPaeStickerUrl(PAE_STICKERS[key] || PAE_STICKERS.KHAO_JAI_YU_NA);
+  const bank = options.flipped ? PAE_STICKERS_FLIPPED : PAE_STICKERS;
+  return getPaeStickerUrl(bank[key] || bank.KHAO_JAI_YU_NA || PAE_STICKERS.KHAO_JAI_YU_NA);
 };
 
 export const chooseDailyRecapStickerMood = ({ day = {}, memory = {} } = {}) => {
-  // Situation severity wins before pattern flavor.
-  // Example: very over target should look like "อย่ามาเนียน", not a casual "แปะเห็นนะ" sweet/fried read.
   if (day.mealCount <= 0) return "KHAO_JAI_YU_NA";
   if (day.isVeryOver || memory.hasHeavyPattern) return "YA_MA_NIAN";
   if (day.isOver) return "LUE_EK_LAEW";
@@ -47,6 +57,7 @@ export const chooseDailyRecapStickerMood = ({ day = {}, memory = {} } = {}) => {
   return "GU_WA_LAEW";
 };
 
-export const chooseDailyRecapStickerUrl = ({ day = {}, memory = {} } = {}) => getPaeStickerByMood(
-  chooseDailyRecapStickerMood({ day, memory })
+export const chooseDailyRecapStickerUrl = ({ day = {}, memory = {} } = {}, options = {}) => getPaeStickerByMood(
+  chooseDailyRecapStickerMood({ day, memory }),
+  options
 );
