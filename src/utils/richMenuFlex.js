@@ -23,12 +23,14 @@ const safeNumber = (value, fallback = 0) => {
   return Number.isFinite(num) ? num : fallback;
 };
 const truncate = (value, max = 28) => {
-  const text = String(value || "").trim();
-  if (!text) return "-";
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  const textValue = String(value || "").trim();
+  if (!textValue) return "-";
+  return textValue.length > max ? `${textValue.slice(0, max - 1)}…` : textValue;
 };
 const text = (props) => ({ type: "text", ...props });
-const stickerImage = (url, size = "76px") => url ? ({ type: "image", url, size, aspectMode: "fit", aspectRatio: "1:1" }) : text({ text: "👀", size: "xxl", align: "center" });
+const stickerImage = (url, size = "76px") => url
+  ? ({ type: "image", url, size, aspectMode: "fit", aspectRatio: "1:1", gravity: "center" })
+  : text({ text: "👀", size: "xxl", align: "center" });
 
 const normalizeMealRow = (meal = {}) => ({
   name: String(meal.menuName || meal.menu_name || meal.name || meal.mealName || meal.foodName || meal.title || "").trim(),
@@ -100,6 +102,22 @@ const getDailyTitle = (signals, summary = {}) => selectDailyTitle(signals, {
 
 const stickerUrlForSignals = (signals = {}, options = {}) => chooseDailyRecapStickerUrl({ day: signals, memory: signals }, options);
 
+const formatDailyTitle = (name = "") => {
+  const title = String(name || "").trim();
+  const fixed = {
+    "น้ำมันคือพลังงานชีวิต": "น้ำมันคือ…\nพลังงานชีวิต",
+    "คาร์บไม่เคยทำร้ายใคร": "คาร์บไม่เคย\nทำร้ายใคร",
+    "ไขมันไม่เข้าใครออกใคร": "ไขมันไม่เข้า\nใครออกใคร",
+    "แป้งก่อน โปรตีนทีหลัง": "แป้งก่อน\nโปรตีนทีหลัง",
+    "มาม่าตอนเที่ยงคืน Ambassador": "มาม่าตอนเที่ยงคืน\nAmbassador",
+  };
+  if (fixed[title]) return fixed[title];
+  if (title.length > 13 && title.includes("คือ")) return title.replace("คือ", "คือ…\n");
+  if (title.length > 14 && title.includes("แห่ง")) return title.replace("แห่ง", "\nแห่ง");
+  if (title.length > 16 && title.includes(" ")) return title.replace(/\s+([^\s]+)$/, "\n$1");
+  return title;
+};
+
 const footerText = (message = "") => String(message || "").replace(/\s+/g, " ").replace(/(.{18,26})\s+/g, "$1\n").trim();
 
 const speechBubbleFooter = (message, color = palette.blue, stickerUrl = "") => ({
@@ -107,8 +125,9 @@ const speechBubbleFooter = (message, color = palette.blue, stickerUrl = "") => (
   layout: "horizontal",
   spacing: "10px",
   margin: "lg",
+  alignItems: "flex-end",
   contents: [
-    { type: "box", layout: "vertical", width: "58px", height: "58px", contents: [stickerImage(stickerUrl, "58px")] },
+    { type: "box", layout: "vertical", width: "54px", height: "54px", contents: [stickerImage(stickerUrl, "54px")] },
     {
       type: "box",
       layout: "vertical",
@@ -116,7 +135,7 @@ const speechBubbleFooter = (message, color = palette.blue, stickerUrl = "") => (
       backgroundColor: "#FFFFFF",
       cornerRadius: "18px",
       paddingAll: "12px",
-      contents: [text({ text: footerText(message), size: "sm", weight: "bold", color, wrap: true, align: "start" })],
+      contents: [text({ text: footerText(message), size: "sm", weight: "bold", color, wrap: true, align: "start", maxLines: 3 })],
     },
   ],
 });
@@ -237,7 +256,7 @@ export const buildFoodAuraFlexMessage = ({ summary = {} } = {}) => {
     altText: "ฉายาวันนี้",
     contents: { type: "bubble", size: "mega", body: { type: "box", layout: "vertical", backgroundColor: palette.cream, paddingAll: "18px", contents: [
       text({ text: `ฉายาลื้อจากแปะ · ${getRarityLabel(titleCard.rarity)}`, size: "sm", weight: "bold", color: titleCard.color || palette.orange, wrap: true }),
-      text({ text: titleCard.name, size: "xxl", weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs" }),
+      text({ text: formatDailyTitle(titleCard.name), size: "xxl", weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs", maxLines: 3 }),
       characterPanel({ titleCard, signals, stickerUrl }),
       text({ text: signals.isEmpty ? "ส่งมื้อแรกมาก่อน เดี๋ยวแปะตั้งฉายาให้" : "อั๊วะพูดจริงไม่ได้โม้~", size: "md", color: palette.brown, weight: "bold", wrap: true, margin: "md" }),
       speechBubbleFooter(titleFooter(signals), palette.blue, footerStickerUrl),
@@ -279,18 +298,19 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
   const footerStickerUrl = stickerUrlForSignals(signals, { flipped: true });
   const topMealText = signals.topMeal ? `${truncate(signals.topMeal, 34)}${signals.topMealKcal > 0 ? ` · ~${Math.round(signals.topMealKcal)} kcal` : ""}` : "ยังไม่มีมื้อเด่น";
   const statusText = signals.isEmpty ? "เอ้า วันนี้ยังไม่มีข้อมูลเลย" : signals.isOver ? "ไอหยา วันนี้ถังเต็มแล้วนะ" : `โอเค เหลืออีก ${Math.round(left)} kcal`;
+  const titleText = formatDailyTitle(titleCard.name);
 
   return {
     type: "flex",
     altText: "สรุปวันนี้",
     contents: { type: "bubble", size: "mega", body: { type: "box", layout: "vertical", backgroundColor: palette.cream, paddingAll: "18px", contents: [
-      { type: "box", layout: "horizontal", spacing: "0px", alignItems: "flex-start", contents: [
-        { type: "box", layout: "vertical", flex: 1, width: "178px", contents: [
-          text({ text: "TODAY RECAP BY แปะ", size: "sm", weight: "bold", color: "#A32922", wrap: false }),
-          text({ text: `${userName} · ${getRarityLabel(titleCard.rarity)}`, size: "sm", weight: "bold", color: titleCard.color || palette.muted, margin: "xs", wrap: true }),
-          text({ text: titleCard.name, size: "xxl", weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs", maxLines: 3 }),
+      { type: "box", layout: "horizontal", spacing: "6px", alignItems: "flex-start", contents: [
+        { type: "box", layout: "vertical", flex: 1, contents: [
+          text({ text: "TODAY RECAP BY แปะ", size: "sm", weight: "bold", color: "#A32922", wrap: false, maxLines: 1 }),
+          text({ text: `${userName} · ${getRarityLabel(titleCard.rarity)}`, size: "sm", weight: "bold", color: titleCard.color || palette.muted, margin: "xs", wrap: true, maxLines: 1 }),
+          text({ text: titleText, size: "xxl", weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs", maxLines: 3 }),
         ]},
-        { type: "box", layout: "vertical", flex: 0, width: "142px", height: "142px", contents: [stickerImage(stickerUrl, "142px")] },
+        { type: "box", layout: "vertical", flex: 0, width: "118px", height: "118px", paddingAll: "0px", contents: [stickerImage(stickerUrl, "112px")] },
       ]},
       { type: "box", layout: "vertical", backgroundColor: palette.card, cornerRadius: "20px", paddingAll: "16px", margin: "md", spacing: "sm", contents: [
         text({ text: statusText, size: "xl", weight: "bold", color: signals.isOver ? palette.red : palette.green, wrap: true }),
