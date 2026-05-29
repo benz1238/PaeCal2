@@ -109,17 +109,37 @@ const buildTwoLineTitle = (left, right, leftSuffix = "") => {
   return `${a}${leftSuffix}\n${b}`;
 };
 
+const isEnglishOnlyTitle = (title = "") => /[A-Za-z]/.test(title) && !/[ก-๙]/.test(title);
+const splitEnglishTitle = (title = "") => {
+  const cleaned = String(title || "").trim().replace(/\s+/g, " ");
+  const exact = {
+    "Cream Overload Aura": ["Cream Overload", "Aura"],
+    "Chicken Breast Left the Chat": ["Chicken", "Breast", "Left the Chat"],
+    "Dessert Main Character": ["Dessert", "Main Character"],
+    "Protein DLC ยังไม่โหลด": ["Protein DLC", "ยังไม่โหลด"],
+  };
+  if (exact[cleaned]) return exact[cleaned];
+  const words = cleaned.split(" ").filter(Boolean);
+  if (words.length <= 2) return [cleaned];
+  if (words.length === 3) return [words.slice(0, 2).join(" "), words[2]];
+  if (words.length >= 5) return [words[0], words[1], words.slice(2).join(" ")];
+  return [words.slice(0, 2).join(" "), words.slice(2).join(" ")];
+};
+
 const formatDailyTitle = (name = "") => {
   const title = String(name || "").trim();
   if (!title) return "-";
+  if (isEnglishOnlyTitle(title)) return splitEnglishTitle(title).join("\n");
 
   const exact = {
     "น้ำมันคือพลังงานชีวิต": buildTwoLineTitle("น้ำมันคือ", "พลังงานชีวิต", "..."),
     "หมูกระทะเยียวยาทุกสิ่ง": buildTwoLineTitle("หมูกระทะจะ", "เยียวยาทุกสิ่ง", "..."),
+    "หวานนำ ชีวิตตาม": buildTwoLineTitle("หวานนำ", "ชีวิตตาม"),
     "คาร์บไม่เคยทำร้ายใคร": buildTwoLineTitle("คาร์บไม่เคย", "ทำร้ายใคร"),
     "ไขมันไม่เข้าใครออกใคร": buildTwoLineTitle("ไขมันไม่เข้า", "ใครออกใคร"),
     "แป้งก่อน โปรตีนทีหลัง": buildTwoLineTitle("แป้งก่อน", "โปรตีนทีหลัง"),
     "มาม่าตอนเที่ยงคืน Ambassador": buildTwoLineTitle("มาม่าตอนเที่ยงคืน", "Ambassador"),
+    "Noodle Energy สูงมาก": buildTwoLineTitle("Noodle Energy", "สูงมาก"),
   };
   if (exact[title]) return exact[title];
 
@@ -165,6 +185,26 @@ const formatDailyTitle = (name = "") => {
   );
 };
 
+const titleChipWidth = (line = "") => `${Math.min(270, Math.max(104, String(line).length * 16 + 34))}px`;
+const shouldUseTitleChips = (title = "") => isEnglishOnlyTitle(title) && splitEnglishTitle(title).length >= 3;
+const dailyTitleNodes = ({ titleCard, titleText, size = "xxl" }) => {
+  if (shouldUseTitleChips(titleCard.name)) {
+    return splitEnglishTitle(titleCard.name).map((line, index) => ({
+      type: "box",
+      layout: "vertical",
+      flex: 0,
+      width: titleChipWidth(line),
+      backgroundColor: "#EEF0F4",
+      cornerRadius: "8px",
+      paddingAll: "4px",
+      margin: index === 0 ? "xs" : "xxs",
+      contents: [text({ text: line, size: "xl", weight: "bold", color: titleCard.color || palette.muted, wrap: false, maxLines: 1 })],
+    }));
+  }
+
+  return [text({ text: titleText, size, weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs", maxLines: 3 })];
+};
+
 const footerText = (message = "") => String(message || "").replace(/\s+/g, " ").replace(/(.{18,26})\s+/g, "$1\n").trim();
 
 const speechBubbleFooter = (message, color = palette.blue, stickerUrl = "") => ({
@@ -201,14 +241,14 @@ const heroStickerBackground = (stickerUrl = "") => ({
 const recapHeroTitle = ({ userName, rarityLabel, titleCard, titleText, stickerUrl }) => ({
   type: "box",
   layout: "vertical",
-  height: "132px",
+  height: shouldUseTitleChips(titleCard.name) ? "142px" : "132px",
   paddingTop: "0px",
   paddingEnd: "0px",
   contents: [
     heroStickerBackground(stickerUrl),
     text({ text: "TODAY RECAP BY แปะ", size: "sm", weight: "bold", color: "#A32922", wrap: false, maxLines: 1 }),
     text({ text: `${userName} · ${rarityLabel}`, size: "sm", weight: "bold", color: titleCard.color || palette.muted, margin: "xs", wrap: true, maxLines: 1 }),
-    text({ text: titleText, size: "xxl", weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs", maxLines: 3 }),
+    ...dailyTitleNodes({ titleCard, titleText }),
   ],
 });
 
@@ -312,7 +352,7 @@ const characterPanel = ({ titleCard, signals, stickerUrl }) => ({
     { type: "box", layout: "vertical", width: "76px", height: "76px", contents: [stickerImage(stickerUrl, "76px")] },
     { type: "box", layout: "vertical", flex: 1, contents: [
       text({ text: "ฉายาลื้อจากแปะ", size: "xs", weight: "bold", color: palette.muted, wrap: true }),
-      text({ text: formatDailyTitle(titleCard.name), size: "lg", weight: "bold", color: titleCard.color || palette.brown, wrap: true, maxLines: 3 }),
+      ...dailyTitleNodes({ titleCard, titleText: formatDailyTitle(titleCard.name), size: "lg" }),
     ]},
   ],
 });
@@ -327,7 +367,7 @@ export const buildFoodAuraFlexMessage = ({ summary = {} } = {}) => {
     altText: "ฉายาวันนี้",
     contents: { type: "bubble", size: "mega", body: { type: "box", layout: "vertical", backgroundColor: palette.cream, paddingAll: "18px", contents: [
       text({ text: `ฉายาลื้อจากแปะ · ${getRarityLabel(titleCard.rarity)}`, size: "sm", weight: "bold", color: titleCard.color || palette.orange, wrap: true }),
-      text({ text: formatDailyTitle(titleCard.name), size: "xxl", weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs", maxLines: 3 }),
+      ...dailyTitleNodes({ titleCard, titleText: formatDailyTitle(titleCard.name) }),
       characterPanel({ titleCard, signals, stickerUrl }),
       text({ text: signals.isEmpty ? "ส่งมื้อแรกมาก่อน เดี๋ยวแปะตั้งฉายาให้" : "อั๊วะพูดจริงไม่ได้โม้~", size: "md", color: palette.brown, weight: "bold", wrap: true, margin: "md" }),
       speechBubbleFooter(titleFooter(signals), palette.blue, footerStickerUrl),
