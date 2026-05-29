@@ -36,12 +36,14 @@ export const getPaeStickerByMood = (mood = "") => {
 };
 
 export const chooseDailyRecapStickerMood = ({ day = {}, memory = {} } = {}) => {
-  if (day.goodProteinDay || memory.hasProteinWin) return "AO_WAN_NEE_THAM_DEE";
-  if (memory.hasSweetPattern || memory.hasFriedPattern) return "PAE_HEN_NA";
+  // Situation severity wins before pattern flavor.
+  // Example: very over target should look like "อย่ามาเนียน", not a casual "แปะเห็นนะ" sweet/fried read.
+  if (day.mealCount <= 0) return "KHAO_JAI_YU_NA";
   if (day.isVeryOver || memory.hasHeavyPattern) return "YA_MA_NIAN";
   if (day.isOver) return "LUE_EK_LAEW";
   if (day.isNearLimit) return "PAE_ANUYAT_WAN_NUENG";
-  if (day.mealCount <= 0) return "KHAO_JAI_YU_NA";
+  if (memory.hasSweetPattern || memory.hasFriedPattern) return "PAE_HEN_NA";
+  if (day.goodProteinDay || memory.hasProteinWin) return "AO_WAN_NEE_THAM_DEE";
   return "GU_WA_LAEW";
 };
 
