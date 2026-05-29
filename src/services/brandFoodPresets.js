@@ -30,26 +30,39 @@ const normalizeText = (text = "") => String(text || "")
 
 const canonicalizeText = (text = "") => normalizeText(text)
   .replace(/โค๊ก/g, "โค้ก")
-  .replace(/ซีโร่/g, "zero")
   .replace(/โอริโอ้/g, "โอริโอ")
-  .replace(/potato\s*corner/g, "potatocorner")
+  .replace(/potato\s*corner/g, "potato corner")
+  .replace(/mega\s*fries|เมกะ\s*ฟรายส์?/g, "mega fries")
   .replace(/mage\s*fries/g, "mega fries")
   .replace(/\s+/g, " ")
   .trim();
+
+const compactText = (text = "") => normalizeText(text).replace(/\s+/g, "");
+
+const buildPresetSearchTerms = (text = "") => {
+  const value = normalizeText(text);
+  const canonical = canonicalizeText(value);
+  const compactCanonical = compactText(canonical);
+  return [...new Set([
+    value,
+    canonical,
+    compactCanonical,
+  ])].filter((term) => term && term.length >= 2);
+};
 
 const toNumber = (value, fallback = 0) => {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
 };
 
-const escapeLike = (value = "") => String(value || "").replace(/[%*_]/g, "");
+const escapeLike = (value = "") => String(value || "").replace(/[%*_"\\]/g, "");
 
 const getSweetnessLevel = (text = "") => {
   const value = normalizeText(text);
   if (/(100\s*%|หวาน\s*100|หวานมาก|เพิ่มหวาน)/i.test(value)) return 100;
   if (/(75\s*%|หวาน\s*75|หวานปกติ|ปกติ)/i.test(value)) return 75;
-  if (/(50\s*%|หวาน\s*50|หวานน้อย|ครึ่งหวาน)/i.test(value)) return 50;
   if (/(25\s*%|หวาน\s*25|หวานน้อยมาก)/i.test(value)) return 25;
+  if (/(50\s*%|หวาน\s*50|หวานน้อย|ครึ่งหวาน)/i.test(value)) return 50;
   if (/(ไม่หวาน|หวาน\s*0|(^|[^\d])0\s*%|no\s*sugar|sugar\s*free)/i.test(value)) return 0;
   return null;
 };
@@ -102,8 +115,7 @@ const findDrinkSweetnessPreset = async (text) => {
 };
 
 const findBrandPreset = async (text) => {
-  const value = normalizeText(text);
-  const terms = [...new Set([value, canonicalizeText(value)])].filter((term) => term && term.length >= 2);
+  const terms = buildPresetSearchTerms(text);
 
   for (const term of terms) {
     const safe = escapeLike(term);
@@ -120,9 +132,9 @@ const findBrandPreset = async (text) => {
     if (!rows.length) continue;
 
     const exact = rows.find((row) =>
-      canonicalizeText(row.menu_name) === term ||
-      canonicalizeText(row.product_name) === term ||
-      canonicalizeText(row.brand) === term
+      buildPresetSearchTerms(row.menu_name).includes(term) ||
+      buildPresetSearchTerms(row.product_name).includes(term) ||
+      buildPresetSearchTerms(row.brand).includes(term)
     );
     return mapPresetRow(exact || rows[0], "brand_preset");
   }
@@ -146,4 +158,12 @@ export const findFoodPreset = async (text = "") => {
     console.warn("[PaeCalPreset] lookup failed", err?.response?.data || err?.message || err);
     return null;
   }
+};
+
+export const __testPresetFlow = {
+  normalizeText,
+  canonicalizeText,
+  buildPresetSearchTerms,
+  getSweetnessLevel,
+  resolveDrinkKey,
 };
