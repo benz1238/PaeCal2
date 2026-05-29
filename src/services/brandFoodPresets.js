@@ -25,8 +25,17 @@ const supabase = axios.create({
 const normalizeText = (text = "") => String(text || "")
   .trim()
   .toLowerCase()
-  .replace(/^กิน\s+/, "")
+  .replace(/^กิน\s*/, "")
   .replace(/\s+/g, " ");
+
+const canonicalizeText = (text = "") => normalizeText(text)
+  .replace(/โค๊ก/g, "โค้ก")
+  .replace(/ซีโร่/g, "zero")
+  .replace(/โอริโอ้/g, "โอริโอ")
+  .replace(/potato\s*corner/g, "potatocorner")
+  .replace(/mage\s*fries/g, "mega fries")
+  .replace(/\s+/g, " ")
+  .trim();
 
 const toNumber = (value, fallback = 0) => {
   const num = Number(value);
@@ -37,11 +46,11 @@ const escapeLike = (value = "") => String(value || "").replace(/[%*_]/g, "");
 
 const getSweetnessLevel = (text = "") => {
   const value = normalizeText(text);
-  if (/(ไม่หวาน|หวาน\s*0|0\s*%|zero|no\s*sugar|sugar\s*free)/i.test(value)) return 0;
-  if (/(25\s*%|หวานน้อยมาก)/i.test(value)) return 25;
-  if (/(50\s*%|หวานน้อย|ครึ่งหวาน)/i.test(value)) return 50;
-  if (/(100\s*%|หวานมาก|เพิ่มหวาน)/i.test(value)) return 100;
-  if (/(75\s*%|หวานปกติ|ปกติ)/i.test(value)) return 75;
+  if (/(100\s*%|หวาน\s*100|หวานมาก|เพิ่มหวาน)/i.test(value)) return 100;
+  if (/(75\s*%|หวาน\s*75|หวานปกติ|ปกติ)/i.test(value)) return 75;
+  if (/(50\s*%|หวาน\s*50|หวานน้อย|ครึ่งหวาน)/i.test(value)) return 50;
+  if (/(25\s*%|หวาน\s*25|หวานน้อยมาก)/i.test(value)) return 25;
+  if (/(ไม่หวาน|หวาน\s*0|(^|[^\d])0\s*%|no\s*sugar|sugar\s*free)/i.test(value)) return 0;
   return null;
 };
 
@@ -94,27 +103,30 @@ const findDrinkSweetnessPreset = async (text) => {
 
 const findBrandPreset = async (text) => {
   const value = normalizeText(text);
-  const safe = escapeLike(value);
-  if (!safe || safe.length < 2) return null;
+  const terms = [...new Set([value, canonicalizeText(value)])].filter((term) => term && term.length >= 2);
 
-  const res = await supabase.get("/brand_food_presets", {
-    params: {
-      status: "eq.active",
-      or: `(aliases.cs.{"${safe}"},menu_name.ilike.*${safe}*,product_name.ilike.*${safe}*,brand.ilike.*${safe}*)`,
-      select: "preset_key,brand,product_name,menu_name,category,serving_size,kcal,carb,protein,fat,sugar,sweetness_level,confidence,verified",
-      limit: 5,
-    },
-  });
+  for (const term of terms) {
+    const safe = escapeLike(term);
+    const res = await supabase.get("/brand_food_presets", {
+      params: {
+        status: "eq.active",
+        or: `(aliases.cs.{"${safe}"},menu_name.ilike.*${safe}*,product_name.ilike.*${safe}*,brand.ilike.*${safe}*)`,
+        select: "preset_key,brand,product_name,menu_name,category,serving_size,kcal,carb,protein,fat,sugar,sweetness_level,confidence,verified",
+        limit: 5,
+      },
+    });
 
-  const rows = Array.isArray(res.data) ? res.data : [];
-  if (!rows.length) return null;
+    const rows = Array.isArray(res.data) ? res.data : [];
+    if (!rows.length) continue;
 
-  const exact = rows.find((row) =>
-    normalizeText(row.menu_name) === value ||
-    normalizeText(row.product_name) === value ||
-    normalizeText(row.brand) === value
-  );
-  return mapPresetRow(exact || rows[0], "brand_preset");
+    const exact = rows.find((row) =>
+      canonicalizeText(row.menu_name) === term ||
+      canonicalizeText(row.product_name) === term ||
+      canonicalizeText(row.brand) === term
+    );
+    return mapPresetRow(exact || rows[0], "brand_preset");
+  }
+  return null;
 };
 
 export const findFoodPreset = async (text = "") => {
