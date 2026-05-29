@@ -59,9 +59,7 @@ const parseFoodBatchCard = (texts = []) => {
 
 const toOutboundMessages = (texts) => {
   const sanitized = sanitizeTextList(texts);
-  if (sanitized.length >= 1 && isFoodTextBatch(sanitized)) {
-    return [parseFoodBatchCard(sanitized)].slice(0, 5);
-  }
+  if (sanitized.length >= 1 && isFoodTextBatch(sanitized)) return [parseFoodBatchCard(sanitized)].slice(0, 5);
   return sanitized.map((text) => ({ type: "text", text }));
 };
 
@@ -74,7 +72,7 @@ export const getLineDisplayName = async (userId) => {
   try {
     const res = await axios.get(`https://api.line.me/v2/bot/profile/${userId}`, { headers: { Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` } });
     return res.data?.displayName || "";
-  } catch (err) {
+  } catch {
     return "";
   }
 };
@@ -120,16 +118,16 @@ export const replyPaeLaewGuideCard = async (replyToken) => replyFlex(replyToken,
 export const replySendPhotoGuide = async (replyToken) => replyPaeLaewGuideCard(replyToken);
 export const replyTypeFoodPrompt = async (replyToken) => replyText(replyToken, "พิมพ์มื้อที่กินมาได้เลย\nสั้น ๆ ก็ได้ เดี๋ยวแปะดูให้ 😄");
 
-export const replyDailyRecapCardWithBubbles = async (replyToken, { bubbles = [], summary = {}, decision = null }) => {
+export const replyDailyRecapCardWithBubbles = async (replyToken, { title = "ลื้อ", bubbles = [], summary = {}, decision = null }) => {
   const bubbleMessages = toTextMessages(Array.isArray(bubbles) ? bubbles : [bubbles]).slice(0, 2);
   const mascotUrl = process.env.PAECAL_RECAP_MASCOT_URL || "";
-  const flexMessage = buildDailyRecapFlexMessageNew({ summary, decision: decision || {}, characterUrl: mascotUrl });
+  const flexMessage = buildDailyRecapFlexMessageNew({ title, summary, decision: decision || {}, characterUrl: mascotUrl });
   await client.replyMessage({ replyToken, messages: [flexMessage, ...bubbleMessages].slice(0, 5) });
 };
 
-export const pushDailyRecapCardWithBubbles = async (to, { bubbles = [], summary = {}, decision = null }) => {
+export const pushDailyRecapCardWithBubbles = async (to, { title = "ลื้อ", bubbles = [], summary = {}, decision = null }) => {
   const bubbleMessages = toTextMessages(Array.isArray(bubbles) ? bubbles : [bubbles]).slice(0, 2);
   const mascotUrl = process.env.PAECAL_RECAP_MASCOT_URL || "";
-  const flexMessage = buildDailyRecapFlexMessageNew({ summary, decision: decision || {}, characterUrl: mascotUrl });
+  const flexMessage = buildDailyRecapFlexMessageNew({ title, summary, decision: decision || {}, characterUrl: mascotUrl });
   await client.pushMessage({ to, messages: [flexMessage, ...bubbleMessages].slice(0, 5) });
 };
