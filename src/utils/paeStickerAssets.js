@@ -1,5 +1,6 @@
 const STICKER_BUCKET = "Paecal-asset";
 const STICKER_FOLDER = "Stickers";
+const USE_FLIPPED_STICKERS = String(process.env.PAECAL_USE_FLIPPED_STICKERS || "false").toLowerCase() === "true";
 
 export const PAE_STICKERS = {
   GU_WA_LAEW: "01_gu_wa_laew.png",
@@ -43,7 +44,8 @@ export const getPaeStickerUrl = (fileName = "") => {
 
 export const getPaeStickerByMood = (mood = "", options = {}) => {
   const key = String(mood || "").trim().toUpperCase();
-  const bank = options.flipped ? PAE_STICKERS_FLIPPED : PAE_STICKERS;
+  const shouldUseFlipped = Boolean(options.flipped && USE_FLIPPED_STICKERS);
+  const bank = shouldUseFlipped ? PAE_STICKERS_FLIPPED : PAE_STICKERS;
   return getPaeStickerUrl(bank[key] || bank.KHAO_JAI_YU_NA || PAE_STICKERS.KHAO_JAI_YU_NA);
 };
 
