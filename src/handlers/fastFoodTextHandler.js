@@ -7,165 +7,47 @@ import { invalidateRichMenuSummaryCache } from "../utils/richMenuSummaryCache.js
 import { buildFoodLogFlexMessage } from "../utils/foodLogFlex.js";
 
 const nowMs = () => Date.now();
+const logTiming = (label, start, extra = "") => console.log(`[PaeCalTiming] ${label} ${Date.now() - start}ms${extra ? ` ${extra}` : ""}`);
+const normalize = (text = "") => String(text || "").trim().toLowerCase().replace(/\s+/g, " ").replace(/^กิน\s+/, "");
 
-const logTiming = (label, start, extra = "") => {
-  console.log(`[PaeCalTiming] ${label} ${Date.now() - start}ms${extra ? ` ${extra}` : ""}`);
-};
+const BLOCKLIST = ["สรุป", "สรุปวันนี้", "แคลวันนี้", "กินอะไรดี", "กินไรดี", "หิวแล้ว", "ตั้งเป้า", "เปลี่ยนเป้า", "แก้มื้อล่าสุด", "ลบมื้อล่าสุด", "ฉายาวันนี้", "วันนี้อาหารฟ้องว่า"];
 
-const FOOD_KEYWORDS = [
-  "ข้าว", "ก๋วยเตี๋ยว", "บะหมี่", "ราเมง", "เส้น", "โจ๊ก", "ข้าวต้ม", "ผัดไทย", "มาม่า", "เกาเหลา",
-  "หมู", "ไก่", "ปลา", "กุ้ง", "เนื้อ", "ไข่", "เต้าหู้", "แซลมอน", "ทะเล",
-  "ซูชิ", "ซูชิโระ", "ซาชิมิ", "มากิ", "sushi", "sashimi", "sushiro",
-  "กะเพรา", "กระเพรา", "ข้าวมันไก่", "ข้าวขาหมู", "ข้าวหมูกรอบ", "ข้าวหมูแดง", "ข้าวผัด", "ข้าวไข่เจียว", "หมูทอด", "ข้าวหมูทอด", "ข้าวเหนียว", "ข้าวไก่ทอด", "ข้าวไก่ย่าง", "ข้าวปลาแกะ",
-  "ส้มตำ", "ลาบ", "น้ำตก", "ยำ", "ยำวุ้นเส้น", "สลัด", "สุกี้", "ชาบู", "หมูกระทะ", "หมูทะ", "ปิ้งย่าง", "บุฟเฟต์",
-  "ไส้กรอก", "ลูกชิ้น", "ชีส", "ทอด", "ของทอด", "แซนด์วิช", "ขนมปัง", "ครัวซองต์",
-  "ชาไทย", "ชานม", "ชาเขียว", "มัจฉะ", "มัทฉะ", "กาแฟ", "อเมริกาโน่", "ลาเต้", "คาปูชิโน่", "มอคค่า", "เอสเย็น", "โกโก้", "นม", "นมสด", "น้ำเต้าหู้", "น้ำหวาน", "น้ำผลไม้", "น้ำส้ม", "โค้ก", "โค๊ก", "เป๊ปซี่",
-  "เค้ก", "ขนม", "ขนมถุง", "ป๊อกกี้", "โอริโอ", "โอริโอ้", "คิทแคท", "ช็อกโกแลต", "คุกกี้", "โดนัท", "ไอติม", "บิงซู", "เลย์", "lays", "ผลไม้", "กล้วย", "แตงโม", "มะม่วง", "แอปเปิล", "แอปเปิ้ล", "ส้ม", "ส้มโอ", "ฝรั่ง", "สับปะรด", "องุ่น", "แก้วมังกร",
-];
+const KEYWORD_PATTERN = /(ข้าว|ก๋วยเตี๋ยว|บะหมี่|ราเมง|เส้น|โจ๊ก|หมู|ไก่|ปลา|กุ้ง|เนื้อ|ไข่|เต้าหู้|แซลมอน|ซูชิ|กะเพรา|กระเพรา|ส้มตำ|ลาบ|ยำ|สลัด|ชาบู|หมูกระทะ|หมูทะ|ปิ้งย่าง|ไส้กรอก|ลูกชิ้น|ชีส|ทอด|แซนด์วิช|ขนมปัง|ครัวซองต์|ชาไทย|ชานม|ชาเขียว|มัจฉะ|มัทฉะ|กาแฟ|อเมริกาโน่|ลาเต้|คาปูชิโน่|มอคค่า|โกโก้|นม|น้ำเต้าหู้|น้ำหวาน|น้ำผลไม้|น้ำส้ม|โค้ก|โค๊ก|เป๊ปซี่|เค้ก|ขนม|ป๊อกกี้|โอริโอ้|โอริโอ|คิทแคท|ช็อกโกแลต|คุกกี้|โดนัท|ไอติม|บิงซู|บลิซซาร์ด|บลิดซาด|แดรี่ควีน|เลย์|ผลไม้|กล้วย|แตงโม|มะม่วง|แอปเปิล|ส้ม|ฝรั่ง|สับปะรด|oreo|blizzard|dq|lays|sushi|sashimi|americano|latte)/i;
+const QUESTION_PATTERN = /(ไหม|มั้ย|ปะ|ป่ะ|ดีไหม|ดีมั้ย|อะไรดี|กี่แคล|แคลเท่าไร|แคลเท่าไหร่|ควรกิน|กินได้ไหม)/i;
 
-const BLOCKLIST = [
-  "สรุป", "สรุปวันนี้", "แคลวันนี้", "กินอะไรดี", "กินไรดี", "หิวแล้ว", "ตั้งเป้า", "เปลี่ยนเป้า",
-  "แก้มื้อล่าสุด", "ลบมื้อล่าสุด", "ฉายาวันนี้", "วันนี้อาหารฟ้องว่า",
-];
-
-const LOCAL_FOOD_PRESETS = [
-  { pattern: /ซูชิโระ|ซูชิ|ซาชิมิ|มากิ|sushiro|sushi|sashimi/i, menuName: "ซูชิ", kcal: 450, carb: 58, protein: 22, fat: 12, sugar: 8 },
-  { pattern: /ชาบู|สุกี้|hot\s*pot/i, menuName: "ชาบู", kcal: 650, carb: 45, protein: 35, fat: 32, sugar: 10 },
-  { pattern: /หมูกระทะ|หมูทะ|ปิ้งย่าง|บุฟเฟต์/i, menuName: "หมูกระทะ", kcal: 850, carb: 55, protein: 42, fat: 48, sugar: 12 },
-  { pattern: /ข้าวไข่เจียว|ไข่เจียว/i, menuName: "ข้าวไข่เจียว", kcal: 520, carb: 62, protein: 18, fat: 22, sugar: 3 },
-  { pattern: /ข้าวหมูทอด|หมูทอด/i, menuName: "ข้าวหมูทอด", kcal: 680, carb: 72, protein: 30, fat: 30, sugar: 5 },
-  { pattern: /ข้าวไก่ทอด/i, menuName: "ข้าวไก่ทอด", kcal: 680, carb: 72, protein: 32, fat: 30, sugar: 5 },
-  { pattern: /ข้าวไก่ย่าง/i, menuName: "ข้าวไก่ย่าง", kcal: 560, carb: 65, protein: 38, fat: 14, sugar: 4 },
-  { pattern: /ข้าวปลาแกะ|ข้าวปลาทอด/i, menuName: "ข้าวปลาแกะ", kcal: 620, carb: 70, protein: 34, fat: 22, sugar: 4 },
-  { pattern: /ข้าวหมูแดง/i, menuName: "ข้าวหมูแดง", kcal: 650, carb: 78, protein: 30, fat: 24, sugar: 12 },
-  { pattern: /ข้าวผัด/i, menuName: "ข้าวผัด", kcal: 650, carb: 78, protein: 22, fat: 24, sugar: 6 },
-  { pattern: /ข้าวเหนียว.*หมูปิ้ง|หมูปิ้ง.*ข้าวเหนียว/i, menuName: "ข้าวเหนียวหมูปิ้ง", kcal: 520, carb: 72, protein: 22, fat: 18, sugar: 10 },
-  { pattern: /โจ๊กหมู|โจ๊ก/i, menuName: "โจ๊กหมู", kcal: 330, carb: 42, protein: 18, fat: 8, sugar: 2 },
-  { pattern: /ข้าวต้มปลา|ข้าวต้ม/i, menuName: "ข้าวต้ม", kcal: 320, carb: 48, protein: 18, fat: 5, sugar: 2 },
-  { pattern: /เกาเหลา/i, menuName: "เกาเหลา", kcal: 320, carb: 15, protein: 28, fat: 16, sugar: 3 },
-  { pattern: /ส้มตำ/i, menuName: "ส้มตำ", kcal: 180, carb: 28, protein: 5, fat: 4, sugar: 14 },
-  { pattern: /ลาบ/i, menuName: "ลาบ", kcal: 300, carb: 12, protein: 28, fat: 16, sugar: 3 },
-  { pattern: /ยำวุ้นเส้น/i, menuName: "ยำวุ้นเส้น", kcal: 360, carb: 45, protein: 18, fat: 10, sugar: 8 },
-  { pattern: /สลัด/i, menuName: "สลัด", kcal: 300, carb: 18, protein: 18, fat: 16, sugar: 8 },
-  { pattern: /แซนด์วิช|sandwich/i, menuName: "แซนด์วิช", kcal: 320, carb: 38, protein: 15, fat: 12, sugar: 6 },
-  { pattern: /ขนมปัง/i, menuName: "ขนมปัง", kcal: 220, carb: 36, protein: 7, fat: 6, sugar: 8 },
-  { pattern: /ครัวซองต์|croissant/i, menuName: "ครัวซองต์", kcal: 300, carb: 32, protein: 6, fat: 16, sugar: 7 },
-  { pattern: /ขนมถุง|ขนมกรุบกรอบ|snack/i, menuName: "ขนมถุง", kcal: 250, carb: 30, protein: 3, fat: 13, sugar: 4 },
-  { pattern: /เลย์|lays?|มันฝรั่งทอด|โปเตโต้ชิป/i, menuName: "เลย์/มันฝรั่งทอด", kcal: 320, carb: 36, protein: 4, fat: 18, sugar: 2 },
-  { pattern: /ป๊อกกี้|pocky/i, menuName: "ป๊อกกี้", kcal: 220, carb: 32, protein: 4, fat: 9, sugar: 18 },
+const FAST_PRESETS = [
   { pattern: /โอริโอ้|โอริโอ|oreo/i, menuName: "โอริโอ", kcal: 260, carb: 38, protein: 3, fat: 11, sugar: 22 },
-  { pattern: /คิทแคท|kitkat/i, menuName: "คิทแคท", kcal: 220, carb: 28, protein: 3, fat: 11, sugar: 21 },
-  { pattern: /ช็อกโกแลต|ช็อคโกแลต|chocolate/i, menuName: "ช็อกโกแลต", kcal: 250, carb: 28, protein: 3, fat: 14, sugar: 24 },
+  { pattern: /บลิซซาร์ด|บลิดซาด|blizzard|dq|แดรี่ควีน/i, menuName: "บลิซซาร์ด", kcal: 350, carb: 52, protein: 8, fat: 12, sugar: 40 },
+  { pattern: /โค้ก\s*ซีโร่|โค๊ก\s*ซีโร่|coke\s*zero/i, menuName: "โค้กซีโร่", kcal: 0, carb: 0, protein: 0, fat: 0, sugar: 0 },
   { pattern: /อเมริกาโน่|อเมริกาโน|americano|กาแฟดำ/i, menuName: "อเมริกาโน่", kcal: 15, carb: 2, protein: 1, fat: 0, sugar: 0 },
-  { pattern: /ลาเต้|latte/i, menuName: "ลาเต้", kcal: 180, carb: 18, protein: 8, fat: 8, sugar: 14 },
-  { pattern: /คาปูชิโน่|คาปูชิโน|cappuccino/i, menuName: "คาปูชิโน่", kcal: 170, carb: 18, protein: 7, fat: 7, sugar: 14 },
-  { pattern: /มอคค่า|mocha/i, menuName: "มอคค่า", kcal: 240, carb: 32, protein: 7, fat: 9, sugar: 26 },
-  { pattern: /เอสเย็น|กาแฟเย็น/i, menuName: "กาแฟเย็น", kcal: 220, carb: 30, protein: 5, fat: 8, sugar: 26 },
-  { pattern: /ชามะนาว/i, menuName: "ชามะนาว", kcal: 160, carb: 40, protein: 0, fat: 0, sugar: 36 },
-  { pattern: /น้ำส้ม|orange\s*juice/i, menuName: "น้ำส้ม", kcal: 120, carb: 28, protein: 1, fat: 0, sugar: 24 },
-  { pattern: /น้ำผลไม้|fruit\s*juice/i, menuName: "น้ำผลไม้", kcal: 140, carb: 34, protein: 1, fat: 0, sugar: 30 },
-  { pattern: /นมสด/i, menuName: "นมสด", kcal: 150, carb: 12, protein: 8, fat: 8, sugar: 12 },
-  { pattern: /น้ำเต้าหู้|นมถั่วเหลือง/i, menuName: "น้ำเต้าหู้", kcal: 140, carb: 16, protein: 8, fat: 4, sugar: 10 },
-  { pattern: /ผลไม้รวม|ผลไม้/i, menuName: "ผลไม้", kcal: 150, carb: 36, protein: 2, fat: 0, sugar: 26 },
-  { pattern: /กล้วย/i, menuName: "กล้วย", kcal: 100, carb: 26, protein: 1, fat: 0, sugar: 14 },
-  { pattern: /แอปเปิล|แอปเปิ้ล|apple/i, menuName: "แอปเปิล", kcal: 80, carb: 21, protein: 0, fat: 0, sugar: 16 },
-  { pattern: /แตงโม/i, menuName: "แตงโม", kcal: 80, carb: 20, protein: 1, fat: 0, sugar: 16 },
-  { pattern: /มะม่วง/i, menuName: "มะม่วง", kcal: 150, carb: 38, protein: 1, fat: 0, sugar: 30 },
-  { pattern: /ฝรั่ง/i, menuName: "ฝรั่ง", kcal: 80, carb: 18, protein: 3, fat: 0, sugar: 10 },
-  { pattern: /สับปะรด/i, menuName: "สับปะรด", kcal: 90, carb: 23, protein: 1, fat: 0, sugar: 17 },
-  { pattern: /(^|\s)ส้ม(\s|$)/i, menuName: "ส้ม", kcal: 70, carb: 17, protein: 1, fat: 0, sugar: 12 },
-  { pattern: /ไส้กรอกชีส/i, menuName: "ไส้กรอกชีส", kcal: 260, carb: 10, protein: 10, fat: 20, sugar: 2 },
-  { pattern: /ไส้กรอก/i, menuName: "ไส้กรอก", kcal: 180, carb: 7, protein: 8, fat: 13, sugar: 2 },
-  { pattern: /ลูกชิ้นทอด/i, menuName: "ลูกชิ้นทอด", kcal: 280, carb: 28, protein: 12, fat: 14, sugar: 4 },
-  { pattern: /ชาเขียวมัจฉะ|ชาเขียวมัทฉะ|มัจฉะ|มัทฉะ|matcha/i, menuName: "ชาเขียวมัจฉะ", kcal: 180, carb: 28, protein: 4, fat: 5, sugar: 22 },
-  { pattern: /ชาไทย/i, menuName: "ชาไทย", kcal: 220, carb: 35, protein: 3, fat: 6, sugar: 30 },
-  { pattern: /ชานม/i, menuName: "ชานม", kcal: 280, carb: 45, protein: 4, fat: 8, sugar: 36 },
-  { pattern: /ข้าวแกง\s*(สอง|2)\s*อย่าง|ข้าวราดแกง/i, menuName: "ข้าวแกงสองอย่าง", kcal: 650, carb: 82, protein: 24, fat: 24, sugar: 8 },
-  { pattern: /^(?!.*ข้าว).*ไก่ทอด/i, menuName: "ไก่ทอด", kcal: 420, carb: 30, protein: 24, fat: 24, sugar: 4 },
-  { pattern: /^(?!.*ข้าวเหนียว).*หมูปิ้ง/i, menuName: "หมูปิ้ง", kcal: 320, carb: 18, protein: 18, fat: 20, sugar: 8 },
-  { pattern: /ข้าวขาหมู/i, menuName: "ข้าวขาหมู", kcal: 780, carb: 82, protein: 32, fat: 34, sugar: 8 },
-  { pattern: /ข้าวมันไก่/i, menuName: "ข้าวมันไก่", kcal: 650, carb: 70, protein: 32, fat: 26, sugar: 5 },
-  { pattern: /ข้าวหมูกรอบ/i, menuName: "ข้าวหมูกรอบ", kcal: 820, carb: 75, protein: 30, fat: 42, sugar: 8 },
-  { pattern: /กะเพรา|กระเพรา/i, menuName: "ข้าวกะเพรา", kcal: 650, carb: 70, protein: 30, fat: 28, sugar: 6 },
-  { pattern: /มาม่า|บะหมี่|ก๋วยเตี๋ยว|ราเมง|เส้น/i, menuName: "เมนูเส้น", kcal: 480, carb: 65, protein: 20, fat: 14, sugar: 5 },
-  { pattern: /เค้ก|คุกกี้|โดนัท|ไอติม|บิงซู/i, menuName: "ของหวาน", kcal: 350, carb: 50, protein: 5, fat: 14, sugar: 34 },
+  { pattern: /โค้ก|โค๊ก|coke/i, menuName: "โค้กกระป๋อง", kcal: 140, carb: 35, protein: 0, fat: 0, sugar: 35 },
+  { pattern: /ป๊อกกี้|pocky/i, menuName: "ป๊อกกี้", kcal: 220, carb: 32, protein: 4, fat: 9, sugar: 18 },
 ];
-
-const PROTECTED_LOCAL_PRESETS = [
-  { pattern: /โอริโอ้|โอริโอ|oreo/i, menuName: "โอริโอ", kcal: 260, carb: 38, protein: 3, fat: 11, sugar: 22, confidence: "medium", estimateMode: "local" },
-  { pattern: /โค้ก\s*ซีโร่|โค๊ก\s*ซีโร่|coke\s*zero/i, menuName: "โค้กซีโร่", kcal: 0, carb: 0, protein: 0, fat: 0, sugar: 0, confidence: "high", estimateMode: "local" },
-];
-
-const normalize = (text = "") => String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
-
-const hasFoodKeyword = (text = "") => {
-  const value = normalize(text);
-  return FOOD_KEYWORDS.some((word) => value.includes(word));
-};
-
-const isQuestionOrAdviceText = (text = "") => /(ไหม|มั้ย|ปะ|ป่ะ|ดีไหม|ดีมั้ย|อะไรดี|กี่แคล|แคลเท่าไร|แคลเท่าไหร่|ควรกิน|กินได้ไหม)/i.test(text);
 
 const isLikelyShortFoodText = (text = "") => {
-  const value = normalize(text).replace(/^กิน\s+/, "");
+  const value = normalize(text);
   if (!value || value.length > 140) return false;
   if (BLOCKLIST.some((word) => value === normalize(word) || value.includes(normalize(word)))) return false;
-  if (isQuestionOrAdviceText(value)) return false;
-  return hasFoodKeyword(value);
+  if (QUESTION_PATTERN.test(value)) return false;
+  return KEYWORD_PATTERN.test(value);
 };
 
 const buildGoalFoodGuardReply = (foodText) => [
-  [
-    "เอ้า! อันนี้ของกินนะ 👀",
-    "ยังไม่ใช่เป้าหมายอะ",
-    "ถ้าจะให้แปะลงมื้อ",
-    `พิมพ์: กิน ${foodText}`,
-  ].join("\n"),
-  [
-    "หรือส่งรูปมาเลยก็ได้",
-    "เดี๋ยวแปะอ่านทรงให้ 📸",
-    "ถ้าจะตั้งเป้า ลองพิมพ์:",
-    "เป้าหมาย กินให้พอดี",
-    "เป้าหมาย เพิ่มแรง",
-    "เป้าหมาย คุมหวาน",
-  ].join("\n"),
+  ["เอ้า! อันนี้ของกินนะ 👀", "ยังไม่ใช่เป้าหมายอะ", "ถ้าจะให้แปะลงมื้อ", `พิมพ์: กิน ${foodText}`].join("\n"),
+  ["หรือส่งรูปมาเลยก็ได้", "เดี๋ยวแปะอ่านทรงให้ 📸", "ถ้าจะตั้งเป้า ลองพิมพ์:", "เป้าหมาย กินให้พอดี", "เป้าหมาย เพิ่มแรง", "เป้าหมาย คุมหวาน"].join("\n"),
 ];
 
 const resolveTextPortion = ({ kcal = 0 } = {}) => {
-  if (kcal >= 750) return { level: "heavy", label: "ค่อนข้างเยอะ", note: "พิมพ์มาเป็นชื่อเมนู แปะนับเป็น 1 เสิร์ฟแบบร้านทั่วไปก่อนนะ" };
-  if (kcal <= 320) return { level: "light", label: "ค่อนข้างเบา", note: "พิมพ์มาเป็นชื่อเมนู แปะนับเป็น 1 เสิร์ฟเบา ๆ ก่อนนะ" };
-  return { level: "normal", label: "พอดี", note: "พิมพ์มาเป็นชื่อเมนู แปะนับเป็น 1 เสิร์ฟทั่วไปก่อนนะ" };
+  if (kcal >= 750) return { level: "heavy", label: "ค่อนข้างเยอะ", note: "แปะนับเป็น 1 เสิร์ฟแบบร้านทั่วไปก่อนนะ" };
+  if (kcal <= 320) return { level: "light", label: "ค่อนข้างเบา", note: "แปะนับเป็น 1 เสิร์ฟเบา ๆ ก่อนนะ" };
+  return { level: "normal", label: "พอดี", note: "แปะนับเป็น 1 เสิร์ฟทั่วไปก่อนนะ" };
 };
 
-const splitFoodText = (text = "") => normalize(text)
-  .replace(/^กิน\s+/, "")
-  .split(/\s*(?:\+|,|และ|กับ|\n)\s*/i)
-  .map((item) => item.trim())
-  .filter(Boolean);
-
-const estimateProtectedLocal = (text = "") => {
-  const normalized = normalize(text).replace(/^กิน\s+/, "");
-  return PROTECTED_LOCAL_PRESETS.find((preset) => preset.pattern.test(normalized)) || null;
-};
-
-const estimateFoodLocally = (text = "") => {
-  const normalized = normalize(text).replace(/^กิน\s+/, "");
-  const matched = [];
-  for (const preset of LOCAL_FOOD_PRESETS) if (preset.pattern.test(normalized)) matched.push(preset);
-  if (matched.length === 0) return null;
-
-  const parts = splitFoodText(text);
-  const isSimpleSinglePreset = matched.length === 1 && parts.length <= 1 && normalized.length <= 40;
-  const isComplex = parts.length >= 2 || matched.length >= 2 || normalized.length >= 28;
-  if (!isSimpleSinglePreset && !isComplex) return null;
-
-  const totals = matched.reduce((acc, item) => ({ kcal: acc.kcal + item.kcal, carb: acc.carb + item.carb, protein: acc.protein + item.protein, fat: acc.fat + item.fat, sugar: acc.sugar + item.sugar }), { kcal: 0, carb: 0, protein: 0, fat: 0, sugar: 0 });
-  const menuName = isSimpleSinglePreset ? matched[0].menuName : matched.map((item) => item.menuName).filter(Boolean).join(" + ");
-  return { menuName: menuName || normalized, ...totals, confidence: "medium", estimateMode: "local" };
-};
+const estimateFastPreset = (text = "") => FAST_PRESETS.find((preset) => preset.pattern.test(normalize(text))) || null;
 
 const estimateFood = async (text) => {
-  const protectedLocal = estimateProtectedLocal(text);
-  if (protectedLocal) return protectedLocal;
+  const fastPreset = estimateFastPreset(text);
+  if (fastPreset) return { ...fastPreset, confidence: "medium", estimateMode: "local" };
 
   const presetStart = nowMs();
   const preset = await findFoodPreset(text);
@@ -174,8 +56,6 @@ const estimateFood = async (text) => {
     return preset;
   }
 
-  const local = estimateFoodLocally(text);
-  if (local) return local;
   const aiStart = nowMs();
   const foodData = await estimateFoodFromText(text);
   logTiming("fastFoodText:estimateOpenAI", aiStart, `text=${text} menu=${foodData?.menuName || ""}`);
@@ -190,17 +70,14 @@ const resolveCurrentTotal = ({ result = {}, session = {}, mealKcal = 0 } = {}) =
   return safeNumber(mealKcal, 0);
 };
 
-const isZeroCalorieFood = (foodData = {}, text = "") => (
-  safeNumber(foodData?.kcal, 0) === 0 && /(zero|ซีโร่|ไม่หวาน|ไม่มีน้ำตาล|กาแฟดำ|อเมริกาโน่)/i.test(`${foodData?.menuName || ""} ${text}`)
-);
+const isZeroCalorieFood = (foodData = {}, text = "") => safeNumber(foodData?.kcal, 0) === 0 && /(zero|ซีโร่|ไม่หวาน|ไม่มีน้ำตาล|กาแฟดำ|อเมริกาโน่)/i.test(`${foodData?.menuName || ""} ${text}`);
 
 export const handleFastFoodText = async (event) => {
   const start = nowMs();
   const userId = event.source?.userId;
   const replyToken = event.replyToken;
   const text = String(event.message?.text || "").trim();
-  if (!userId || !text) return false;
-  if (!isLikelyShortFoodText(text)) return false;
+  if (!userId || !text || !isLikelyShortFoodText(text)) return false;
 
   const sessionStart = nowMs();
   const session = await getSession(userId);
@@ -220,9 +97,7 @@ export const handleFastFoodText = async (event) => {
   const kcal = safeNumber(foodData?.kcal, 0);
   if (kcal <= 0 && !isZeroCalorieFood(foodData, text)) return false;
 
-  if (foodData?.estimateMode === "openai") {
-    logFoodTermCandidate({ term: text, foodData, source: "openai", example: text }).catch(() => {});
-  }
+  if (foodData?.estimateMode === "openai") logFoodTermCandidate({ term: text, foodData, source: "openai", example: text }).catch(() => {});
 
   const meal = { menuName: foodData?.menuName || text, kcal, carb: safeNumber(foodData?.carb, 0), protein: safeNumber(foodData?.protein, 0), fat: safeNumber(foodData?.fat, 0), sugar: safeNumber(foodData?.sugar, 0) };
   const portion = resolveTextPortion({ kcal: meal.kcal });
