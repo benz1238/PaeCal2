@@ -98,16 +98,26 @@ const getDailyTitle = (signals, summary = {}) => selectDailyTitle(signals, {
   topMeal: signals.topMeal,
 });
 
-const stickerUrlForSignals = (signals = {}) => chooseDailyRecapStickerUrl({ day: signals, memory: signals });
+const stickerUrlForSignals = (signals = {}, options = {}) => chooseDailyRecapStickerUrl({ day: signals, memory: signals }, options);
 
-const footerLine = (message, color = palette.blue, stickerUrl = "") => ({
+const footerText = (message = "") => String(message || "").replace(/\s+/g, " ").replace(/(.{18,26})\s+/g, "$1\n").trim();
+
+const speechBubbleFooter = (message, color = palette.blue, stickerUrl = "") => ({
   type: "box",
   layout: "horizontal",
-  spacing: "8px",
-  margin: "md",
+  spacing: "10px",
+  margin: "lg",
   contents: [
-    { type: "box", layout: "vertical", width: "40px", height: "40px", contents: [stickerImage(stickerUrl, "40px")] },
-    text({ text: message, size: "sm", weight: "bold", color, wrap: true, align: "start", flex: 1 }),
+    { type: "box", layout: "vertical", width: "58px", height: "58px", contents: [stickerImage(stickerUrl, "58px")] },
+    {
+      type: "box",
+      layout: "vertical",
+      flex: 1,
+      backgroundColor: "#FFFFFF",
+      cornerRadius: "18px",
+      paddingAll: "12px",
+      contents: [text({ text: footerText(message), size: "sm", weight: "bold", color, wrap: true, align: "start" })],
+    },
   ],
 });
 
@@ -221,6 +231,7 @@ export const buildFoodAuraFlexMessage = ({ summary = {} } = {}) => {
   const signals = getSummarySignals(summary);
   const titleCard = getDailyTitle(signals, summary);
   const stickerUrl = stickerUrlForSignals(signals);
+  const footerStickerUrl = stickerUrlForSignals(signals, { flipped: true });
   return {
     type: "flex",
     altText: "ฉายาวันนี้",
@@ -229,7 +240,7 @@ export const buildFoodAuraFlexMessage = ({ summary = {} } = {}) => {
       text({ text: titleCard.name, size: "xxl", weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs" }),
       characterPanel({ titleCard, signals, stickerUrl }),
       text({ text: signals.isEmpty ? "ส่งมื้อแรกมาก่อน เดี๋ยวแปะตั้งฉายาให้" : "อั๊วะพูดจริงไม่ได้โม้~", size: "md", color: palette.brown, weight: "bold", wrap: true, margin: "md" }),
-      footerLine(titleFooter(signals), palette.blue, stickerUrl),
+      speechBubbleFooter(titleFooter(signals), palette.blue, footerStickerUrl),
     ] } },
   };
 };
@@ -238,6 +249,7 @@ export const buildFoodWrappedFlexMessage = ({ summary = {} } = {}) => {
   const signals = getSummarySignals(summary);
   const culprit = diagnoseMainCulprit(signals);
   const stickerUrl = stickerUrlForSignals(signals);
+  const footerStickerUrl = stickerUrlForSignals(signals, { flipped: true });
   const topMealText = signals.topMeal ? `${truncate(signals.topMeal, 28)}${signals.topMealKcal > 0 ? ` · ~${Math.round(signals.topMealKcal)} kcal` : ""}` : "ยังไม่มีมื้อเด่น";
   return {
     type: "flex",
@@ -252,7 +264,7 @@ export const buildFoodWrappedFlexMessage = ({ summary = {} } = {}) => {
       ]},
       evidenceBox([`มื้อเด่น: ${topMealText}`, `รวมวันนี้: ${Math.round(signals.kcal)} / ${Math.round(signals.target)} kcal`], "หลักฐานบนโต๊ะ"),
       text({ text: culprit.detail, size: "md", color: palette.brown, weight: "bold", wrap: true, margin: "md" }),
-      footerLine(wrappedFooter(signals), palette.blue, stickerUrl),
+      speechBubbleFooter(wrappedFooter(signals), palette.blue, footerStickerUrl),
     ] } },
   };
 };
@@ -264,6 +276,7 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
   const left = Math.max(signals.target - signals.kcal, 0);
   const over = Math.max(signals.kcal - signals.target, 0);
   const stickerUrl = stickerUrlForSignals(signals);
+  const footerStickerUrl = stickerUrlForSignals(signals, { flipped: true });
   const topMealText = signals.topMeal ? `${truncate(signals.topMeal, 34)}${signals.topMealKcal > 0 ? ` · ~${Math.round(signals.topMealKcal)} kcal` : ""}` : "ยังไม่มีมื้อเด่น";
   const statusText = signals.isEmpty ? "เอ้า วันนี้ยังไม่มีข้อมูลเลย" : signals.isOver ? "ไอหยา วันนี้ถังเต็มแล้วนะ" : `โอเค เหลืออีก ${Math.round(left)} kcal`;
 
@@ -271,13 +284,13 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
     type: "flex",
     altText: "สรุปวันนี้",
     contents: { type: "bubble", size: "mega", body: { type: "box", layout: "vertical", backgroundColor: palette.cream, paddingAll: "18px", contents: [
-      { type: "box", layout: "horizontal", spacing: "10px", contents: [
-        { type: "box", layout: "vertical", flex: 5, contents: [
-          text({ text: "TODAY RECAP BY แปะ", size: "sm", weight: "bold", color: "#A32922" }),
+      { type: "box", layout: "horizontal", spacing: "0px", alignItems: "flex-start", contents: [
+        { type: "box", layout: "vertical", flex: 1, width: "178px", contents: [
+          text({ text: "TODAY RECAP BY แปะ", size: "sm", weight: "bold", color: "#A32922", wrap: false }),
           text({ text: `${userName} · ${getRarityLabel(titleCard.rarity)}`, size: "sm", weight: "bold", color: titleCard.color || palette.muted, margin: "xs", wrap: true }),
-          text({ text: titleCard.name, size: "xxl", weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs" }),
+          text({ text: titleCard.name, size: "xxl", weight: "bold", color: titleCard.color || palette.brown, wrap: true, margin: "xs", maxLines: 3 }),
         ]},
-        { type: "box", layout: "vertical", flex: 0, width: "82px", height: "82px", contents: [stickerImage(stickerUrl, "82px")] },
+        { type: "box", layout: "vertical", flex: 0, width: "142px", height: "142px", contents: [stickerImage(stickerUrl, "142px")] },
       ]},
       { type: "box", layout: "vertical", backgroundColor: palette.card, cornerRadius: "20px", paddingAll: "16px", margin: "md", spacing: "sm", contents: [
         text({ text: statusText, size: "xl", weight: "bold", color: signals.isOver ? palette.red : palette.green, wrap: true }),
@@ -291,7 +304,7 @@ export const buildCalorieSummaryFlexMessage = ({ summary = {} } = {}) => {
       ]},
       fullInfoPill({ title: "เป้าหมาย", value: signals.isEmpty ? "ยังไม่มีข้อมูลวันนี้" : signals.isOver ? `เกิน ${Math.round(over)} kcal` : `เหลือ ${Math.round(left)} kcal`, bg: signals.isOver ? palette.softRed : palette.mint, color: signals.isOver ? palette.red : palette.brown }),
       fullInfoPill({ title: "มื้อเด่น", value: topMealText, bg: palette.sky, color: palette.brown }),
-      footerLine(calorieFooter(signals), signals.isOver ? palette.red : palette.blue, stickerUrl),
+      speechBubbleFooter(calorieFooter(signals), signals.isOver ? palette.red : palette.blue, footerStickerUrl),
     ] } },
   };
 };
@@ -300,6 +313,7 @@ export const buildNutritionFlexMessage = ({ summary = {} } = {}) => {
   const signals = getSummarySignals(summary);
   const left = Math.max(signals.target - signals.kcal, 0);
   const stickerUrl = stickerUrlForSignals(signals);
+  const footerStickerUrl = stickerUrlForSignals(signals, { flipped: true });
   return {
     type: "flex",
     altText: "โภชนาการวันนี้",
@@ -312,7 +326,7 @@ export const buildNutritionFlexMessage = ({ summary = {} } = {}) => {
         ]},
       ]},
       evidenceBox([`คาร์บ ${Math.round(signals.carb)} g`, `โปรตีน ${Math.round(signals.protein)} g`, `ไขมัน ${Math.round(signals.fat)} g`, `น้ำตาล ${Math.round(signals.sugar)} g`, signals.topMeal ? `มื้อเด่น: ${truncate(signals.topMeal, 28)}` : "มื้อเด่นยังไม่มี"], "แปะจับตัวเลขมาให้"),
-      footerLine(nutritionFooter(signals), palette.blue, stickerUrl),
+      speechBubbleFooter(nutritionFooter(signals), palette.blue, footerStickerUrl),
     ] } },
   };
 };
