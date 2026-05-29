@@ -43,7 +43,7 @@ const buildVibeRichMenu = () => ({
   areas: [
     { ...area(0, 0, 1250, 300), action: postback("แปะอ่านทรง", "action=SWITCH_TO_VIBE_MENU") },
     { ...area(1250, 0, 1250, 300), action: switchMenu("แปะแคล", ALIAS.cal, "action=SWITCH_TO_CAL_MENU") },
-    { ...area(0, 300, 2500, 500), action: postback("ส่งรูปให้แปะอ่าน", "action=SEND_PHOTO_GUIDE") },
+    { ...area(0, 300, 2500, 500), action: postback("ส่งรูปให้แปะอ่าน", "action=SEND_PHOTO_GUIDE", { inputOption: "openKeyboard" }) },
     { ...area(0, 800, 833, 886), action: postback("วันนี้อาหารฟ้องว่า", "action=DAILY_FOOD_WRAPPED") },
     { ...area(833, 800, 834, 886), action: postback("กินอะไรดี", "action=MEAL_SUGGESTION") },
     { ...area(1667, 800, 833, 886), action: postback("ฉายาวันนี้", "action=FOOD_AURA") },
