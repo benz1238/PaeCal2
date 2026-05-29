@@ -145,7 +145,7 @@ const heroStickerBackground = (stickerUrl = "") => ({
   layout: "vertical",
   position: "absolute",
   offsetTop: "0px",
-  offsetEnd: "0px",
+  offsetEnd: "14px",
   width: "142px",
   height: "142px",
   contents: [stickerImage(stickerUrl, "142px")],
