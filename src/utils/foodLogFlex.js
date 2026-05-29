@@ -18,8 +18,9 @@ export const buildDailyEnergyGauge = ({ total = 0, target = DEFAULT_CALORIE_TARG
       fillPercent,
       color: "#DC2626",
       statusEmoji: "🔴",
-      statusText: overKcal > 0 ? `เกินลิมิตมาประมาณ ${round(overKcal)} kcal` : "แตะลิมิตพอดี",
+      statusText: overKcal > 0 ? `เลยเพดานมาราว ${round(overKcal)} kcal` : "แตะเพดานวันนี้พอดี",
       adviceText: "มื้อต่อไปเบา ๆ หน่อย แปะว่าเอากลับมาได้",
+      meterText: `ถังวันนี้เต็มแล้ว ${percent}%`,
       totalKcal,
       targetKcal,
       leftKcal,
@@ -35,6 +36,7 @@ export const buildDailyEnergyGauge = ({ total = 0, target = DEFAULT_CALORIE_TARG
       statusEmoji: "🟡",
       statusText: `ถังเริ่มใกล้เต็ม เหลือราว ${round(leftKcal)} kcal`,
       adviceText: "ยังพอมีพื้นที่ แต่อย่าเจี๊ยะเพลินเกินนะ",
+      meterText: `ใช้พลังวันนี้ไปประมาณ ${percent}%`,
       totalKcal,
       targetKcal,
       leftKcal,
@@ -49,6 +51,7 @@ export const buildDailyEnergyGauge = ({ total = 0, target = DEFAULT_CALORIE_TARG
     statusEmoji: "🟢",
     statusText: `ยังมีพื้นที่อยู่ ราว ${round(leftKcal)} kcal`,
     adviceText: "เดี๋ยวมื้อต่อไปค่อยคุมต่อได้",
+    meterText: `ใช้พลังวันนี้ไปประมาณ ${percent}%`,
     totalKcal,
     targetKcal,
     leftKcal,
@@ -95,7 +98,7 @@ export const buildFoodLogFlexMessage = ({ meal = {}, total = 0, target = DEFAULT
   const gauge = buildDailyEnergyGauge({ total, target });
   const menuName = meal.menuName || "มื้อนี้";
   const sugar = safeNumber(meal.sugar, 0);
-  const showSugar = sugar > 0 || /หวาน|ชา|กาแฟ|โกโก้|โค้ก|เป๊ปซี่|น้ำ|ขนม|โอริโอ|oreo|เค้ก|ไอติม|บิงซู/i.test(menuName);
+  const showSugar = sugar > 0 || /หวาน|ชา|กาแฟ|โกโก้|โค้ก|เป๊ปซี่|น้ำ|ขนม|โอริโอ|oreo|เค้ก|ไอติม|บิงซู|บลิซซาร์ด|blizzard/i.test(menuName);
   const portionLabel = meal.portionLabel || "พอดี";
   const opener = title && title !== "ลื้อ" ? `${title} แปะจดให้แล้ว` : "แปะจดให้แล้ว";
 
@@ -144,7 +147,7 @@ export const buildFoodLogFlexMessage = ({ meal = {}, total = 0, target = DEFAULT
               { type: "text", text: "⛽ เกจพลังวันนี้", size: "sm", weight: "bold", color: "#003C88", wrap: true },
               buildGaugeBar(gauge),
               { type: "text", text: `${gauge.statusEmoji} ${gauge.statusText}`, size: "sm", color: "#1F2937", wrap: true },
-              { type: "text", text: `วันนี้รวม ~${round(gauge.totalKcal)} kcal · ลิมิต ~${round(gauge.targetKcal)} kcal`, size: "xs", color: "#6B7280", wrap: true },
+              { type: "text", text: gauge.meterText, size: "xs", color: "#6B7280", wrap: true },
             ],
           },
           { type: "text", text: gauge.adviceText, size: "sm", color: "#003C88", weight: "bold", align: "center", wrap: true },
