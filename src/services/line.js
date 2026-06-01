@@ -98,9 +98,19 @@ const paeLaewGuideFlex = () => ({
       backgroundColor: "#FFF7ED",
       contents: [
         { type: "text", text: "📸 ส่งรูปให้แปะอ่าน", weight: "bold", size: "xl", wrap: true, color: "#1F2937" },
-        { type: "text", text: "ถ่ายอาหารให้ชัด ๆ แล้วส่งมาได้เลย\nเดี๋ยวแปะดูให้ว่าเมนูนี้ประมาณไหน 👀", size: "sm", wrap: true, color: "#374151" },
+        { type: "text", text: "กดปุ่มด้านล่างเพื่อถ่ายรูปหรือเลือกรูปอาหารได้เลย\nเดี๋ยวแปะดูให้ว่าเมนูนี้ประมาณไหน 👀", size: "sm", wrap: true, color: "#374151" },
       ],
     },
+  },
+});
+
+const withPhotoQuickReply = (message) => ({
+  ...message,
+  quickReply: {
+    items: [
+      { type: "action", action: { type: "camera", label: "ถ่ายรูป" } },
+      { type: "action", action: { type: "cameraRoll", label: "เลือกรูป" } },
+    ],
   },
 });
 
@@ -115,7 +125,7 @@ export const pushFlex = async (to, messages) => {
 };
 
 export const replyPaeLaewGuideCard = async (replyToken) => replyFlex(replyToken, paeLaewGuideFlex());
-export const replySendPhotoGuide = async (replyToken) => replyPaeLaewGuideCard(replyToken);
+export const replySendPhotoGuide = async (replyToken) => client.replyMessage({ replyToken, messages: [withPhotoQuickReply(paeLaewGuideFlex())] });
 export const replyTypeFoodPrompt = async (replyToken) => replyText(replyToken, "พิมพ์มื้อที่กินมาได้เลย\nสั้น ๆ ก็ได้ เดี๋ยวแปะดูให้ 😄");
 
 export const replyDailyRecapCardWithBubbles = async (replyToken, { title = "ลื้อ", bubbles = [], summary = {}, decision = null }) => {
