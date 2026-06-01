@@ -8,6 +8,7 @@ const normalizeText = (text = "") => String(text || "")
 
 const compactText = (text = "") => normalizeText(text).replace(/\s+/g, "");
 const round = (value) => Math.round(Number(value) || 0);
+const clamp = (value, min = 0) => Math.max(min, round(value));
 
 const makeItem = (meal, quantity = "1 เสิร์ฟ") => ({ name: meal.menuName, quantity, kcal: meal.kcal });
 
@@ -78,7 +79,12 @@ const PRESETS = [
   { pattern: /กุ้งทอด/, menuName: "กุ้งทอด", kcal: 330, carb: 20, protein: 28, fat: 16 },
   { pattern: /กุ้งต้ม|กุ้งลวก/, menuName: "กุ้งต้ม", kcal: 180, carb: 0, protein: 36, fat: 3 },
 
-  // Noodles
+  // Noodles and noodle alternatives
+  { pattern: /เส้นปลา/, menuName: "เส้นปลา", kcal: 180, carb: 20, protein: 18, fat: 2, special: "noodleAlternative" },
+  { pattern: /เส้นไข่/, menuName: "เส้นไข่", kcal: 220, carb: 25, protein: 15, fat: 8, special: "noodleAlternative" },
+  { pattern: /บะหมี่ผัก/, menuName: "บะหมี่ผัก", kcal: 180, carb: 28, protein: 8, fat: 4, special: "noodleAlternative" },
+  { pattern: /เส้นบุก|บุกเส้น|บะหมี่บุก/, menuName: "เส้นบุก", kcal: 40, carb: 8, protein: 1, fat: 0, special: "noodleAlternative" },
+  { pattern: /วุ้นเส้น/, menuName: "วุ้นเส้น", kcal: 180, carb: 42, protein: 1, fat: 0, special: "noodleAlternative" },
   { pattern: /ก๋วยเตี๋ยวต้มยำ/, menuName: "ก๋วยเตี๋ยวต้มยำ", kcal: 450, carb: 60, protein: 22, fat: 15 },
   { pattern: /ก๋วยเตี๋ยวแห้ง/, menuName: "ก๋วยเตี๋ยวแห้ง", kcal: 500, carb: 70, protein: 22, fat: 16 },
   { pattern: /ก๋วยเตี๋ยวน้ำ|ก๋วยเตี๋ยว/, menuName: "ก๋วยเตี๋ยวน้ำ", kcal: 400, carb: 55, protein: 22, fat: 10 },
@@ -112,6 +118,18 @@ const applyPorkLegRiceModifiers = (base, value) => {
   return base;
 };
 
+const appendMenuNote = (menuName = "", note = "") => menuName.includes(note) ? menuName : `${menuName} ${note}`.trim();
+const isNoodleMeal = (menuName = "") => /(ก๋วยเตี๋ยว|บะหมี่|ราเมง|ผัดไทย|ผัดซีอิ๊ว|ราดหน้า|สุกี้|เส้น|วุ้นเส้น)/.test(menuName);
+
+const replaceNoodleBase = (meal, { label, kcalDelta, carbDelta, proteinDelta = 0, fatDelta = 0 }) => ({
+  ...meal,
+  kcal: clamp(meal.kcal + kcalDelta),
+  carb: clamp(meal.carb + carbDelta),
+  protein: clamp(meal.protein + proteinDelta),
+  fat: clamp(meal.fat + fatDelta),
+  menuName: appendMenuNote(meal.menuName, label),
+});
+
 const applyModifiers = (meal, text) => {
   const value = compactText(text);
   let next = { ...meal };
@@ -120,7 +138,9 @@ const applyModifiers = (meal, text) => {
   delete next.special;
 
   const hasRiceBase = /^ข้าว/.test(next.menuName);
+  const hasNoodleBase = isNoodleMeal(next.menuName);
   const isExtra = /(พิเศษ|จัมโบ้|ไซซ์ใหญ่|sizeใหญ่)/.test(value);
+
   if (isExtra) {
     next = {
       ...next,
@@ -134,20 +154,48 @@ const applyModifiers = (meal, text) => {
     next = { ...next, menuName: `${next.menuName}ธรรมดา` };
   }
 
+  if (/(ข้าวน้อย|ข้าวครึ่ง|ครึ่งข้าว|ลดข้าว|ข้าวนิดเดียว|ข้าวน้อยๆ|ข้าวน้อยนิด|ไม่เอาข้าว|ไม่ใส่ข้าว)/.test(value) && hasRiceBase) {
+    next = { ...next, kcal: clamp(next.kcal - 120), carb: clamp(next.carb - 28), protein: clamp(next.protein - 2), menuName: appendMenuNote(next.menuName, "ข้าวน้อย") };
+  }
+
   if (/เพิ่มข้าว|ข้าวเพิ่ม|เอาข้าวเพิ่ม|ข้าวเยอะ/.test(value) && hasRiceBase) {
-    next = { ...next, kcal: next.kcal + 180, carb: next.carb + 40, protein: next.protein + 3, menuName: `${next.menuName} เพิ่มข้าว` };
+    next = { ...next, kcal: next.kcal + 180, carb: next.carb + 40, protein: next.protein + 3, menuName: appendMenuNote(next.menuName, "เพิ่มข้าว") };
+  }
+
+  if (/(เส้นน้อย|เส้นครึ่ง|ครึ่งเส้น|ลดเส้น|เส้นนิดเดียว|ไม่เอาเส้น|ไม่ใส่เส้น)/.test(value) && hasNoodleBase) {
+    next = { ...next, kcal: clamp(next.kcal - 120), carb: clamp(next.carb - 30), protein: clamp(next.protein - 2), menuName: appendMenuNote(next.menuName, "เส้นน้อย") };
   }
 
   if (/เพิ่มเส้น|เส้นเพิ่ม|เอาเส้นเพิ่ม|เส้นเยอะ/.test(value)) {
-    next = { ...next, kcal: next.kcal + 180, carb: next.carb + 40, protein: next.protein + 4, fat: next.fat + 2, menuName: `${next.menuName} เพิ่มเส้น` };
+    next = { ...next, kcal: next.kcal + 180, carb: next.carb + 40, protein: next.protein + 4, fat: next.fat + 2, menuName: appendMenuNote(next.menuName, "เพิ่มเส้น") };
+  }
+
+  if (/เส้นปลา/.test(value) && hasNoodleBase && !/เส้นปลา/.test(next.menuName)) {
+    next = replaceNoodleBase(next, { label: "เส้นปลา", kcalDelta: -120, carbDelta: -35, proteinDelta: 8, fatDelta: -3 });
+  }
+
+  if (/เส้นไข่/.test(value) && hasNoodleBase && !/เส้นไข่/.test(next.menuName)) {
+    next = replaceNoodleBase(next, { label: "เส้นไข่", kcalDelta: -80, carbDelta: -25, proteinDelta: 10, fatDelta: 4 });
+  }
+
+  if (/บะหมี่ผัก/.test(value) && hasNoodleBase && !/บะหมี่ผัก/.test(next.menuName)) {
+    next = replaceNoodleBase(next, { label: "บะหมี่ผัก", kcalDelta: -120, carbDelta: -35, proteinDelta: 4, fatDelta: -2 });
+  }
+
+  if (/เส้นบุก|บุกเส้น|บะหมี่บุก/.test(value) && hasNoodleBase && !/เส้นบุก/.test(next.menuName)) {
+    next = replaceNoodleBase(next, { label: "เส้นบุก", kcalDelta: -180, carbDelta: -45, proteinDelta: -2, fatDelta: -2 });
+  }
+
+  if (/วุ้นเส้น/.test(value) && hasNoodleBase && !/วุ้นเส้น/.test(next.menuName)) {
+    next = replaceNoodleBase(next, { label: "วุ้นเส้น", kcalDelta: -60, carbDelta: -15, proteinDelta: -6, fatDelta: -4 });
   }
 
   if (/ข้าวกล้อง/.test(value) && hasRiceBase && !/ข้าวกล้อง/.test(next.menuName)) {
-    next = { ...next, kcal: Math.max(0, next.kcal - 25), carb: Math.max(0, next.carb - 7), protein: next.protein + 1, menuName: next.menuName.replace(/^ข้าว/, "ข้าวกล้อง") };
+    next = { ...next, kcal: clamp(next.kcal - 25), carb: clamp(next.carb - 7), protein: next.protein + 1, menuName: next.menuName.replace(/^ข้าว/, "ข้าวกล้อง") };
   }
 
   if (/ข้าวไรซ์เบอร์รี่|ข้าวไรส์เบอร์รี่/.test(value) && hasRiceBase && !/ไรซ์เบอร์รี่|ไรส์เบอร์รี่/.test(next.menuName)) {
-    next = { ...next, kcal: Math.max(0, next.kcal - 35), carb: Math.max(0, next.carb - 9), protein: next.protein + 1, menuName: next.menuName.replace(/^ข้าว/, "ข้าวไรซ์เบอร์รี่") };
+    next = { ...next, kcal: clamp(next.kcal - 35), carb: clamp(next.carb - 9), protein: next.protein + 1, menuName: next.menuName.replace(/^ข้าว/, "ข้าวไรซ์เบอร์รี่") };
   }
 
   if (/ไข่ดาว/.test(value) && !/ไข่ดาว/.test(next.menuName)) {
@@ -172,7 +220,7 @@ export const resolveLocalFoodEstimate = (text = "") => {
   const meal = withDefaults(applyModifiers(preset, text));
   return {
     ...meal,
-    items: [makeItem(meal, /พิเศษ|เพิ่มข้าว|เพิ่มเส้น/.test(value) ? "1 เสิร์ฟปรับเพิ่ม" : "1 เสิร์ฟ")],
+    items: [makeItem(meal, /พิเศษ|เพิ่มข้าว|เพิ่มเส้น|ข้าวน้อย|เส้นน้อย|เส้นปลา|เส้นไข่|บะหมี่ผัก|เส้นบุก|วุ้นเส้น/.test(value) ? "1 เสิร์ฟปรับตามที่สั่ง" : "1 เสิร์ฟ")],
   };
 };
 
