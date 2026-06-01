@@ -15,6 +15,43 @@ const BLOCKLIST = ["สรุป", "สรุปวันนี้", "แคล�
 const KEYWORD_PATTERN = /(ข้าว|ก๋วยเตี๋ยว|บะหมี่|ราเมง|เส้น|โจ๊ก|หมู|ไก่|ปลา|กุ้ง|เนื้อ|ไข่|เต้าหู้|แซลมอน|ซูชิ|กะเพรา|กระเพรา|ส้มตำ|ลาบ|ยำ|สลัด|ชาบู|หมูกระทะ|หมูทะ|ปิ้งย่าง|ไส้กรอก|ลูกชิ้น|ชีส|ทอด|แซนด์วิช|ขนมปัง|ครัวซองต์|ชาไทย|ชานม|ชาเขียว|มัจฉะ|มัทฉะ|กาแฟ|อเมริกาโน่|ลาเต้|คาปูชิโน่|มอคค่า|โกโก้|นม|น้ำเต้าหู้|น้ำหวาน|น้ำผลไม้|น้ำส้ม|โค้ก|โค๊ก|เป๊ปซี่|เค้ก|ขนม|ป๊อกกี้|โอริโอ้|โอริโอ|คิทแคท|ช็อกโกแลต|คุกกี้|โดนัท|ไอติม|บิงซู|บลิซซาร์ด|บลิดซาด|แดรี่ควีน|เลย์|ผลไม้|กล้วย|แตงโม|มะม่วง|แอปเปิล|ส้ม|ฝรั่ง|สับปะรด|oreo|blizzard|dq|lays|sushi|sashimi|americano|latte)/i;
 const QUESTION_PATTERN = /(ไหม|มั้ย|ปะ|ป่ะ|ดีไหม|ดีมั้ย|อะไรดี|กี่แคล|แคลเท่าไร|แคลเท่าไหร่|ควรกิน|กินได้ไหม)/i;
 
+const resolvePorkLegRicePreset = (text = "") => {
+  const value = normalize(text).replace(/\s+/g, "");
+  if (!/ข้าวขาหมู/.test(value)) return null;
+
+  const isExtra = /(พิเศษ|เพิ่ม|เยอะ|จัมโบ้|ใหญ่)/.test(value);
+  const isLean = /(เนื้อล้วน|ล้วน|ไม่เอาหนัง|ไม่หนัง|ไม่มัน|เอาแต่เนื้อ)/.test(value);
+  const isSkin = /(เนื้อหนัง|หนัง|ติดหนัง|ติดมัน)/.test(value);
+  const isKaki = /(คากิ|ขากิ)/.test(value);
+
+  let profile = { kcal: 800, carb: 85, protein: 36, fat: 35, menuName: "ข้าวขาหมู" };
+
+  if (isLean) profile = { kcal: 700, carb: 82, protein: 40, fat: 22, menuName: "ข้าวขาหมูเนื้อล้วน" };
+  else if (isKaki) profile = { kcal: 930, carb: 82, protein: 32, fat: 55, menuName: "ข้าวขาหมูคากิ" };
+  else if (isSkin) profile = { kcal: 850, carb: 85, protein: 36, fat: 45, menuName: "ข้าวขาหมูเนื้อหนัง" };
+
+  if (isExtra) {
+    profile = {
+      ...profile,
+      kcal: Math.round(profile.kcal * 1.22),
+      carb: Math.round(profile.carb * 1.15),
+      protein: Math.round(profile.protein * 1.2),
+      fat: Math.round(profile.fat * 1.2),
+      menuName: `${profile.menuName}พิเศษ`,
+    };
+  } else if (/(ธรรมดา|ปกติ)/.test(value)) {
+    profile = { ...profile, menuName: `${profile.menuName}ธรรมดา` };
+  }
+
+  return {
+    ...profile,
+    sugar: 5,
+    confidence: "high",
+    estimateMode: "local_pork_leg_rice",
+    items: [{ name: profile.menuName, quantity: isExtra ? "1 จานพิเศษ" : "1 จาน", kcal: profile.kcal }],
+  };
+};
+
 const FAST_PRESETS = [
   { pattern: /โอริโอ้|โอริโอ|oreo/i, menuName: "โอริโอ", kcal: 260, carb: 38, protein: 3, fat: 11, sugar: 22 },
   { pattern: /บลิซซาร์ด|บลิดซาด|blizzard|dq|แดรี่ควีน/i, menuName: "บลิซซาร์ด", kcal: 350, carb: 52, protein: 8, fat: 12, sugar: 40 },
@@ -43,11 +80,11 @@ const resolveTextPortion = ({ kcal = 0 } = {}) => {
   return { level: "normal", label: "พอดี", note: "แปะนับเป็น 1 เสิร์ฟทั่วไปก่อนนะ" };
 };
 
-const estimateFastPreset = (text = "") => FAST_PRESETS.find((preset) => preset.pattern.test(normalize(text))) || null;
+const estimateFastPreset = (text = "") => resolvePorkLegRicePreset(text) || FAST_PRESETS.find((preset) => preset.pattern.test(normalize(text))) || null;
 
 const estimateFood = async (text) => {
   const fastPreset = estimateFastPreset(text);
-  if (fastPreset) return { ...fastPreset, confidence: "medium", estimateMode: "local" };
+  if (fastPreset) return { ...fastPreset, estimateMode: fastPreset.estimateMode || "local" };
 
   const presetStart = nowMs();
   const preset = await findFoodPreset(text);
@@ -103,7 +140,7 @@ export const handleFastFoodText = async (event) => {
   const portion = resolveTextPortion({ kcal: meal.kcal });
   const requestId = `${event.message?.id || Date.now()}:fast-text-food`;
   invalidateRichMenuSummaryCache(userId);
-  const result = await logFood({ userId, name: session.data?.name || "", menuName: meal.menuName, kcal: meal.kcal, carb: meal.carb, protein: meal.protein, fat: meal.fat, sugar: meal.sugar, requestId, source: foodData?.estimateMode === "local" ? "text_fast_local" : foodData?.estimateMode === "brand_preset" || foodData?.estimateMode === "drink_sweetness_preset" ? "text_fast_preset" : "text_fast_openai", portionLevel: portion.level, portionLabel: portion.label, portionNote: portion.note, confidence: foodData?.confidence || "medium" });
+  const result = await logFood({ userId, name: session.data?.name || "", menuName: meal.menuName, kcal: meal.kcal, carb: meal.carb, protein: meal.protein, fat: meal.fat, sugar: meal.sugar, requestId, source: foodData?.estimateMode === "local" || foodData?.estimateMode === "local_pork_leg_rice" ? "text_fast_local" : foodData?.estimateMode === "brand_preset" || foodData?.estimateMode === "drink_sweetness_preset" ? "text_fast_preset" : "text_fast_openai", portionLevel: portion.level, portionLabel: portion.label, portionNote: portion.note, confidence: foodData?.confidence || "medium" });
   invalidateRichMenuSummaryCache(userId);
   const total = resolveCurrentTotal({ result, session, mealKcal: meal.kcal });
   const target = safeNumber(result.calorieTarget ?? session.calorieTarget ?? session.data?.calorieTarget, DEFAULT_CALORIE_TARGET);
