@@ -30,6 +30,10 @@ const PRESETS = [
   { pattern: /ข้าวไรซ์เบอร์รี่|ข้าวไรส์เบอร์รี่|ไรซ์เบอร์รี่|ไรส์เบอร์รี่/, menuName: "ข้าวไรซ์เบอร์รี่", kcal: 220, carb: 46, protein: 5, fat: 2 },
   { pattern: /ข้าวเหนียว/, menuName: "ข้าวเหนียว", kcal: 250, carb: 55, protein: 5, fat: 1 },
 
+  // Drinks / smoothies
+  { pattern: /อโวคาโดปั่นน้ำผึ้ง|อะโวคาโดปั่นน้ำผึ้ง|avocadohoney/, menuName: "อโวคาโดปั่นน้ำผึ้ง", kcal: 360, carb: 42, protein: 4, fat: 22, sugar: 22 },
+  { pattern: /อโวคาโดปั่น|อะโวคาโดปั่น|avocado/, menuName: "อโวคาโดปั่น", kcal: 320, carb: 28, protein: 4, fat: 22, sugar: 8 },
+
   // Chicken
   { pattern: /ข้าวมันไก่ทอด/, menuName: "ข้าวมันไก่ทอด", kcal: 780, carb: 85, protein: 30, fat: 35 },
   { pattern: /ข้าวมันไก่|ข้าวมันไก่ต้ม/, menuName: "ข้าวมันไก่ต้ม", kcal: 650, carb: 80, protein: 32, fat: 22 },
