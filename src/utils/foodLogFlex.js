@@ -73,6 +73,8 @@ const macroRow = (label, value) => ({
   ],
 });
 
+const qualityRow = (text) => ({ type: "text", text, size: "xs", color: "#6B7280", wrap: true });
+
 const buildGaugeBar = (gauge) => ({
   type: "box",
   layout: "vertical",
@@ -93,18 +95,59 @@ const buildGaugeBar = (gauge) => ({
 });
 
 const estimateNote = (estimateMode = "") => (
-  ["local", "brand_preset", "drink_sweetness_preset", "meal_suggestion_card"].includes(String(estimateMode || ""))
+  ["local", "local_food_rules", "local_pork_leg_rice", "brand_preset", "drink_sweetness_preset", "meal_suggestion_card"].includes(String(estimateMode || ""))
     ? "แปะนับแบบเร็วคร่าว ๆ ให้นะ 👀"
     : "แปะประเมินให้แล้ว 👀"
 );
+
+const resolveNutritionQuality = (meal = {}) => {
+  const menu = String(meal.menuName || "").toLowerCase();
+  const fat = safeNumber(meal.fat, 0);
+  const sugar = safeNumber(meal.sugar, 0);
+  const protein = safeNumber(meal.protein, 0);
+  const rows = [];
+
+  if (/อโวคาโด|avocado|แซลมอน|salmon|ทูน่า|tuna|อัลมอนด์|almond|ถั่ว/.test(menu) && fat >= 8) {
+    rows.push(/อโวคาโด|avocado/.test(menu) ? "🥑 ไขมันส่วนใหญ่: ดีจากอะโวคาโด" : "🥑 ไขมันส่วนใหญ่: ไขมันดี");
+  } else if (/ทอด|ฟราย|เฟรนช์ฟราย|นักเก็ต|ไก่ทอด|หมูทอด|ปลาทอด|กุ้งทอด/.test(menu) && fat >= 10) {
+    rows.push("🍟 ไขมันส่วนใหญ่: มาจากของทอด");
+  } else if (/สามชั้น|สันคอ|คอหมู|ขาหมู|คากิ|หนัง|เบคอน|ไส้กรอก|ชีส|ครีม/.test(menu) && fat >= 14) {
+    rows.push("🥓 ไขมันส่วนใหญ่: ไขมันสัตว์ค่อนข้างเยอะ");
+  } else if (fat <= 5) {
+    rows.push("🍃 ไขมัน: ค่อนข้างเบา");
+  }
+
+  if (/น้ำผึ้ง|honey|ไซรัป|syrup|นมข้น|หวาน|น้ำหวาน|ชาไทย|ชานม|โกโก้|เค้ก|ไอติม|บิงซู|บลิซซาร์ด/.test(menu) || sugar >= 15) {
+    rows.push(sugar > 0 ? "🍯 ความหวาน: มีบทอยู่ ระวังนิด" : "🍯 ความหวาน: น่าจะมีจากน้ำผึ้ง/ไซรัป");
+  }
+
+  if (protein >= 28) rows.push("💪 โปรตีน: ดีอยู่");
+  else if (protein > 0 && protein < 10) rows.push("💪 โปรตีน: ยังบาง");
+
+  return rows.slice(0, 3);
+};
+
+const nutritionQualityBox = (rows = []) => rows.length ? [{
+  type: "box",
+  layout: "vertical",
+  backgroundColor: "#F9FAFB",
+  cornerRadius: "12px",
+  paddingAll: "10px",
+  spacing: "xs",
+  contents: [
+    { type: "text", text: "แปะอ่านคุณภาพให้", size: "xs", weight: "bold", color: "#374151", wrap: true },
+    ...rows.map(qualityRow),
+  ],
+}] : [];
 
 export const buildFoodLogFlexMessage = ({ meal = {}, total = 0, target = DEFAULT_CALORIE_TARGET, estimateMode = "", title = "" } = {}) => {
   const gauge = buildDailyEnergyGauge({ total, target });
   const menuName = meal.menuName || "มื้อนี้";
   const sugar = safeNumber(meal.sugar, 0);
-  const showSugar = sugar > 0 || /หวาน|ชา|กาแฟ|โกโก้|โค้ก|เป๊ปซี่|น้ำ|ขนม|โอริโอ|oreo|เค้ก|ไอติม|บิงซู|บลิซซาร์ด|blizzard/i.test(menuName);
+  const showSugar = sugar > 0 || /หวาน|น้ำผึ้ง|honey|ไซรัป|ชา|กาแฟ|โกโก้|โค้ก|เป๊ปซี่|น้ำ|ขนม|โอริโอ|oreo|เค้ก|ไอติม|บิงซู|บลิซซาร์ด|blizzard/i.test(menuName);
   const portionLabel = meal.portionLabel || "พอดี";
   const opener = title && title !== "ลื้อ" ? `${title} แปะจดให้แล้ว` : "แปะจดให้แล้ว";
+  const qualityRows = resolveNutritionQuality(meal);
 
   return {
     type: "flex",
@@ -135,6 +178,7 @@ export const buildFoodLogFlexMessage = ({ meal = {}, total = 0, target = DEFAULT
               macroRow("💪 โปรตีน", meal.protein),
               macroRow("🥑 ไขมัน", meal.fat),
               ...(showSugar ? [macroRow("🍬 น้ำตาล", sugar)] : []),
+              ...nutritionQualityBox(qualityRows),
               { type: "separator", margin: "sm" },
               { type: "text", text: `📏 ปริมาณ: ${portionLabel}`, size: "sm", color: "#374151", wrap: true },
               { type: "text", text: `🧾 ${estimateNote(estimateMode)}`, size: "xs", color: "#6B7280", wrap: true },
@@ -163,4 +207,5 @@ export const buildFoodLogFlexMessage = ({ meal = {}, total = 0, target = DEFAULT
 
 export const __testFoodLogFlex = {
   buildDailyEnergyGauge,
+  resolveNutritionQuality,
 };
