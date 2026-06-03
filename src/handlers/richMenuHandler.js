@@ -7,6 +7,7 @@ import {
   replyTypeFoodPrompt,
 } from "../services/line.js";
 import { deleteLastMeal, getDailySummary, updateSession } from "../services/db.js";
+import { postToSheet } from "../services/sheet.js";
 import {
   buildCalorieSummaryFlexMessage,
   buildFoodAuraFlexMessage,
@@ -221,29 +222,59 @@ const replyEditMealFast = async ({ replyToken }) => {
   logTiming("richMenu:editMealFast", start);
 };
 
+const normalizeDeletedMeal = (result = {}) => result.deletedMeal || result.meal || (
+  result.menuName || result.kcal
+    ? { menuName: result.menuName || result.name || "มื้อล่าสุด", kcal: result.kcal || result.calories || 0 }
+    : null
+);
+
+const deleteLastMealAnySource = async (userId) => {
+  const primary = await deleteLastMeal(userId);
+  if (primary?.status === "success" || normalizeDeletedMeal(primary)) return primary;
+
+  try {
+    const sheet = await postToSheet({ action: "DELETE_LAST_MEAL", userId });
+    const sheetDeletedMeal = normalizeDeletedMeal(sheet);
+    if (sheet?.status === "success" || sheetDeletedMeal) {
+      return {
+        ...(sheet || {}),
+        status: "success",
+        source: `sheet_delete_fallback_after_${primary?.source || primary?.status || "unknown"}`,
+        deletedMeal: sheetDeletedMeal || { menuName: "มื้อล่าสุด", kcal: 0 },
+      };
+    }
+  } catch (err) {
+    console.warn("[PaeCalDB] DELETE_LAST_MEAL direct sheet fallback failed", err?.response?.data || err.message || err);
+  }
+
+  return primary || { status: "not_found", source: "delete_unknown" };
+};
+
 const replyDeleteLastMealFast = async ({ replyToken, userId }) => {
   const start = nowMs();
-  const deleted = await dbAction("DELETE_LAST_MEAL:richMenu", () => deleteLastMeal(userId));
+  const deleted = await dbAction("DELETE_LAST_MEAL:anySource", () => deleteLastMealAnySource(userId));
   invalidateRichMenuSummaryCache(userId);
-  const notFound = deleted.status === "not_found";
+  const deletedMeal = normalizeDeletedMeal(deleted);
+  const notFound = !(deleted?.status === "success" || deletedMeal);
 
   let summary = {};
   if (!notFound) {
-    summary = await dbAction("GET_DAILY_SUMMARY:afterDelete", () => getDailySummary(userId, { allowSheetFallback: false }));
+    const allowSheetFallback = String(deleted?.source || "").includes("sheet");
+    summary = await dbAction("GET_DAILY_SUMMARY:afterDelete", () => getDailySummary(userId, { allowSheetFallback }));
     if (summary?.status === "success") setCachedRichMenuSummary(userId, summary || {});
   }
 
   const deletedForCard = {
     ...(summary || {}),
     ...deleted,
-    todayCalories: summary.todayCalories ?? summary.totalToday ?? 0,
-    totalToday: summary.totalToday ?? summary.todayCalories ?? 0,
+    todayCalories: summary.todayCalories ?? summary.totalToday ?? deleted.todayCalories ?? deleted.totalToday ?? 0,
+    totalToday: summary.totalToday ?? summary.todayCalories ?? deleted.totalToday ?? deleted.todayCalories ?? 0,
     calorieTarget: summary.calorieTarget || deleted.calorieTarget || 2050,
-    deletedMeal: deleted.deletedMeal,
+    deletedMeal,
   };
 
   await replyFlex(replyToken, buildDeleteMealFlexMessage({ deleted: deletedForCard, notFound }));
-  logTiming("richMenu:deleteLastMealFast", start, notFound ? "status=not_found" : `status=deleted total=${deletedForCard.todayCalories || 0}`);
+  logTiming("richMenu:deleteLastMealFast", start, notFound ? `status=not_found source=${deleted?.source || "unknown"}` : `status=deleted source=${deleted?.source || "unknown"} total=${deletedForCard.todayCalories || 0}`);
 };
 
 export const handleRichMenuPostback = async ({ event, postback, eventStart }) => {
