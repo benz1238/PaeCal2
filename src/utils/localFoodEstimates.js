@@ -23,6 +23,80 @@ const withDefaults = (meal, estimateMode = "local_food_rules") => ({
   fat: round(meal.fat),
 });
 
+const THAI_DIGITS = "๐๑๒๓๔๕๖๗๘๙";
+const THAI_NUMBER_WORDS = {
+  หนึ่ง: 1,
+  นึง: 1,
+  สอง: 2,
+  สาม: 3,
+  สี่: 4,
+  ห้า: 5,
+  หก: 6,
+  เจ็ด: 7,
+  แปด: 8,
+  เก้า: 9,
+  สิบ: 10,
+};
+
+const BOILED_EGG_UNIT = { kcal: 70, carb: 0.6, protein: 6.3, fat: 5.2 };
+
+const toArabicDigits = (value = "") => String(value).replace(/[๐-๙]/g, (char) => String(THAI_DIGITS.indexOf(char)));
+
+const parseCountToken = (token = "") => {
+  const value = toArabicDigits(token).trim();
+  if (!value) return null;
+  if (/^\d+$/.test(value)) return Math.max(1, Number(value));
+  return THAI_NUMBER_WORDS[value] || null;
+};
+
+const parseEggCount = (value = "") => {
+  const normalized = toArabicDigits(value);
+  const match = normalized.match(/(\d+|หนึ่ง|นึง|สอง|สาม|สี่|ห้า|หก|เจ็ด|แปด|เก้า|สิบ)(?=ฟอง)/);
+  return parseCountToken(match?.[1]) || 1;
+};
+
+const isStandaloneBoiledEggText = (value = "") => {
+  const normalized = toArabicDigits(value);
+  const countPattern = "(?:\\d+|หนึ่ง|นึง|สอง|สาม|สี่|ห้า|หก|เจ็ด|แปด|เก้า|สิบ)?";
+  const eggPattern = `(?:ไข่(?:ไก่)?(?:ต้ม|ลวก)|ไข่(?:ต้ม|ลวก)(?:ไก่)?)`;
+  const standalone = new RegExp(`^${eggPattern}(?:เบอร์\\d+)?${countPattern}(?:ฟอง)?$`);
+  return standalone.test(normalized);
+};
+
+const buildBoiledEggMeal = (type = "ต้ม", count = 1) => ({
+  menuName: `${type === "ลวก" ? "ไข่ลวก" : "ไข่ต้ม"}${count > 1 ? ` ${count} ฟอง` : ""}`,
+  kcal: BOILED_EGG_UNIT.kcal * count,
+  carb: BOILED_EGG_UNIT.carb * count,
+  protein: BOILED_EGG_UNIT.protein * count,
+  fat: BOILED_EGG_UNIT.fat * count,
+});
+
+const resolveBoiledEggEstimate = (text = "") => {
+  const value = compactText(text);
+  const normalized = toArabicDigits(value);
+  if (!value || !isStandaloneBoiledEggText(value)) return null;
+
+  const typeMatch = normalized.match(/ไข่(?:ไก่)?(ต้ม|ลวก)|ไข่(ต้ม|ลวก)(?:ไก่)?/);
+  const type = typeMatch?.[1] || typeMatch?.[2];
+  if (!type) return null;
+
+  const count = parseEggCount(normalized);
+  const meal = withDefaults(buildBoiledEggMeal(type, count), "local_egg_rules");
+  return {
+    ...meal,
+    items: [makeItem(meal, `${count} ฟอง`)],
+  };
+};
+
+const addBoiledEggModifier = (meal, label = "ไข่ต้ม", count = 1) => ({
+  ...meal,
+  kcal: meal.kcal + BOILED_EGG_UNIT.kcal * count,
+  carb: meal.carb + BOILED_EGG_UNIT.carb * count,
+  protein: meal.protein + BOILED_EGG_UNIT.protein * count,
+  fat: meal.fat + BOILED_EGG_UNIT.fat * count,
+  menuName: appendMenuNote(meal.menuName, count > 1 ? `${label} ${count} ฟอง` : label),
+});
+
 const PRESETS = [
   // Rice / carbs
   { pattern: /ข้าวสวย|ข้าวเปล่า|ข้าวขาว/, menuName: "ข้าวสวย", kcal: 250, carb: 55, protein: 4, fat: 1 },
@@ -103,7 +177,8 @@ const PRESETS = [
   // Eggs / lighter Thai dishes
   { pattern: /ไข่เจียว/, menuName: "ไข่เจียว", kcal: 250, carb: 2, protein: 12, fat: 22 },
   { pattern: /ไข่ดาว/, menuName: "ไข่ดาว", kcal: 180, carb: 1, protein: 7, fat: 16 },
-  { pattern: /ไข่ต้ม/, menuName: "ไข่ต้ม", kcal: 70, carb: 1, protein: 6, fat: 5 },
+  { pattern: /ไข่ต้ม/, menuName: "ไข่ต้ม", kcal: 70, carb: 0.6, protein: 6.3, fat: 5.2 },
+  { pattern: /ไข่ลวก/, menuName: "ไข่ลวก", kcal: 70, carb: 0.6, protein: 6.3, fat: 5.2 },
   { pattern: /ส้มตำ/, menuName: "ส้มตำ", kcal: 150, carb: 30, protein: 5, fat: 2, sugar: 12 },
   { pattern: /ยำวุ้นเส้น/, menuName: "ยำวุ้นเส้น", kcal: 280, carb: 42, protein: 18, fat: 6, sugar: 8 },
   { pattern: /ลาบหมู/, menuName: "ลาบหมู", kcal: 300, carb: 12, protein: 28, fat: 16 },
@@ -206,8 +281,9 @@ const applyModifiers = (meal, text) => {
     next = { ...next, kcal: next.kcal + 180, carb: next.carb + 1, protein: next.protein + 7, fat: next.fat + 16, menuName: `${next.menuName}ไข่ดาว` };
   }
 
-  if (/ไข่ต้ม/.test(value) && !/ไข่ต้ม/.test(next.menuName)) {
-    next = { ...next, kcal: next.kcal + 70, carb: next.carb + 1, protein: next.protein + 6, fat: next.fat + 5, menuName: `${next.menuName}ไข่ต้ม` };
+  if (/ไข่ต้ม|ไข่ลวก/.test(value) && !/ไข่ต้ม|ไข่ลวก/.test(next.menuName)) {
+    const eggLabel = /ไข่ลวก/.test(value) ? "ไข่ลวก" : "ไข่ต้ม";
+    next = addBoiledEggModifier(next, eggLabel, parseEggCount(value));
   }
 
   return next;
@@ -218,13 +294,16 @@ export const resolveLocalFoodEstimate = (text = "") => {
   const value = compactText(text);
   if (!normalized || !value) return null;
 
+  const eggEstimate = resolveBoiledEggEstimate(text);
+  if (eggEstimate) return eggEstimate;
+
   const preset = PRESETS.find((entry) => entry.pattern.test(value) || entry.pattern.test(normalized));
   if (!preset) return null;
 
   const meal = withDefaults(applyModifiers(preset, text));
   return {
     ...meal,
-    items: [makeItem(meal, /พิเศษ|เพิ่มข้าว|เพิ่มเส้น|ข้าวน้อย|เส้นน้อย|เส้นปลา|เส้นไข่|บะหมี่ผัก|เส้นบุก|วุ้นเส้น/.test(value) ? "1 เสิร์ฟปรับตามที่สั่ง" : "1 เสิร์ฟ")],
+    items: [makeItem(meal, /พิเศษ|เพิ่มข้าว|เพิ่มเส้น|ข้าวน้อย|เส้นน้อย|เส้นปลา|เส้นไข่|บะหมี่ผัก|เส้นบุก|วุ้นเส้น|ไข่ต้ม|ไข่ลวก/.test(value) ? "1 เสิร์ฟปรับตามที่สั่ง" : "1 เสิร์ฟ")],
   };
 };
 
