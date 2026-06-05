@@ -39,6 +39,7 @@ const THAI_NUMBER_WORDS = {
 };
 
 const BOILED_EGG_UNIT = { kcal: 70, carb: 0.6, protein: 6.3, fat: 5.2 };
+const PORK_SKEWER_UNIT = { kcal: 140, carb: 4, protein: 9, fat: 10 };
 
 const toArabicDigits = (value = "") => String(value).replace(/[๐-๙]/g, (char) => String(THAI_DIGITS.indexOf(char)));
 
@@ -49,11 +50,14 @@ const parseCountToken = (token = "") => {
   return THAI_NUMBER_WORDS[value] || null;
 };
 
-const parseEggCount = (value = "") => {
+const parseCountBeforeUnit = (value = "", units = "") => {
   const normalized = toArabicDigits(value);
-  const match = normalized.match(/(\d+|หนึ่ง|นึง|สอง|สาม|สี่|ห้า|หก|เจ็ด|แปด|เก้า|สิบ)(?=ฟอง)/);
+  const match = normalized.match(new RegExp(`(\\d+|หนึ่ง|นึง|สอง|สาม|สี่|ห้า|หก|เจ็ด|แปด|เก้า|สิบ)(?=${units})`));
   return parseCountToken(match?.[1]) || 1;
 };
+
+const parseEggCount = (value = "") => parseCountBeforeUnit(value, "ฟอง");
+const parseSkewerCount = (value = "") => parseCountBeforeUnit(value, "ไม้");
 
 const isStandaloneBoiledEggText = (value = "") => {
   const normalized = toArabicDigits(value);
@@ -88,6 +92,25 @@ const resolveBoiledEggEstimate = (text = "") => {
   };
 };
 
+const resolvePorkSkewerEstimate = (text = "") => {
+  const value = compactText(text);
+  if (!/หมูปิ้ง|หมูปิ้งโบราณ|หมูเสียบไม้|หมูไม้/.test(value)) return null;
+
+  const count = parseSkewerCount(value);
+  const meal = withDefaults({
+    menuName: `หมูปิ้งโบราณ${count > 1 ? ` ${count} ไม้` : ""}`,
+    kcal: PORK_SKEWER_UNIT.kcal * count,
+    carb: PORK_SKEWER_UNIT.carb * count,
+    protein: PORK_SKEWER_UNIT.protein * count,
+    fat: PORK_SKEWER_UNIT.fat * count,
+    sugar: 2 * count,
+  }, "local_pork_skewer_rules");
+  return {
+    ...meal,
+    items: [makeItem(meal, `${count} ไม้`)],
+  };
+};
+
 const addBoiledEggModifier = (meal, label = "ไข่ต้ม", count = 1) => ({
   ...meal,
   kcal: meal.kcal + BOILED_EGG_UNIT.kcal * count,
@@ -104,7 +127,10 @@ const PRESETS = [
   { pattern: /ข้าวไรซ์เบอร์รี่|ข้าวไรส์เบอร์รี่|ไรซ์เบอร์รี่|ไรส์เบอร์รี่/, menuName: "ข้าวไรซ์เบอร์รี่", kcal: 220, carb: 46, protein: 5, fat: 2 },
   { pattern: /ข้าวเหนียว/, menuName: "ข้าวเหนียว", kcal: 250, carb: 55, protein: 5, fat: 1 },
 
-  // Drinks / smoothies
+  // Drinks / smoothies / coffee
+  { pattern: /กาแฟดำ|อเมริกาโน่|อเมริกาโน|americano|blackcoffee/, menuName: "อเมริกาโน่ / กาแฟดำ", kcal: 15, carb: 2, protein: 1, fat: 0, sugar: 0 },
+  { pattern: /ลาเต้|latte/, menuName: "ลาเต้", kcal: 150, carb: 12, protein: 7, fat: 7, sugar: 10 },
+  { pattern: /คาปูชิโน่|คาปูชิโน|cappuccino/, menuName: "คาปูชิโน่", kcal: 120, carb: 10, protein: 6, fat: 6, sugar: 8 },
   { pattern: /อโวคาโดปั่นน้ำผึ้ง|อะโวคาโดปั่นน้ำผึ้ง|avocadohoney/, menuName: "อโวคาโดปั่นน้ำผึ้ง", kcal: 360, carb: 42, protein: 4, fat: 22, sugar: 22 },
   { pattern: /อโวคาโดปั่น|อะโวคาโดปั่น|avocado/, menuName: "อโวคาโดปั่น", kcal: 320, carb: 28, protein: 4, fat: 22, sugar: 8 },
 
@@ -128,6 +154,7 @@ const PRESETS = [
   { pattern: /ข้าวกะเพราหมู|ข้าวกระเพราหมู/, menuName: "ข้าวกะเพราหมู", kcal: 650, carb: 75, protein: 28, fat: 28 },
   { pattern: /ข้าวหมูกระเทียม/, menuName: "ข้าวหมูกระเทียม", kcal: 700, carb: 80, protein: 32, fat: 28 },
   { pattern: /ข้าวหมูทอด/, menuName: "ข้าวหมูทอด", kcal: 750, carb: 85, protein: 30, fat: 34 },
+  { pattern: /หมูปิ้งโบราณ|หมูปิ้ง|หมูเสียบไม้|หมูไม้/, menuName: "หมูปิ้งโบราณ", kcal: 140, carb: 4, protein: 9, fat: 10, sugar: 2 },
   { pattern: /หมูสันนอกทอด|สันนอกทอด/, menuName: "หมูสันนอกทอด", kcal: 360, carb: 15, protein: 32, fat: 20 },
   { pattern: /หมูสันนอกย่าง|สันนอกย่าง|หมูสันนอก/, menuName: "หมูสันนอกย่าง", kcal: 220, carb: 0, protein: 32, fat: 10 },
   { pattern: /หมูสันคอทอด|สันคอทอด/, menuName: "หมูสันคอทอด", kcal: 480, carb: 15, protein: 28, fat: 34 },
@@ -296,6 +323,9 @@ export const resolveLocalFoodEstimate = (text = "") => {
 
   const eggEstimate = resolveBoiledEggEstimate(text);
   if (eggEstimate) return eggEstimate;
+
+  const porkSkewerEstimate = resolvePorkSkewerEstimate(text);
+  if (porkSkewerEstimate) return porkSkewerEstimate;
 
   const preset = PRESETS.find((entry) => entry.pattern.test(value) || entry.pattern.test(normalized));
   if (!preset) return null;
