@@ -6,6 +6,7 @@ import { safeNumber, DEFAULT_CALORIE_TARGET } from "../utils/helpers.js";
 import { invalidateRichMenuSummaryCache } from "../utils/richMenuSummaryCache.js";
 import { buildFoodLogFlexMessage } from "../utils/foodLogFlex.js";
 import { resolveLocalFoodEstimate } from "../utils/localFoodEstimates.js";
+import { resolveTopFoodPreset } from "../utils/topFoodPresets.js";
 
 const nowMs = () => Date.now();
 const logTiming = (label, start, extra = "") => console.log(`[PaeCalTiming] ${label} ${Date.now() - start}ms${extra ? ` ${extra}` : ""}`);
@@ -13,7 +14,7 @@ const normalize = (text = "") => String(text || "").trim().toLowerCase().replace
 
 const BLOCKLIST = ["สรุป", "สรุปวันนี้", "แคลวันนี้", "กินอะไรดี", "กินไรดี", "หิวแล้ว", "ตั้งเป้า", "เปลี่ยนเป้า", "แก้มื้อล่าสุด", "ลบมื้อล่าสุด", "ฉายาวันนี้", "วันนี้อาหารฟ้องว่า"];
 
-const KEYWORD_PATTERN = /(ข้าว|ก๋วยเตี๋ยว|บะหมี่|ราเมง|เส้น|โจ๊ก|หมู|ไก่|ปลา|กุ้ง|เนื้อ|ไข่|เต้าหู้|แซลมอน|ซูชิ|กะเพรา|กระเพรา|ส้มตำ|ลาบ|ยำ|สลัด|ชาบู|หมูกระทะ|หมูทะ|ปิ้งย่าง|ไส้กรอก|ลูกชิ้น|ชีส|โยเกิร์ต|กรีกโยเกิร์ต|บารอน|ทอด|แซนด์วิช|ขนมปัง|ครัวซองต์|ชาไทย|ชานม|ชาเขียว|มัจฉะ|มัทฉะ|กาแฟ|อเมริกาโน่|ลาเต้|คาปูชิโน่|มอคค่า|โกโก้|นม|น้ำเต้าหู้|น้ำหวาน|น้ำผลไม้|น้ำส้ม|โค้ก|โค๊ก|เป๊ปซี่|เค้ก|ขนม|ป๊อกกี้|โอริโอ้|โอริโอ|คิทแคท|ช็อกโกแลต|คุกกี้|โดนัท|ไอติม|บิงซู|บลิซซาร์ด|บลิดซาด|แดรี่ควีน|เลย์|ผลไม้|กล้วย|แตงโม|มะม่วง|แอปเปิล|ส้ม|ฝรั่ง|สับปะรด|oreo|blizzard|dq|lays|sushi|sashimi|americano|latte|yogurt|greek|baron|cheese baron)/i;
+const KEYWORD_PATTERN = /(ข้าว|ก๋วยเตี๋ยว|บะหมี่|ราเมง|เส้น|โจ๊ก|หมู|ไก่|ปลา|กุ้ง|เนื้อ|ไข่|เต้าหู้|แซลมอน|ซูชิ|กะเพรา|กระเพรา|กะเพา|ส้มตำ|ลาบ|ยำ|สลัด|ชาบู|หมูกระทะ|หมูทะ|ปิ้งย่าง|ไส้กรอก|ลูกชิ้น|ชีส|โยเกิร์ต|กรีกโยเกิร์ต|บารอน|ทอด|แซนด์วิช|ขนมปัง|ครัวซองต์|ชาไทย|ชาเย็น|ชานม|ชาเขียว|มัจฉะ|มัทฉะ|กาแฟ|อเมริกาโน่|อเมริกาโน|ลาเต้|คาปูชิโน่|คาปูชิโน|มอคค่า|โกโก้|นม|น้ำเต้าหู้|น้ำหวาน|น้ำผลไม้|น้ำส้ม|โค้ก|โค๊ก|เป๊ปซี่|เค้ก|ขนม|ป๊อกกี้|โอริโอ้|โอริโอ|คิทแคท|ช็อกโกแลต|คุกกี้|โดนัท|ไอติม|บิงซู|บลิซซาร์ด|บลิดซาด|แดรี่ควีน|เลย์|ผลไม้|กล้วย|แตงโม|มะม่วง|แอปเปิล|ส้ม|ฝรั่ง|สับปะรด|oreo|blizzard|dq|lays|sushi|sashimi|americano|latte|cappuccino|yogurt|greek|baron|cheese baron)/i;
 const QUESTION_PATTERN = /(ไหม|มั้ย|ปะ|ป่ะ|ดีไหม|ดีมั้ย|อะไรดี|กี่แคล|แคลเท่าไร|แคลเท่าไหร่|ควรกิน|กินได้ไหม)/i;
 
 const THAI_DIGITS = "๐๑๒๓๔๕๖๗๘๙";
@@ -91,7 +92,7 @@ const applySharedPortion = (meal = {}, shared = {}) => {
   };
 };
 
-const estimateFastPreset = (text = "") => resolveLocalFoodEstimate(text) || FAST_PRESETS.find((preset) => preset.pattern.test(normalize(text))) || null;
+const estimateFastPreset = (text = "") => resolveLocalFoodEstimate(text) || resolveTopFoodPreset(text) || FAST_PRESETS.find((preset) => preset.pattern.test(normalize(text))) || null;
 
 const estimateFood = async (text) => {
   const fastPreset = estimateFastPreset(text);
@@ -119,7 +120,7 @@ const resolveCurrentTotal = ({ result = {}, session = {}, mealKcal = 0 } = {}) =
 };
 
 const isZeroCalorieFood = (foodData = {}, text = "") => safeNumber(foodData?.kcal, 0) === 0 && /(zero|ซีโร่|ไม่หวาน|ไม่มีน้ำตาล|กาแฟดำ|อเมริกาโน่)/i.test(`${foodData?.menuName || ""} ${text}`);
-const isLocalEstimateMode = (mode = "") => String(mode || "").startsWith("local");
+const isLocalEstimateMode = (mode = "") => String(mode || "").startsWith("local") || mode === "top_food_preset";
 
 export const handleFastFoodText = async (event) => {
   const start = nowMs();
