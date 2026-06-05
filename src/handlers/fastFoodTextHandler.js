@@ -13,7 +13,6 @@ const logTiming = (label, start, extra = "") => console.log(`[PaeCalTiming] ${la
 const normalize = (text = "") => String(text || "").trim().toLowerCase().replace(/\s+/g, " ").replace(/^กิน\s+/, "");
 
 const BLOCKLIST = ["สรุป", "สรุปวันนี้", "แคลวันนี้", "กินอะไรดี", "กินไรดี", "หิวแล้ว", "ตั้งเป้า", "เปลี่ยนเป้า", "แก้มื้อล่าสุด", "ลบมื้อล่าสุด", "ฉายาวันนี้", "วันนี้อาหารฟ้องว่า"];
-
 const KEYWORD_PATTERN = /(ข้าว|ก๋วยเตี๋ยว|บะหมี่|ราเมง|เส้น|โจ๊ก|หมู|ไก่|ปลา|กุ้ง|เนื้อ|ไข่|เต้าหู้|แซลมอน|ซูชิ|กะเพรา|กระเพรา|กะเพา|ส้มตำ|ลาบ|ยำ|สลัด|ชาบู|หมูกระทะ|หมูทะ|ปิ้งย่าง|ไส้กรอก|ลูกชิ้น|ชีส|โยเกิร์ต|กรีกโยเกิร์ต|บารอน|ทอด|แซนด์วิช|ขนมปัง|ครัวซองต์|ชาไทย|ชาเย็น|ชานม|ชาเขียว|มัจฉะ|มัทฉะ|กาแฟ|อเมริกาโน่|อเมริกาโน|ลาเต้|คาปูชิโน่|คาปูชิโน|มอคค่า|โกโก้|นม|น้ำเต้าหู้|น้ำหวาน|น้ำผลไม้|น้ำส้ม|โค้ก|โค๊ก|เป๊ปซี่|เค้ก|ขนม|ป๊อกกี้|โอริโอ้|โอริโอ|คิทแคท|ช็อกโกแลต|คุกกี้|โดนัท|ไอติม|บิงซู|บลิซซาร์ด|บลิดซาด|แดรี่ควีน|เลย์|ผลไม้|กล้วย|แตงโม|มะม่วง|แอปเปิล|ส้ม|ฝรั่ง|สับปะรด|oreo|blizzard|dq|lays|sushi|sashimi|americano|latte|cappuccino|yogurt|greek|baron|cheese baron)/i;
 const QUESTION_PATTERN = /(ไหม|มั้ย|ปะ|ป่ะ|ดีไหม|ดีมั้ย|อะไรดี|กี่แคล|แคลเท่าไร|แคลเท่าไหร่|ควรกิน|กินได้ไหม)/i;
 
@@ -44,8 +43,9 @@ const buildGoalFoodGuardReply = (foodText) => [
   ["หรือส่งรูปมาเลยก็ได้", "เดี๋ยวแปะอ่านทรงให้ 📸", "ถ้าจะตั้งเป้า ลองพิมพ์:", "เป้าหมาย กินให้พอดี", "เป้าหมาย เพิ่มแรง", "เป้าหมาย คุมหวาน"].join("\n"),
 ];
 
-const resolveTextPortion = ({ kcal = 0, sharedDivisor = 1 } = {}) => {
+const resolveTextPortion = ({ kcal = 0, sharedDivisor = 1, portionLabel = "" } = {}) => {
   if (sharedDivisor > 1) return { level: "shared", label: `หาร ${sharedDivisor} คน`, note: `แปะหารจากทั้งจานเป็นส่วนของลื้อ 1/${sharedDivisor} แล้วนะ` };
+  if (portionLabel) return { level: "adjusted", label: portionLabel, note: `แปะปรับปริมาณเป็น${portionLabel}แล้วนะ` };
   if (kcal >= 750) return { level: "heavy", label: "ค่อนข้างเยอะ", note: "แปะนับเป็น 1 เสิร์ฟแบบร้านทั่วไปก่อนนะ" };
   if (kcal <= 320) return { level: "light", label: "ค่อนข้างเบา", note: "แปะนับเป็น 1 เสิร์ฟเบา ๆ ก่อนนะ" };
   return { level: "normal", label: "พอดี", note: "แปะนับเป็น 1 เสิร์ฟทั่วไปก่อนนะ" };
@@ -76,6 +76,16 @@ const resolveSharedPortion = (text = "") => {
   return { divisor, estimateText, label: `หาร ${divisor} คน` };
 };
 
+const resolvePortionModifier = (text = "") => {
+  const value = toArabicDigits(normalize(text)).replace(/\s+/g, "");
+  if (/ชิมนิดเดียว|ชิม|นิดเดียวมาก|นิดเดียว|นิดนึง|นิดหน่อย/.test(value)) return { multiplier: 0.2, label: "นิดเดียว" };
+  if (/คำสองคำ|สองคำ|2คำ|สามคำ|3คำ/.test(value)) return { multiplier: 0.15, label: "ไม่กี่คำ" };
+  if (/ครึ่งจาน|ครึ่งชาม|ครึ่งแก้ว|ครึ่งถ้วย|ครึ่งก้อน|ครึ่งอัน|ครึ่งไม้|ครึ่งลูก|ครึ่ง/.test(value) || /1\/2/.test(value)) return { multiplier: 0.5, label: "ครึ่ง" };
+  if (/สามในสี่|3\/4/.test(value)) return { multiplier: 0.75, label: "สามในสี่" };
+  if (/เกือบหมด|เหลือนิดเดียว/.test(value)) return { multiplier: 0.9, label: "เกือบหมด" };
+  return { multiplier: 1, label: "" };
+};
+
 const applySharedPortion = (meal = {}, shared = {}) => {
   const divisor = safeNumber(shared.divisor, 1);
   if (divisor <= 1) return meal;
@@ -89,6 +99,20 @@ const applySharedPortion = (meal = {}, shared = {}) => {
     protein: roundFoodValue(meal.protein / divisor),
     fat: roundFoodValue(meal.fat / divisor),
     sugar: roundFoodValue(meal.sugar / divisor),
+  };
+};
+
+const applyPortionModifier = (meal = {}, portion = {}) => {
+  const multiplier = safeNumber(portion.multiplier, 1);
+  if (!portion.label || multiplier === 1) return meal;
+  return {
+    ...meal,
+    menuName: `${meal.menuName || "มื้อนี้"} (${portion.label})`,
+    kcal: roundFoodValue(meal.kcal * multiplier),
+    carb: Math.round(safeNumber(meal.carb, 0) * multiplier * 10) / 10,
+    protein: Math.round(safeNumber(meal.protein, 0) * multiplier * 10) / 10,
+    fat: Math.round(safeNumber(meal.fat, 0) * multiplier * 10) / 10,
+    sugar: Math.round(safeNumber(meal.sugar, 0) * multiplier * 10) / 10,
   };
 };
 
@@ -142,19 +166,21 @@ export const handleFastFoodText = async (event) => {
   if (session.step && session.step !== "READY") return false;
 
   const sharedPortion = resolveSharedPortion(text);
+  const portionModifier = resolvePortionModifier(text);
   const estimateText = sharedPortion.estimateText || text;
 
   const estimateStart = nowMs();
   const foodData = await estimateFood(estimateText);
-  logTiming("fastFoodText:estimate", estimateStart, `mode=${foodData?.estimateMode || "unknown"} text=${text} estimateText=${estimateText} menu=${foodData?.menuName || ""} sharedDivisor=${sharedPortion.divisor || 1}`);
+  logTiming("fastFoodText:estimate", estimateStart, `mode=${foodData?.estimateMode || "unknown"} text=${text} estimateText=${estimateText} menu=${foodData?.menuName || ""} sharedDivisor=${sharedPortion.divisor || 1} portion=${portionModifier.label || ""}`);
   const kcal = safeNumber(foodData?.kcal, 0);
   if (kcal <= 0 && !isZeroCalorieFood(foodData, estimateText)) return false;
 
   if (foodData?.estimateMode === "openai") logFoodTermCandidate({ term: estimateText, foodData, source: "openai", example: text }).catch(() => {});
 
   const baseMeal = { menuName: foodData?.menuName || estimateText, kcal, carb: safeNumber(foodData?.carb, 0), protein: safeNumber(foodData?.protein, 0), fat: safeNumber(foodData?.fat, 0), sugar: safeNumber(foodData?.sugar, 0) };
-  const meal = applySharedPortion(baseMeal, sharedPortion);
-  const portion = resolveTextPortion({ kcal: meal.kcal, sharedDivisor: sharedPortion.divisor });
+  const sharedMeal = applySharedPortion(baseMeal, sharedPortion);
+  const meal = applyPortionModifier(sharedMeal, portionModifier);
+  const portion = resolveTextPortion({ kcal: meal.kcal, sharedDivisor: sharedPortion.divisor, portionLabel: sharedPortion.divisor > 1 ? "" : portionModifier.label });
   const requestId = `${event.message?.id || Date.now()}:fast-text-food`;
   invalidateRichMenuSummaryCache(userId);
   const result = await logFood({
