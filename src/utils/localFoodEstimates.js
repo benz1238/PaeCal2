@@ -11,8 +11,12 @@ const round = (value) => Math.round(Number(value) || 0);
 const clamp = (value, min = 0) => Math.max(min, round(value));
 const makeItem = (meal, quantity = "1 เสิร์ฟ") => ({ name: meal.menuName, quantity, kcal: meal.kcal });
 const withDefaults = (meal, estimateMode = "local_food_rules") => ({ sugar: 0, confidence: "high", estimateMode, ...meal, kcal: round(meal.kcal), carb: round(meal.carb), protein: round(meal.protein), fat: round(meal.fat) });
+const parseEggCount = (value = "") => Number(String(value).match(/(\d+)(?=ฟอง)/)?.[1] || 1);
 
 const PRESETS = [
+  { pattern: /ไก่คาราเกะไซส์s|ไก่คาราอาเกะไซส์s|คาราเกะไซส์s|ไก่คาราเกะs|คาราเกะs/i, menuName: "ไก่คาราเกะ ไซส์ S", kcal: 260, carb: 8, protein: 16, fat: 15, sugar: 2, priority: 120 },
+  { pattern: /ข้าวไก่คาราเกะยำแซ่บ|ข้าวไก่คาราเกะยําแซ่บ|ข้าวไก่คาราอาเกะยำแซ่บ|ข้าวไก่คาราอาเกะยําแซ่บ|ข้าวไก่คาราเกะ/, menuName: "ข้าวไก่คาราเกะ + ยำแซ่บ", kcal: 620, carb: 75, protein: 22, fat: 16, sugar: 10, priority: 115 },
+  { pattern: /ไก่คาราเกะ|ไก่คาราอาเกะ|คาราเกะ/, menuName: "ไก่คาราเกะ", kcal: 280, carb: 10, protein: 18, fat: 16, sugar: 2, priority: 110 },
   { pattern: /อกไก่ทอด/, menuName: "อกไก่ทอด", kcal: 320, carb: 15, protein: 35, fat: 15, priority: 100 },
   { pattern: /อกไก่ย่าง/, menuName: "อกไก่ย่าง", kcal: 200, carb: 0, protein: 38, fat: 6, priority: 100 },
   { pattern: /อกไก่ต้ม|อกไก่นึ่ง|^อกไก่$/, menuName: "อกไก่ต้ม", kcal: 180, carb: 0, protein: 38, fat: 4, priority: 90 },
