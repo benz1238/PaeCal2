@@ -9,187 +9,53 @@ const normalizeText = (text = "") => String(text || "")
 const compactText = (text = "") => normalizeText(text).replace(/\s+/g, "");
 const round = (value) => Math.round(Number(value) || 0);
 const clamp = (value, min = 0) => Math.max(min, round(value));
-
 const makeItem = (meal, quantity = "1 เสิร์ฟ") => ({ name: meal.menuName, quantity, kcal: meal.kcal });
-
-const withDefaults = (meal, estimateMode = "local_food_rules") => ({
-  sugar: 0,
-  confidence: "high",
-  estimateMode,
-  ...meal,
-  kcal: round(meal.kcal),
-  carb: round(meal.carb),
-  protein: round(meal.protein),
-  fat: round(meal.fat),
-});
-
-const THAI_DIGITS = "๐๑๒๓๔๕๖๗๘๙";
-const THAI_NUMBER_WORDS = {
-  หนึ่ง: 1,
-  นึง: 1,
-  สอง: 2,
-  สาม: 3,
-  สี่: 4,
-  ห้า: 5,
-  หก: 6,
-  เจ็ด: 7,
-  แปด: 8,
-  เก้า: 9,
-  สิบ: 10,
-};
-
-const BOILED_EGG_UNIT = { kcal: 70, carb: 0.6, protein: 6.3, fat: 5.2 };
-const PORK_SKEWER_UNIT = { kcal: 140, carb: 4, protein: 9, fat: 10 };
-
-const toArabicDigits = (value = "") => String(value).replace(/[๐-๙]/g, (char) => String(THAI_DIGITS.indexOf(char)));
-
-const parseCountToken = (token = "") => {
-  const value = toArabicDigits(token).trim();
-  if (!value) return null;
-  if (/^\d+$/.test(value)) return Math.max(1, Number(value));
-  return THAI_NUMBER_WORDS[value] || null;
-};
-
-const parseCountBeforeUnit = (value = "", units = "") => {
-  const normalized = toArabicDigits(value);
-  const match = normalized.match(new RegExp(`(\\d+|หนึ่ง|นึง|สอง|สาม|สี่|ห้า|หก|เจ็ด|แปด|เก้า|สิบ)(?=${units})`));
-  return parseCountToken(match?.[1]) || 1;
-};
-
-const parseEggCount = (value = "") => parseCountBeforeUnit(value, "ฟอง");
-const parseSkewerCount = (value = "") => parseCountBeforeUnit(value, "ไม้");
-
-const isStandaloneBoiledEggText = (value = "") => {
-  const normalized = toArabicDigits(value);
-  const countPattern = "(?:\\d+|หนึ่ง|นึง|สอง|สาม|สี่|ห้า|หก|เจ็ด|แปด|เก้า|สิบ)?";
-  const eggPattern = `(?:ไข่(?:ไก่)?(?:ต้ม|ลวก)|ไข่(?:ต้ม|ลวก)(?:ไก่)?)`;
-  const standalone = new RegExp(`^${eggPattern}(?:เบอร์\\d+)?${countPattern}(?:ฟอง)?$`);
-  return standalone.test(normalized);
-};
-
-const buildBoiledEggMeal = (type = "ต้ม", count = 1) => ({
-  menuName: `${type === "ลวก" ? "ไข่ลวก" : "ไข่ต้ม"}${count > 1 ? ` ${count} ฟอง` : ""}`,
-  kcal: BOILED_EGG_UNIT.kcal * count,
-  carb: BOILED_EGG_UNIT.carb * count,
-  protein: BOILED_EGG_UNIT.protein * count,
-  fat: BOILED_EGG_UNIT.fat * count,
-});
-
-const resolveBoiledEggEstimate = (text = "") => {
-  const value = compactText(text);
-  const normalized = toArabicDigits(value);
-  if (!value || !isStandaloneBoiledEggText(value)) return null;
-
-  const typeMatch = normalized.match(/ไข่(?:ไก่)?(ต้ม|ลวก)|ไข่(ต้ม|ลวก)(?:ไก่)?/);
-  const type = typeMatch?.[1] || typeMatch?.[2];
-  if (!type) return null;
-
-  const count = parseEggCount(normalized);
-  const meal = withDefaults(buildBoiledEggMeal(type, count), "local_egg_rules");
-  return {
-    ...meal,
-    items: [makeItem(meal, `${count} ฟอง`)],
-  };
-};
-
-const resolvePorkSkewerEstimate = (text = "") => {
-  const value = compactText(text);
-  if (!/หมูปิ้ง|หมูปิ้งโบราณ|หมูเสียบไม้|หมูไม้/.test(value)) return null;
-
-  const count = parseSkewerCount(value);
-  const meal = withDefaults({
-    menuName: `หมูปิ้งโบราณ${count > 1 ? ` ${count} ไม้` : ""}`,
-    kcal: PORK_SKEWER_UNIT.kcal * count,
-    carb: PORK_SKEWER_UNIT.carb * count,
-    protein: PORK_SKEWER_UNIT.protein * count,
-    fat: PORK_SKEWER_UNIT.fat * count,
-    sugar: 2 * count,
-  }, "local_pork_skewer_rules");
-  return {
-    ...meal,
-    items: [makeItem(meal, `${count} ไม้`)],
-  };
-};
-
-const addBoiledEggModifier = (meal, label = "ไข่ต้ม", count = 1) => ({
-  ...meal,
-  kcal: meal.kcal + BOILED_EGG_UNIT.kcal * count,
-  carb: meal.carb + BOILED_EGG_UNIT.carb * count,
-  protein: meal.protein + BOILED_EGG_UNIT.protein * count,
-  fat: meal.fat + BOILED_EGG_UNIT.fat * count,
-  menuName: appendMenuNote(meal.menuName, count > 1 ? `${label} ${count} ฟอง` : label),
-});
+const withDefaults = (meal, estimateMode = "local_food_rules") => ({ sugar: 0, confidence: "high", estimateMode, ...meal, kcal: round(meal.kcal), carb: round(meal.carb), protein: round(meal.protein), fat: round(meal.fat) });
 
 const PRESETS = [
-  // Rice / carbs
-  { pattern: /ข้าวสวย|ข้าวเปล่า|ข้าวขาว/, menuName: "ข้าวสวย", kcal: 250, carb: 55, protein: 4, fat: 1 },
-  { pattern: /ข้าวกล้อง/, menuName: "ข้าวกล้อง", kcal: 230, carb: 48, protein: 5, fat: 2 },
-  { pattern: /ข้าวไรซ์เบอร์รี่|ข้าวไรส์เบอร์รี่|ไรซ์เบอร์รี่|ไรส์เบอร์รี่/, menuName: "ข้าวไรซ์เบอร์รี่", kcal: 220, carb: 46, protein: 5, fat: 2 },
-  { pattern: /ข้าวเหนียว/, menuName: "ข้าวเหนียว", kcal: 250, carb: 55, protein: 5, fat: 1 },
-
-  // Drinks / smoothies / coffee
+  { pattern: /อกไก่ทอด/, menuName: "อกไก่ทอด", kcal: 320, carb: 15, protein: 35, fat: 15, priority: 100 },
+  { pattern: /อกไก่ย่าง/, menuName: "อกไก่ย่าง", kcal: 200, carb: 0, protein: 38, fat: 6, priority: 100 },
+  { pattern: /อกไก่ต้ม|อกไก่นึ่ง|^อกไก่$/, menuName: "อกไก่ต้ม", kcal: 180, carb: 0, protein: 38, fat: 4, priority: 90 },
+  { pattern: /สะโพกไก่ทอด/, menuName: "สะโพกไก่ทอด", kcal: 420, carb: 20, protein: 30, fat: 26, priority: 100 },
+  { pattern: /สะโพกไก่ย่าง/, menuName: "สะโพกไก่ย่าง", kcal: 300, carb: 0, protein: 30, fat: 18, priority: 100 },
+  { pattern: /สะโพกไก่ต้ม|สะโพกไก่นึ่ง|^สะโพกไก่$/, menuName: "สะโพกไก่ต้ม", kcal: 260, carb: 0, protein: 28, fat: 16, priority: 90 },
+  { pattern: /ไก่ทอด/, menuName: "ไก่ทอด", kcal: 450, carb: 25, protein: 30, fat: 28 },
+  { pattern: /ไก่ย่าง/, menuName: "ไก่ย่าง", kcal: 280, carb: 3, protein: 32, fat: 16 },
+  { pattern: /ไก่ต้ม|ไก่นึ่ง/, menuName: "ไก่ต้ม", kcal: 250, carb: 0, protein: 32, fat: 13 },
   { pattern: /กาแฟดำ|อเมริกาโน่|อเมริกาโน|americano|blackcoffee/, menuName: "อเมริกาโน่ / กาแฟดำ", kcal: 15, carb: 2, protein: 1, fat: 0, sugar: 0 },
   { pattern: /ลาเต้|latte/, menuName: "ลาเต้", kcal: 150, carb: 12, protein: 7, fat: 7, sugar: 10 },
   { pattern: /คาปูชิโน่|คาปูชิโน|cappuccino/, menuName: "คาปูชิโน่", kcal: 120, carb: 10, protein: 6, fat: 6, sugar: 8 },
   { pattern: /อโวคาโดปั่นน้ำผึ้ง|อะโวคาโดปั่นน้ำผึ้ง|avocadohoney/, menuName: "อโวคาโดปั่นน้ำผึ้ง", kcal: 360, carb: 42, protein: 4, fat: 22, sugar: 22 },
   { pattern: /อโวคาโดปั่น|อะโวคาโดปั่น|avocado/, menuName: "อโวคาโดปั่น", kcal: 320, carb: 28, protein: 4, fat: 22, sugar: 8 },
-
-  // Chicken
   { pattern: /ข้าวมันไก่ทอด/, menuName: "ข้าวมันไก่ทอด", kcal: 780, carb: 85, protein: 30, fat: 35 },
   { pattern: /ข้าวมันไก่|ข้าวมันไก่ต้ม/, menuName: "ข้าวมันไก่ต้ม", kcal: 650, carb: 80, protein: 32, fat: 22 },
-  { pattern: /อกไก่ทอด/, menuName: "อกไก่ทอด", kcal: 320, carb: 15, protein: 35, fat: 15 },
-  { pattern: /อกไก่ย่าง/, menuName: "อกไก่ย่าง", kcal: 200, carb: 0, protein: 38, fat: 6 },
-  { pattern: /อกไก่ต้ม|อกไก่นึ่ง|อกไก่/, menuName: "อกไก่ต้ม", kcal: 180, carb: 0, protein: 38, fat: 4 },
-  { pattern: /สะโพกไก่ทอด/, menuName: "สะโพกไก่ทอด", kcal: 420, carb: 20, protein: 30, fat: 26 },
-  { pattern: /สะโพกไก่ย่าง/, menuName: "สะโพกไก่ย่าง", kcal: 300, carb: 0, protein: 30, fat: 18 },
-  { pattern: /สะโพกไก่ต้ม|สะโพกไก่นึ่ง|สะโพกไก่/, menuName: "สะโพกไก่ต้ม", kcal: 260, carb: 0, protein: 28, fat: 16 },
-  { pattern: /ไก่ทอด/, menuName: "ไก่ทอด", kcal: 450, carb: 25, protein: 30, fat: 28 },
-  { pattern: /ไก่ย่าง/, menuName: "ไก่ย่าง", kcal: 280, carb: 3, protein: 32, fat: 16 },
-  { pattern: /ไก่ต้ม|ไก่นึ่ง/, menuName: "ไก่ต้ม", kcal: 250, carb: 0, protein: 32, fat: 13 },
   { pattern: /ข้าวกะเพราไก่ไข่ดาว|ข้าวกระเพราไก่ไข่ดาว/, menuName: "ข้าวกะเพราไก่ไข่ดาว", kcal: 780, carb: 80, protein: 35, fat: 32 },
   { pattern: /ข้าวกะเพราไก่|ข้าวกระเพราไก่/, menuName: "ข้าวกะเพราไก่", kcal: 600, carb: 75, protein: 30, fat: 20 },
-
-  // Pork
   { pattern: /ข้าวกะเพราหมูไข่ดาว|ข้าวกระเพราหมูไข่ดาว/, menuName: "ข้าวกะเพราหมูไข่ดาว", kcal: 820, carb: 80, protein: 34, fat: 38 },
   { pattern: /ข้าวกะเพราหมู|ข้าวกระเพราหมู/, menuName: "ข้าวกะเพราหมู", kcal: 650, carb: 75, protein: 28, fat: 28 },
+  { pattern: /ข้าวกะเพราเนื้อไข่ดาว|ข้าวกระเพราเนื้อไข่ดาว/, menuName: "ข้าวกะเพราเนื้อไข่ดาว", kcal: 850, carb: 80, protein: 38, fat: 38 },
+  { pattern: /ข้าวกะเพราเนื้อ|ข้าวกระเพราเนื้อ/, menuName: "ข้าวกะเพราเนื้อ", kcal: 700, carb: 75, protein: 34, fat: 30 },
   { pattern: /ข้าวหมูกระเทียม/, menuName: "ข้าวหมูกระเทียม", kcal: 700, carb: 80, protein: 32, fat: 28 },
   { pattern: /ข้าวหมูทอด/, menuName: "ข้าวหมูทอด", kcal: 750, carb: 85, protein: 30, fat: 34 },
-  { pattern: /หมูปิ้งโบราณ|หมูปิ้ง|หมูเสียบไม้|หมูไม้/, menuName: "หมูปิ้งโบราณ", kcal: 140, carb: 4, protein: 9, fat: 10, sugar: 2 },
   { pattern: /หมูสันนอกทอด|สันนอกทอด/, menuName: "หมูสันนอกทอด", kcal: 360, carb: 15, protein: 32, fat: 20 },
   { pattern: /หมูสันนอกย่าง|สันนอกย่าง|หมูสันนอก/, menuName: "หมูสันนอกย่าง", kcal: 220, carb: 0, protein: 32, fat: 10 },
-  { pattern: /หมูสันคอทอด|สันคอทอด/, menuName: "หมูสันคอทอด", kcal: 480, carb: 15, protein: 28, fat: 34 },
-  { pattern: /คอหมูย่าง|หมูสันคอย่าง|สันคอย่าง|หมูสันคอ/, menuName: "หมูสันคอย่าง", kcal: 420, carb: 5, protein: 28, fat: 32 },
+  { pattern: /คอหมูย่าง|หมูสันคอย่าง|สันคอย่าง|หมูสันคอ/, menuName: "คอหมูย่าง", kcal: 420, carb: 5, protein: 28, fat: 32 },
   { pattern: /หมูสามชั้นทอด|สามชั้นทอด/, menuName: "หมูสามชั้นทอด", kcal: 600, carb: 10, protein: 22, fat: 55 },
   { pattern: /หมูสามชั้นย่าง|สามชั้นย่าง|หมูสามชั้น/, menuName: "หมูสามชั้นย่าง", kcal: 520, carb: 3, protein: 22, fat: 48 },
   { pattern: /หมูทอด/, menuName: "หมูทอด", kcal: 450, carb: 15, protein: 28, fat: 30 },
   { pattern: /หมูย่าง/, menuName: "หมูย่าง", kcal: 350, carb: 5, protein: 30, fat: 22 },
   { pattern: /หมูกระทะ|หมูทะ/, menuName: "หมูกระทะ", kcal: 900, carb: 70, protein: 45, fat: 50 },
-
-  // Pork leg rice is intentionally explicit because fat changes a lot by cut.
   { pattern: /ข้าวขาหมู/, menuName: "ข้าวขาหมู", kcal: 800, carb: 85, protein: 36, fat: 35, special: "porkLegRice" },
-
-  // Beef / mixed meats
-  { pattern: /ข้าวกะเพราเนื้อไข่ดาว|ข้าวกระเพราเนื้อไข่ดาว/, menuName: "ข้าวกะเพราเนื้อไข่ดาว", kcal: 850, carb: 80, protein: 38, fat: 38 },
-  { pattern: /ข้าวกะเพราเนื้อ|ข้าวกระเพราเนื้อ/, menuName: "ข้าวกะเพราเนื้อ", kcal: 700, carb: 75, protein: 34, fat: 30 },
   { pattern: /เนื้อย่าง/, menuName: "เนื้อย่าง", kcal: 350, carb: 0, protein: 38, fat: 22 },
   { pattern: /ชาบู/, menuName: "ชาบู", kcal: 650, carb: 45, protein: 45, fat: 32 },
-
-  // Fish / seafood
-  { pattern: /ปลากะพงทอดน้ำปลา|ปลาทอดน้ำปลา/, menuName: "ปลากะพงทอดน้ำปลา", kcal: 650, carb: 25, protein: 45, fat: 42 },
   { pattern: /ปลาแซลมอนย่าง|แซลมอนย่าง/, menuName: "แซลมอนย่าง", kcal: 330, carb: 0, protein: 32, fat: 22 },
+  { pattern: /ปลากะพงทอดน้ำปลา|ปลาทอดน้ำปลา/, menuName: "ปลากะพงทอดน้ำปลา", kcal: 650, carb: 25, protein: 45, fat: 42 },
   { pattern: /ปลาทอด/, menuName: "ปลาทอด", kcal: 420, carb: 15, protein: 35, fat: 26 },
   { pattern: /ปลาเผา/, menuName: "ปลาเผา", kcal: 250, carb: 0, protein: 42, fat: 8 },
   { pattern: /ปลาย่าง/, menuName: "ปลาย่าง", kcal: 220, carb: 0, protein: 38, fat: 7 },
   { pattern: /ทูน่า/, menuName: "ทูน่า", kcal: 160, carb: 0, protein: 35, fat: 2 },
   { pattern: /กุ้งทอด/, menuName: "กุ้งทอด", kcal: 330, carb: 20, protein: 28, fat: 16 },
   { pattern: /กุ้งต้ม|กุ้งลวก/, menuName: "กุ้งต้ม", kcal: 180, carb: 0, protein: 36, fat: 3 },
-
-  // Noodles and noodle alternatives
-  { pattern: /เส้นปลา/, menuName: "เส้นปลา", kcal: 180, carb: 20, protein: 18, fat: 2, special: "noodleAlternative" },
-  { pattern: /เส้นไข่/, menuName: "เส้นไข่", kcal: 220, carb: 25, protein: 15, fat: 8, special: "noodleAlternative" },
-  { pattern: /บะหมี่ผัก/, menuName: "บะหมี่ผัก", kcal: 180, carb: 28, protein: 8, fat: 4, special: "noodleAlternative" },
-  { pattern: /เส้นบุก|บุกเส้น|บะหมี่บุก/, menuName: "เส้นบุก", kcal: 40, carb: 8, protein: 1, fat: 0, special: "noodleAlternative" },
-  { pattern: /วุ้นเส้น/, menuName: "วุ้นเส้น", kcal: 180, carb: 42, protein: 1, fat: 0, special: "noodleAlternative" },
   { pattern: /ก๋วยเตี๋ยวต้มยำ/, menuName: "ก๋วยเตี๋ยวต้มยำ", kcal: 450, carb: 60, protein: 22, fat: 15 },
   { pattern: /ก๋วยเตี๋ยวแห้ง/, menuName: "ก๋วยเตี๋ยวแห้ง", kcal: 500, carb: 70, protein: 22, fat: 16 },
   { pattern: /ก๋วยเตี๋ยวน้ำ|ก๋วยเตี๋ยว/, menuName: "ก๋วยเตี๋ยวน้ำ", kcal: 400, carb: 55, protein: 22, fat: 10 },
@@ -200,8 +66,6 @@ const PRESETS = [
   { pattern: /ราดหน้า/, menuName: "ราดหน้า", kcal: 550, carb: 75, protein: 25, fat: 16 },
   { pattern: /สุกี้แห้ง/, menuName: "สุกี้แห้ง", kcal: 500, carb: 45, protein: 30, fat: 22 },
   { pattern: /สุกี้น้ำ|สุกี้/, menuName: "สุกี้น้ำ", kcal: 350, carb: 35, protein: 28, fat: 10 },
-
-  // Eggs / lighter Thai dishes
   { pattern: /ไข่เจียว/, menuName: "ไข่เจียว", kcal: 250, carb: 2, protein: 12, fat: 22 },
   { pattern: /ไข่ดาว/, menuName: "ไข่ดาว", kcal: 180, carb: 1, protein: 7, fat: 16 },
   { pattern: /ไข่ต้ม/, menuName: "ไข่ต้ม", kcal: 70, carb: 0.6, protein: 6.3, fat: 5.2 },
@@ -211,108 +75,26 @@ const PRESETS = [
   { pattern: /ลาบหมู/, menuName: "ลาบหมู", kcal: 300, carb: 12, protein: 28, fat: 16 },
   { pattern: /สลัดอกไก่/, menuName: "สลัดอกไก่", kcal: 320, carb: 20, protein: 35, fat: 12 },
   { pattern: /สลัด/, menuName: "สลัด", kcal: 220, carb: 20, protein: 8, fat: 12 },
-].sort((a, b) => String(b.pattern).length - String(a.pattern).length);
+].sort((a, b) => (b.priority || 0) - (a.priority || 0) || String(b.pattern).length - String(a.pattern).length);
 
 const applyPorkLegRiceModifiers = (base, value) => {
-  const isLean = /(เนื้อล้วน|ล้วน|ไม่เอาหนัง|ไม่หนัง|ไม่มัน|เอาแต่เนื้อ)/.test(value);
-  const isSkin = /(เนื้อหนัง|หนัง|ติดหนัง|ติดมัน)/.test(value);
-  const isKaki = /(คากิ|ขากิ)/.test(value);
-
-  if (isLean) return { ...base, kcal: 700, carb: 82, protein: 40, fat: 22, menuName: "ข้าวขาหมูเนื้อล้วน" };
-  if (isKaki) return { ...base, kcal: 930, carb: 82, protein: 32, fat: 55, menuName: "ข้าวขาหมูคากิ" };
-  if (isSkin) return { ...base, kcal: 850, carb: 85, protein: 36, fat: 45, menuName: "ข้าวขาหมูเนื้อหนัง" };
+  if (/(เนื้อล้วน|ล้วน|ไม่เอาหนัง|ไม่หนัง|ไม่มัน|เอาแต่เนื้อ)/.test(value)) return { ...base, kcal: 700, carb: 82, protein: 40, fat: 22, menuName: "ข้าวขาหมูเนื้อล้วน" };
+  if (/(คากิ|ขากิ)/.test(value)) return { ...base, kcal: 930, carb: 82, protein: 32, fat: 55, menuName: "ข้าวขาหมูคากิ" };
+  if (/(เนื้อหนัง|หนัง|ติดหนัง|ติดมัน)/.test(value)) return { ...base, kcal: 850, carb: 85, protein: 36, fat: 45, menuName: "ข้าวขาหมูเนื้อหนัง" };
   return base;
 };
-
-const appendMenuNote = (menuName = "", note = "") => menuName.includes(note) ? menuName : `${menuName} ${note}`.trim();
-const isNoodleMeal = (menuName = "") => /(ก๋วยเตี๋ยว|บะหมี่|ราเมง|ผัดไทย|ผัดซีอิ๊ว|ราดหน้า|สุกี้|เส้น|วุ้นเส้น)/.test(menuName);
-
-const replaceNoodleBase = (meal, { label, kcalDelta, carbDelta, proteinDelta = 0, fatDelta = 0 }) => ({
-  ...meal,
-  kcal: clamp(meal.kcal + kcalDelta),
-  carb: clamp(meal.carb + carbDelta),
-  protein: clamp(meal.protein + proteinDelta),
-  fat: clamp(meal.fat + fatDelta),
-  menuName: appendMenuNote(meal.menuName, label),
-});
 
 const applyModifiers = (meal, text) => {
   const value = compactText(text);
   let next = { ...meal };
-
   if (next.special === "porkLegRice") next = applyPorkLegRiceModifiers(next, value);
   delete next.special;
-
   const hasRiceBase = /^ข้าว/.test(next.menuName);
-  const hasNoodleBase = isNoodleMeal(next.menuName);
-  const isExtra = /(พิเศษ|จัมโบ้|ไซซ์ใหญ่|sizeใหญ่)/.test(value);
-
-  if (isExtra) {
-    next = {
-      ...next,
-      kcal: round(next.kcal * 1.22),
-      carb: round(next.carb * 1.15),
-      protein: round(next.protein * 1.18),
-      fat: round(next.fat * 1.18),
-      menuName: /พิเศษ/.test(next.menuName) ? next.menuName : `${next.menuName}พิเศษ`,
-    };
-  } else if (/(ธรรมดา|ปกติ)/.test(value) && !/(ธรรมดา|ปกติ)/.test(next.menuName) && /ข้าวขาหมู/.test(next.menuName)) {
-    next = { ...next, menuName: `${next.menuName}ธรรมดา` };
-  }
-
-  if (/(ข้าวน้อย|ข้าวครึ่ง|ครึ่งข้าว|ลดข้าว|ข้าวนิดเดียว|ข้าวน้อยๆ|ข้าวน้อยนิด|ไม่เอาข้าว|ไม่ใส่ข้าว)/.test(value) && hasRiceBase) {
-    next = { ...next, kcal: clamp(next.kcal - 120), carb: clamp(next.carb - 28), protein: clamp(next.protein - 2), menuName: appendMenuNote(next.menuName, "ข้าวน้อย") };
-  }
-
-  if (/เพิ่มข้าว|ข้าวเพิ่ม|เอาข้าวเพิ่ม|ข้าวเยอะ/.test(value) && hasRiceBase) {
-    next = { ...next, kcal: next.kcal + 180, carb: next.carb + 40, protein: next.protein + 3, menuName: appendMenuNote(next.menuName, "เพิ่มข้าว") };
-  }
-
-  if (/(เส้นน้อย|เส้นครึ่ง|ครึ่งเส้น|ลดเส้น|เส้นนิดเดียว|ไม่เอาเส้น|ไม่ใส่เส้น)/.test(value) && hasNoodleBase) {
-    next = { ...next, kcal: clamp(next.kcal - 120), carb: clamp(next.carb - 30), protein: clamp(next.protein - 2), menuName: appendMenuNote(next.menuName, "เส้นน้อย") };
-  }
-
-  if (/เพิ่มเส้น|เส้นเพิ่ม|เอาเส้นเพิ่ม|เส้นเยอะ/.test(value)) {
-    next = { ...next, kcal: next.kcal + 180, carb: next.carb + 40, protein: next.protein + 4, fat: next.fat + 2, menuName: appendMenuNote(next.menuName, "เพิ่มเส้น") };
-  }
-
-  if (/เส้นปลา/.test(value) && hasNoodleBase && !/เส้นปลา/.test(next.menuName)) {
-    next = replaceNoodleBase(next, { label: "เส้นปลา", kcalDelta: -120, carbDelta: -35, proteinDelta: 8, fatDelta: -3 });
-  }
-
-  if (/เส้นไข่/.test(value) && hasNoodleBase && !/เส้นไข่/.test(next.menuName)) {
-    next = replaceNoodleBase(next, { label: "เส้นไข่", kcalDelta: -80, carbDelta: -25, proteinDelta: 10, fatDelta: 4 });
-  }
-
-  if (/บะหมี่ผัก/.test(value) && hasNoodleBase && !/บะหมี่ผัก/.test(next.menuName)) {
-    next = replaceNoodleBase(next, { label: "บะหมี่ผัก", kcalDelta: -120, carbDelta: -35, proteinDelta: 4, fatDelta: -2 });
-  }
-
-  if (/เส้นบุก|บุกเส้น|บะหมี่บุก/.test(value) && hasNoodleBase && !/เส้นบุก/.test(next.menuName)) {
-    next = replaceNoodleBase(next, { label: "เส้นบุก", kcalDelta: -180, carbDelta: -45, proteinDelta: -2, fatDelta: -2 });
-  }
-
-  if (/วุ้นเส้น/.test(value) && hasNoodleBase && !/วุ้นเส้น/.test(next.menuName)) {
-    next = replaceNoodleBase(next, { label: "วุ้นเส้น", kcalDelta: -60, carbDelta: -15, proteinDelta: -6, fatDelta: -4 });
-  }
-
-  if (/ข้าวกล้อง/.test(value) && hasRiceBase && !/ข้าวกล้อง/.test(next.menuName)) {
-    next = { ...next, kcal: clamp(next.kcal - 25), carb: clamp(next.carb - 7), protein: next.protein + 1, menuName: next.menuName.replace(/^ข้าว/, "ข้าวกล้อง") };
-  }
-
-  if (/ข้าวไรซ์เบอร์รี่|ข้าวไรส์เบอร์รี่/.test(value) && hasRiceBase && !/ไรซ์เบอร์รี่|ไรส์เบอร์รี่/.test(next.menuName)) {
-    next = { ...next, kcal: clamp(next.kcal - 35), carb: clamp(next.carb - 9), protein: next.protein + 1, menuName: next.menuName.replace(/^ข้าว/, "ข้าวไรซ์เบอร์รี่") };
-  }
-
-  if (/ไข่ดาว/.test(value) && !/ไข่ดาว/.test(next.menuName)) {
-    next = { ...next, kcal: next.kcal + 180, carb: next.carb + 1, protein: next.protein + 7, fat: next.fat + 16, menuName: `${next.menuName}ไข่ดาว` };
-  }
-
-  if (/ไข่ต้ม|ไข่ลวก/.test(value) && !/ไข่ต้ม|ไข่ลวก/.test(next.menuName)) {
-    const eggLabel = /ไข่ลวก/.test(value) ? "ไข่ลวก" : "ไข่ต้ม";
-    next = addBoiledEggModifier(next, eggLabel, parseEggCount(value));
-  }
-
+  if (/(พิเศษ|จัมโบ้|ไซซ์ใหญ่|sizeใหญ่)/.test(value)) next = { ...next, kcal: round(next.kcal * 1.22), carb: round(next.carb * 1.15), protein: round(next.protein * 1.18), fat: round(next.fat * 1.18), menuName: /พิเศษ/.test(next.menuName) ? next.menuName : `${next.menuName}พิเศษ` };
+  if (/(ข้าวน้อย|ข้าวครึ่ง|ครึ่งข้าว|ลดข้าว|ข้าวนิดเดียว|ข้าวน้อยๆ|ข้าวน้อยนิด|ไม่เอาข้าว|ไม่ใส่ข้าว)/.test(value) && hasRiceBase) next = { ...next, kcal: clamp(next.kcal - 120), carb: clamp(next.carb - 28), protein: clamp(next.protein - 2), menuName: appendMenuNote(next.menuName, "ข้าวน้อย") };
+  if (/เพิ่มข้าว|ข้าวเพิ่ม|เอาข้าวเพิ่ม|ข้าวเยอะ/.test(value) && hasRiceBase) next = { ...next, kcal: next.kcal + 180, carb: next.carb + 40, protein: next.protein + 3, menuName: appendMenuNote(next.menuName, "เพิ่มข้าว") };
+  if (/ไข่ดาว/.test(value) && !/ไข่ดาว/.test(next.menuName)) next = { ...next, kcal: next.kcal + 180, carb: next.carb + 1, protein: next.protein + 7, fat: next.fat + 16, menuName: `${next.menuName}ไข่ดาว` };
+  if (/ไข่ต้ม|ไข่ลวก/.test(value) && !/ไข่ต้ม|ไข่ลวก/.test(next.menuName)) next = addBoiledEggModifier(next, /ไข่ลวก/.test(value) ? "ไข่ลวก" : "ไข่ต้ม", parseEggCount(value));
   return next;
 };
 
@@ -320,21 +102,14 @@ export const resolveLocalFoodEstimate = (text = "") => {
   const normalized = normalizeText(text);
   const value = compactText(text);
   if (!normalized || !value) return null;
-
   const eggEstimate = resolveBoiledEggEstimate(text);
   if (eggEstimate) return eggEstimate;
-
   const porkSkewerEstimate = resolvePorkSkewerEstimate(text);
   if (porkSkewerEstimate) return porkSkewerEstimate;
-
   const preset = PRESETS.find((entry) => entry.pattern.test(value) || entry.pattern.test(normalized));
   if (!preset) return null;
-
   const meal = withDefaults(applyModifiers(preset, text));
-  return {
-    ...meal,
-    items: [makeItem(meal, /พิเศษ|เพิ่มข้าว|เพิ่มเส้น|ข้าวน้อย|เส้นน้อย|เส้นปลา|เส้นไข่|บะหมี่ผัก|เส้นบุก|วุ้นเส้น|ไข่ต้ม|ไข่ลวก/.test(value) ? "1 เสิร์ฟปรับตามที่สั่ง" : "1 เสิร์ฟ")],
-  };
+  return { ...meal, items: [makeItem(meal, /พิเศษ|เพิ่มข้าว|ข้าวน้อย|ไข่ต้ม|ไข่ลวก/.test(value) ? "1 เสิร์ฟปรับตามที่สั่ง" : "1 เสิร์ฟ")] };
 };
 
 export const LOCAL_FOOD_ESTIMATE_COUNT = PRESETS.length;
