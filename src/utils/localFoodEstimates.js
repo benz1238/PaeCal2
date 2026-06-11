@@ -19,6 +19,11 @@ const PRESETS = [
   { pattern: /สะโพกไก่ทอด/, menuName: "สะโพกไก่ทอด", kcal: 420, carb: 20, protein: 30, fat: 26, priority: 100 },
   { pattern: /สะโพกไก่ย่าง/, menuName: "สะโพกไก่ย่าง", kcal: 300, carb: 0, protein: 30, fat: 18, priority: 100 },
   { pattern: /สะโพกไก่ต้ม|สะโพกไก่นึ่ง|^สะโพกไก่$/, menuName: "สะโพกไก่ต้ม", kcal: 260, carb: 0, protein: 28, fat: 16, priority: 90 },
+  { pattern: /เส้นปลา/, menuName: "เส้นปลา", kcal: 180, carb: 20, protein: 18, fat: 2, priority: 80 },
+  { pattern: /เส้นไข่/, menuName: "เส้นไข่", kcal: 220, carb: 25, protein: 15, fat: 8, priority: 80 },
+  { pattern: /บะหมี่ผัก/, menuName: "บะหมี่ผัก", kcal: 180, carb: 28, protein: 8, fat: 4, priority: 80 },
+  { pattern: /เส้นบุก|บุกเส้น|บะหมี่บุก/, menuName: "เส้นบุก", kcal: 40, carb: 8, protein: 1, fat: 0, priority: 80 },
+  { pattern: /วุ้นเส้น/, menuName: "วุ้นเส้น", kcal: 180, carb: 42, protein: 1, fat: 0, priority: 80 },
   { pattern: /ไก่ทอด/, menuName: "ไก่ทอด", kcal: 450, carb: 25, protein: 30, fat: 28 },
   { pattern: /ไก่ย่าง/, menuName: "ไก่ย่าง", kcal: 280, carb: 3, protein: 32, fat: 16 },
   { pattern: /ไก่ต้ม|ไก่นึ่ง/, menuName: "ไก่ต้ม", kcal: 250, carb: 0, protein: 32, fat: 13 },
@@ -77,6 +82,10 @@ const PRESETS = [
   { pattern: /สลัด/, menuName: "สลัด", kcal: 220, carb: 20, protein: 8, fat: 12 },
 ].sort((a, b) => (b.priority || 0) - (a.priority || 0) || String(b.pattern).length - String(a.pattern).length);
 
+const appendMenuNote = (menuName = "", note = "") => menuName.includes(note) ? menuName : `${menuName} ${note}`.trim();
+const isNoodleMeal = (menuName = "") => /(ก๋วยเตี๋ยว|บะหมี่|ราเมง|ผัดไทย|ผัดซีอิ๊ว|ราดหน้า|สุกี้|เส้น|วุ้นเส้น)/.test(menuName);
+const replaceNoodleBase = (meal, { label, kcalDelta, carbDelta, proteinDelta = 0, fatDelta = 0 }) => ({ ...meal, kcal: clamp(meal.kcal + kcalDelta), carb: clamp(meal.carb + carbDelta), protein: clamp(meal.protein + proteinDelta), fat: clamp(meal.fat + fatDelta), menuName: appendMenuNote(meal.menuName, label) });
+
 const applyPorkLegRiceModifiers = (base, value) => {
   if (/(เนื้อล้วน|ล้วน|ไม่เอาหนัง|ไม่หนัง|ไม่มัน|เอาแต่เนื้อ)/.test(value)) return { ...base, kcal: 700, carb: 82, protein: 40, fat: 22, menuName: "ข้าวขาหมูเนื้อล้วน" };
   if (/(คากิ|ขากิ)/.test(value)) return { ...base, kcal: 930, carb: 82, protein: 32, fat: 55, menuName: "ข้าวขาหมูคากิ" };
@@ -90,11 +99,19 @@ const applyModifiers = (meal, text) => {
   if (next.special === "porkLegRice") next = applyPorkLegRiceModifiers(next, value);
   delete next.special;
   const hasRiceBase = /^ข้าว/.test(next.menuName);
+  const hasNoodleBase = isNoodleMeal(next.menuName);
   if (/(พิเศษ|จัมโบ้|ไซซ์ใหญ่|sizeใหญ่)/.test(value)) next = { ...next, kcal: round(next.kcal * 1.22), carb: round(next.carb * 1.15), protein: round(next.protein * 1.18), fat: round(next.fat * 1.18), menuName: /พิเศษ/.test(next.menuName) ? next.menuName : `${next.menuName}พิเศษ` };
   if (/(ข้าวน้อย|ข้าวครึ่ง|ครึ่งข้าว|ลดข้าว|ข้าวนิดเดียว|ข้าวน้อยๆ|ข้าวน้อยนิด|ไม่เอาข้าว|ไม่ใส่ข้าว)/.test(value) && hasRiceBase) next = { ...next, kcal: clamp(next.kcal - 120), carb: clamp(next.carb - 28), protein: clamp(next.protein - 2), menuName: appendMenuNote(next.menuName, "ข้าวน้อย") };
   if (/เพิ่มข้าว|ข้าวเพิ่ม|เอาข้าวเพิ่ม|ข้าวเยอะ/.test(value) && hasRiceBase) next = { ...next, kcal: next.kcal + 180, carb: next.carb + 40, protein: next.protein + 3, menuName: appendMenuNote(next.menuName, "เพิ่มข้าว") };
+  if (/(เส้นน้อย|เส้นครึ่ง|ครึ่งเส้น|ลดเส้น|เส้นนิดเดียว|ไม่เอาเส้น|ไม่ใส่เส้น)/.test(value) && hasNoodleBase) next = { ...next, kcal: clamp(next.kcal - 120), carb: clamp(next.carb - 30), protein: clamp(next.protein - 2), menuName: appendMenuNote(next.menuName, "เส้นน้อย") };
+  if (/เพิ่มเส้น|เส้นเพิ่ม|เอาเส้นเพิ่ม|เส้นเยอะ/.test(value) && hasNoodleBase) next = { ...next, kcal: next.kcal + 180, carb: next.carb + 40, protein: next.protein + 4, fat: next.fat + 2, menuName: appendMenuNote(next.menuName, "เพิ่มเส้น") };
+  if (/เส้นปลา/.test(value) && hasNoodleBase && !/เส้นปลา/.test(next.menuName)) next = replaceNoodleBase(next, { label: "เส้นปลา", kcalDelta: -120, carbDelta: -35, proteinDelta: 8, fatDelta: -3 });
+  if (/เส้นไข่/.test(value) && hasNoodleBase && !/เส้นไข่/.test(next.menuName)) next = replaceNoodleBase(next, { label: "เส้นไข่", kcalDelta: -80, carbDelta: -25, proteinDelta: 10, fatDelta: 4 });
+  if (/บะหมี่ผัก/.test(value) && hasNoodleBase && !/บะหมี่ผัก/.test(next.menuName)) next = replaceNoodleBase(next, { label: "บะหมี่ผัก", kcalDelta: -120, carbDelta: -35, proteinDelta: 4, fatDelta: -2 });
+  if (/เส้นบุก|บุกเส้น|บะหมี่บุก/.test(value) && hasNoodleBase && !/เส้นบุก/.test(next.menuName)) next = replaceNoodleBase(next, { label: "เส้นบุก", kcalDelta: -180, carbDelta: -45, proteinDelta: -2, fatDelta: -2 });
+  if (/วุ้นเส้น/.test(value) && hasNoodleBase && !/วุ้นเส้น/.test(next.menuName)) next = replaceNoodleBase(next, { label: "วุ้นเส้น", kcalDelta: -60, carbDelta: -15, proteinDelta: -6, fatDelta: -4 });
   if (/ไข่ดาว/.test(value) && !/ไข่ดาว/.test(next.menuName)) next = { ...next, kcal: next.kcal + 180, carb: next.carb + 1, protein: next.protein + 7, fat: next.fat + 16, menuName: `${next.menuName}ไข่ดาว` };
-  if (/ไข่ต้ม|ไข่ลวก/.test(value) && !/ไข่ต้ม|ไข่ลวก/.test(next.menuName)) next = addBoiledEggModifier(next, /ไข่ลวก/.test(value) ? "ไข่ลวก" : "ไข่ต้ม", parseEggCount(value));
+  if (/ไข่ต้ม|ไข่ลวก/.test(value) && !/ไข่ต้ม|ไข่ลวก/.test(next.menuName)) next = { ...next, kcal: next.kcal + 70, carb: next.carb + 0.6, protein: next.protein + 6.3, fat: next.fat + 5.2, menuName: appendMenuNote(next.menuName, /ไข่ลวก/.test(value) ? "ไข่ลวก" : "ไข่ต้ม") };
   return next;
 };
 
@@ -102,14 +119,10 @@ export const resolveLocalFoodEstimate = (text = "") => {
   const normalized = normalizeText(text);
   const value = compactText(text);
   if (!normalized || !value) return null;
-  const eggEstimate = resolveBoiledEggEstimate(text);
-  if (eggEstimate) return eggEstimate;
-  const porkSkewerEstimate = resolvePorkSkewerEstimate(text);
-  if (porkSkewerEstimate) return porkSkewerEstimate;
   const preset = PRESETS.find((entry) => entry.pattern.test(value) || entry.pattern.test(normalized));
   if (!preset) return null;
   const meal = withDefaults(applyModifiers(preset, text));
-  return { ...meal, items: [makeItem(meal, /พิเศษ|เพิ่มข้าว|ข้าวน้อย|ไข่ต้ม|ไข่ลวก/.test(value) ? "1 เสิร์ฟปรับตามที่สั่ง" : "1 เสิร์ฟ")] };
+  return { ...meal, items: [makeItem(meal, /พิเศษ|เพิ่มข้าว|เพิ่มเส้น|ข้าวน้อย|เส้นน้อย|เส้นปลา|เส้นไข่|บะหมี่ผัก|เส้นบุก|วุ้นเส้น|ไข่ต้ม|ไข่ลวก/.test(value) ? "1 เสิร์ฟปรับตามที่สั่ง" : "1 เสิร์ฟ")] };
 };
 
 export const LOCAL_FOOD_ESTIMATE_COUNT = PRESETS.length;
