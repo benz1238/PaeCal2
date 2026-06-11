@@ -79,16 +79,16 @@ export const buildDailyEnergyGauge = ({ total = 0, target = DEFAULT_CALORIE_TARG
 
 const text = (props) => ({ type: "text", ...props });
 
-const macroChip = (label, value, { warn = false, good = false } = {}) => ({
+const macroChip = (label, value, { warn = false, good = false, flex = 1 } = {}) => ({
   type: "box",
   layout: "vertical",
   backgroundColor: warn ? "#FFF1E6" : good ? "#D9FBEF" : palette.soft,
   cornerRadius: "14px",
   paddingAll: "10px",
-  flex: 1,
+  flex,
   contents: [
     text({ text: label, size: "xs", color: palette.muted, wrap: false, maxLines: 1 }),
-    text({ text: `${round(value)}g`, size: "md", weight: "bold", color: warn ? palette.orange : good ? palette.green : palette.text, align: "end", wrap: false, maxLines: 1 }),
+    text({ text: `${round(value)} g`, size: "md", weight: "bold", color: warn ? palette.orange : good ? palette.green : palette.text, align: "end", wrap: false, maxLines: 1 }),
   ],
 });
 
@@ -97,8 +97,23 @@ const twoColumnMacros = ({ carb = 0, protein = 0, fat = 0, sugar = 0, showSugar 
   layout: "vertical",
   spacing: "8px",
   contents: [
-    { type: "box", layout: "horizontal", spacing: "8px", contents: [macroChip("🍚 คาร์บ", carb), macroChip("💪 โปรตีน", protein, { good: protein >= 28 })] },
-    { type: "box", layout: "horizontal", spacing: "8px", contents: [macroChip("🥑 ไขมัน", fat, { warn: fat >= 35 }), ...(showSugar ? [macroChip("🍬 น้ำตาล", sugar, { warn: sugar >= 15 })] : [macroChip("🍬 น้ำตาล", 0)])] },
+    {
+      type: "box",
+      layout: "horizontal",
+      spacing: "8px",
+      contents: [
+        macroChip("🍚 คาร์บ", carb),
+        macroChip("💪 โปรตีน", protein, { good: protein >= 28 }),
+      ],
+    },
+    {
+      type: "box",
+      layout: "horizontal",
+      spacing: "8px",
+      contents: showSugar
+        ? [macroChip("🥑 ไขมัน", fat, { warn: fat >= 35 }), macroChip("🍬 น้ำตาล", sugar, { warn: sugar >= 15 })]
+        : [macroChip("🥑 ไขมัน", fat, { warn: fat >= 35, flex: 1 })],
+    },
   ],
 });
 
