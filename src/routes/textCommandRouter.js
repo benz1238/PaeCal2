@@ -31,7 +31,9 @@ const TEXT_ACTION_ALIASES = new Map([
   ["ดูแคล", "TODAY_CALORIES"],
 
   ["โภชนาการ", "TODAY_NUTRITION"],
+  ["โภชนาการวันนี้", "TODAY_NUTRITION"],
   ["ดูโภชนาการ", "TODAY_NUTRITION"],
+  ["ดูโภชนาการวันนี้", "TODAY_NUTRITION"],
   ["สารอาหารวันนี้", "TODAY_NUTRITION"],
 
   ["สรุปวันนี้", "TODAY_CALORIES"],
