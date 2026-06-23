@@ -1,4 +1,4 @@
-import { getNutrition } from "./nutritionEngine.js";
+import { getNutrition } from "../core/moduleRegistry.js";
 
 const normalizeText = (text = "") => String(text || "")
   .trim()
@@ -20,19 +20,19 @@ export const resolveLocalFoodEstimate = (text = "") => {
 
   return {
     menuName: raw,
-    kcal: res.final.kcal,
-    carb: res.final.carb,
-    protein: res.final.protein,
-    fat: res.final.fat,
+    kcal: res.final?.kcal ?? res.kcal,
+    carb: res.final?.carb ?? res.carb,
+    protein: res.final?.protein ?? res.protein,
+    fat: res.final?.fat ?? res.fat,
     sugar: 0,
-    confidence: res.confidence,
-    estimateMode: "nutrition_engine",
-    note: res.note,
+    confidence: res.confidence || "code",
+    estimateMode: "module_registry",
+    note: res.note || "registry resolved",
     items: [
       {
         name: raw,
         quantity: "1 เสิร์ฟ",
-        kcal: res.final.kcal
+        kcal: res.final?.kcal ?? res.kcal
       }
     ]
   };
