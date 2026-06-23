@@ -64,10 +64,10 @@ function getNutrition(menuName, modifiers = {}) {
   };
 }
 
-module.exports = {
+export {
   getNutrition,
   findBaseMenu,
   applyModifier,
   normalizeMenuName,
-  MENU_DB,
+  MENU_DB
 };
